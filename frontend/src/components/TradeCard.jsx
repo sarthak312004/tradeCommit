@@ -2,6 +2,17 @@ import { useState } from 'react'
 
 function TradeCard({ trade, onSelect, onDelete }) {
   const [isDeleteConfirmationOpen, setIsDeleteConfirmationOpen] = useState(false)
+  const pnlValue = String(trade.pnl ?? '')
+  const pnlState = pnlValue.trim().startsWith('-')
+    ? 'negative'
+    : Number.parseFloat(pnlValue.replace(/[^0-9.-]/g, '')) === 0
+      ? 'neutral'
+      : 'positive'
+  const pnlStyles = {
+    positive: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-300',
+    negative: 'bg-red-100 text-red-600 dark:bg-red-500/10 dark:text-red-300',
+    neutral: 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300'
+  }
 
   const handleCardKeyDown = (event) => {
     if (event.key === 'Enter' || event.key === ' ') {
@@ -17,7 +28,7 @@ function TradeCard({ trade, onSelect, onDelete }) {
   }
 
   return (
-    <article
+    <article 
       role="button"
       tabIndex="0"
       onClick={() => onSelect(trade)}
@@ -56,28 +67,28 @@ function TradeCard({ trade, onSelect, onDelete }) {
         </button>
       </div>
 
-      <div className="flex items-center justify-between gap-3 pr-16">
-        <div className="flex items-center gap-3">
+      <div className="flex min-h-12 items-start justify-between gap-3 pr-16">
+        <div className="flex min-w-0 items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-zinc-100 text-sm font-semibold text-zinc-700 dark:bg-zinc-800 dark:text-zinc-100">
             {trade.symbol.slice(0, 2)}
           </div>
           <div>
-            <p className="text-lg font-semibold tracking-[-0.04em]">{trade.symbol}</p>
+            <p className="truncate text-lg font-semibold tracking-[-0.04em]">{trade.symbol}</p>
             <p className="text-xs text-zinc-500 dark:text-zinc-400">{trade.side}</p>
           </div>
         </div>
 
-        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${trade.pnl.startsWith('-') ? 'bg-red-100 text-red-600 dark:bg-red-500/10 dark:text-red-300' : 'bg-emerald-100 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-300'}`}>
+        <span data-pnl-state={pnlState} className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${pnlStyles[pnlState]}`}>
           {trade.pnl}
         </span>
       </div>
 
-      <div className="mt-5 flex items-center justify-between text-sm text-zinc-500 dark:text-zinc-400">
+      <div className="mt-5 flex min-h-5 items-center justify-between text-sm text-zinc-500 dark:text-zinc-400">
         <span>{trade.status}</span>
         <span>{trade.date}</span>
       </div>
 
-      <div className="mt-5 grid grid-cols-3 gap-3 border-t border-zinc-200 pt-4 dark:border-zinc-800">
+      <div className="mt-5 grid min-h-14 grid-cols-3 gap-3 border-t border-zinc-200 pt-4 dark:border-zinc-800">
         <div>
           <p className="text-[11px] uppercase tracking-[0.14em] text-zinc-400">Qty</p>
           <p className="mt-1 text-sm font-medium">{trade.qty}</p>

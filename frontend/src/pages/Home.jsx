@@ -19,6 +19,7 @@ function Home() {
 
             <MainJournal
               selectedJournal={selectedJournal}
+              isSidebarOpen={isSidebarOpen}
               onAddTrade={addTrade}
               onUpdateTrade={updateTrade}
               onDeleteTrade={deleteTrade}

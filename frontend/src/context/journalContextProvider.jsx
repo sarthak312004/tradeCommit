@@ -1,39 +1,32 @@
 import { useState } from "react"
 import { journalContext } from "./Context"
+import { journalRepository } from "../services/localStorageRepository"
+
+const initialJournals = journalRepository.list()
 
 function JournalContextProvider({children}){
-    const [journals, setJournals] = useState([])
-    const [selectedJournalId, setSelectedJournalId] = useState(null)
+    const [journals, setJournals] = useState(initialJournals)
+    const [selectedJournalId, setSelectedJournalId] = useState(initialJournals[0]?.id ?? null)
 
     const createJournal = (name) => {
-        const newJournal = {
-            id: Date.now(),
-            name,
-            updated: 'Just now',
-            trades: []
-        }
+        const updatedJournals = journalRepository.create(name)
+        const newJournal = updatedJournals[updatedJournals.length - 1]
 
-        setJournals((prev) => [...prev, newJournal])
+        setJournals(updatedJournals)
         setSelectedJournalId((currentId) => currentId ?? newJournal.id)
     }
 
     const updateJournal = (id, name) => {
-        setJournals((prev) => prev.map((journal) => (
-            journal.id === id ? {...journal, name, updated: 'Just now'} : journal
-        )))
+        setJournals(journalRepository.update(id, name))
     }
 
     // Remove only the journal that matches the id supplied by the sidebar.
     const deleteJournal = (id) => {
-        setJournals((prev) => {
-            const remainingJournals = prev.filter((journal) => journal.id !== id)
-
-            setSelectedJournalId((currentId) => (
-                currentId === id ? remainingJournals[0]?.id ?? null : currentId
-            ))
-
-            return remainingJournals
-        })
+        const remainingJournals = journalRepository.remove(id)
+        setJournals(remainingJournals)
+        setSelectedJournalId((currentId) => (
+            currentId === id ? remainingJournals[0]?.id ?? null : currentId
+        ))
     }
 
     const selectJournal = (id) => {
@@ -41,33 +34,15 @@ function JournalContextProvider({children}){
     }
 
     const addTrade = (journalId, trade) => {
-        setJournals((prev) => prev.map((journal) => (
-            journal.id === journalId
-                ? {...journal, trades: [...journal.trades, trade], updated: 'Just now'}
-                : journal
-        )))
+        setJournals(journalRepository.addTrade(journalId, trade))
     }
 
     const updateTrade = (journalId, tradeId, updatedTrade) => {
-        setJournals((prev) => prev.map((journal) => (
-            journal.id === journalId
-                ? {
-                    ...journal,
-                    trades: journal.trades.map((trade) => (
-                        trade.id === tradeId ? {...trade, ...updatedTrade} : trade
-                    )),
-                    updated: 'Just now'
-                }
-                : journal
-        )))
+        setJournals(journalRepository.updateTrade(journalId, tradeId, updatedTrade))
     }
 
     const deleteTrade = (journalId, tradeId) => {
-        setJournals((prev) => prev.map((journal) => (
-            journal.id === journalId
-                ? {...journal, trades: journal.trades.filter((trade) => trade.id !== tradeId), updated: 'Just now'}
-                : journal
-        )))
+        setJournals(journalRepository.removeTrade(journalId, tradeId))
     }
 
     const selectedJournal = journals.find((journal) => journal.id === selectedJournalId) ?? null

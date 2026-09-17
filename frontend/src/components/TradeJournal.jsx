@@ -2,7 +2,7 @@ import { useState } from 'react'
 import TradeCard from './TradeCard'
 import TradeForm from './TradeForm'
 
-function TradeJournal({ journal, onAddTrade, onUpdateTrade, onDeleteTrade }) {
+function TradeJournal({ journal, isSidebarOpen, onAddTrade, onUpdateTrade, onDeleteTrade }) {
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [editingTrade, setEditingTrade] = useState(null)
 
@@ -70,7 +70,7 @@ function TradeJournal({ journal, onAddTrade, onUpdateTrade, onDeleteTrade }) {
           <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Add your first trade to start tracking this journal.</p>
         </div>
       ) : (
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className={`grid gap-4 ${isSidebarOpen ? 'lg:grid-cols-2' : 'lg:grid-cols-3'}`}>
           {journal.trades.map((currentTrade) => (
             <TradeCard
               key={currentTrade.id}

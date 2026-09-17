@@ -1,6 +1,6 @@
 import TradeJournal from './TradeJournal'
 
-function MainJournal({ selectedJournal, onAddTrade, onUpdateTrade, onDeleteTrade }) {
+function MainJournal({ selectedJournal, isSidebarOpen, onAddTrade, onUpdateTrade, onDeleteTrade }) {
   return (
     <div className="subtle-scrollbar flex-1 overflow-y-auto p-6 md:p-8">
       {/* <section className="mb-8 grid gap-4 md:grid-cols-3">
@@ -12,6 +12,7 @@ function MainJournal({ selectedJournal, onAddTrade, onUpdateTrade, onDeleteTrade
       <TradeJournal
         key={selectedJournal?.id ?? 'empty-journal'}
         journal={selectedJournal}
+        isSidebarOpen={isSidebarOpen}
         onAddTrade={onAddTrade}
         onUpdateTrade={onUpdateTrade}
         onDeleteTrade={onDeleteTrade}
