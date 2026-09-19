@@ -49,9 +49,9 @@ function TradeJournal({ journal, isSidebarOpen, onAddTrade, onUpdateTrade, onDel
         <button
           type="button"
           onClick={isFormOpen ? handleCloseForm : handleOpenNewTrade}
-          className="rounded-lg bg-sky-500 px-3 py-2 text-xs font-semibold text-white transition hover:bg-sky-600"
+          className="cursor-pointer rounded-lg bg-sky-500 px-3 py-2 text-xs font-semibold text-white transition hover:bg-sky-600"
         >
-          {isFormOpen ? 'Close' : '+ Add trade'}
+          + Add trade
         </button>
       </div>
 

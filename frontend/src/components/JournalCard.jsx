@@ -1,6 +1,9 @@
-import { useState } from "react"
+import { useContext, useState } from "react"
+import { journalContext } from "../context/Context"
 
-function JournalCard({ journal, isSelected, onSelect, onUpdate, onDelete }) {
+function JournalCard({ journal, isSelected}) {
+	const {updateJournal, deleteJournal, selectJournal,} = useContext(journalContext)
+
 	const [isEditing, setIsEditing] = useState(false)
 	const [journalName, setJournalName] = useState(journal.name)
 	const [isDeleteConfirmationOpen, setIsDeleteConfirmationOpen] = useState(false)
@@ -17,7 +20,7 @@ function JournalCard({ journal, isSelected, onSelect, onUpdate, onDelete }) {
 		const trimmedName = journalName.trim()
 		if (!trimmedName) return
 
-		onUpdate(journal.id, trimmedName)
+		updateJournal(journal.id, trimmedName)
 		setIsEditing(false)
 	}
 
@@ -27,7 +30,7 @@ function JournalCard({ journal, isSelected, onSelect, onUpdate, onDelete }) {
 	}
 
 	const handleDelete = () => {
-		onDelete(journal.id)
+		deleteJournal(journal.id)
 		setIsDeleteConfirmationOpen(false)
 	}
 
@@ -68,7 +71,7 @@ function JournalCard({ journal, isSelected, onSelect, onUpdate, onDelete }) {
 				<>
 					<button
 						type="button"
-						onClick={() => onSelect(journal.id)}
+						onClick={() => selectJournal(journal.id)}
 						className="cursor-pointer min-w-0 flex-1 rounded-md bg-transparent px-2 py-1.5 text-left transition"
 					>
 						<p className="truncate text-xs font-medium">{journal.name}</p>
