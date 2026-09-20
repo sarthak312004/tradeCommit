@@ -1,4 +1,4 @@
-import TradeJournal from './TradeJournal'
+import TradeJournal from '../components/rightContainer/journal/TradeJournal.jsx'
 
 function MainJournal({ selectedJournal, isSidebarOpen, onAddTrade, onUpdateTrade, onDeleteTrade }) {
   return (

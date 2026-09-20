@@ -1,8 +1,10 @@
 import { useContext, useState } from 'react'
-import Sidebar from '../components/Sidebar'
-import TopBar from '../components/TopBar'
-import MainJournal from '../components/MainJournal'
-import { journalContext } from '../context/Context'
+import Sidebar from './components/sidebar/Sidebar'
+import TopBar from './components/rightContainer/TopBar'
+import MainJournal from './pages/MainJournal'
+import { journalContext } from './context/Context'
+import { Outlet } from 'react-router'
+
 
 function Home() {
   const {journals, selectedJournal, addTrade, updateTrade, deleteTrade} = useContext(journalContext)
@@ -17,6 +19,7 @@ function Home() {
           <main className="flex flex-1 flex-col overflow-hidden">
             <TopBar journalName={selectedJournal?.name} />
 
+            {/* <Outlet/> */}
             <MainJournal
               selectedJournal={selectedJournal}
               isSidebarOpen={isSidebarOpen}

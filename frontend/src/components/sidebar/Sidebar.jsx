@@ -1,5 +1,5 @@
 import { useContext, useEffect, useRef, useState } from "react"
-import { journalContext } from "../context/Context"
+import { journalContext } from "../../context/Context"
 import JournalCard from "./JournalCard"
 
 
