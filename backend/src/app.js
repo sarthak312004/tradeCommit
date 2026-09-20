@@ -13,13 +13,7 @@ app.use(express.urlencoded({extended: true, limit:"16kb"}))
 app.use(express.static("public")) 
 app.use(cookieParser())
 
-app.get('/api/user',(req, res, next)=>{
-    const user = {
-        name:"Sarthak Mahamuni",
-        age:21,
-        email:"sarthak@gmail.com"
-    }
-    res.json(user)
-})
+import { userRouter } from './routes/user.routes.js'
+app.use("/api/v1/users", userRouter)
 
 export {app}

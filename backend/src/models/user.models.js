@@ -25,22 +25,20 @@ const userSchema = new mongoose.Schema(
             type:String,
             required:[true, "Password is required"]
         },
-        avatar:{
-            type: String // cloudinary url
-        },
         refreshToken:{
             type: String
         }
 
     },{ timestamps: true }
 )
-
+//Middleware to hash password just before save to db
 userSchema.pre("save", async function (next) {
     if(!this.isModified("password")) return next()
     this.password = await bcrypt.hash(this.password, 10)
     next()
 })
 
+//Instance methods
 userSchema.methods.isPasswordCorrect = async function(password){
     const isPasswordValid = await bcrypt.compare(password, this.password)
     return isPasswordValid
