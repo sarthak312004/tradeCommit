@@ -1,9 +1,8 @@
 import { Router } from "express";
-import { registerHandler } from "../controllers/user.controllers.js";
-import { asyncHandler } from "../utils/asynHandler.js"
+import { registerUser } from "../controllers/user.controller.js";
 
 const router = Router()
 
-router.post("/register", asyncHandler(registerHandler))
+router.post("/register", registerUser)
 
 export { router as userRouter }

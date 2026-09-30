@@ -65,7 +65,7 @@ userSchema.methods.generateRefreshToken = function(){
         },
         process.env.REFRESH_TOKEN_SECRETE,
         {
-            expiresIn:REFRESH_TOKEN_EXPIRY
+            expiresIn:process.env.REFRESH_TOKEN_EXPIRY
         }
     )
 }
