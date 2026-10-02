@@ -32,6 +32,14 @@ const tradeSchema = new mongoose.Schema(
       type: String, // sanitized HTML from the rich text editor
       default: "",
     },
+    images: {
+      type: [String],
+      default: [],
+      validate: {
+        validator: (value) => Array.isArray(value) && value.every((item) => typeof item === "string"),
+        message: "Images must be a list of strings",
+      },
+    },
 
     // set by the backend, never sent from the form
     owner: {

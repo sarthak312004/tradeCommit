@@ -5,8 +5,13 @@ import { JournalContextProvider } from './context/journalContextProvider.jsx'
 import Home from './Home.jsx'
 import {createBrowserRouter, RouterProvider } from 'react-router'
 import MainJournal from './pages/MainJournal.jsx'
+import AuthPage from './pages/AuthPage.jsx'
 
 const router = createBrowserRouter([
+  {
+    path:'/auth',
+    element:<AuthPage/>
+  },
   {
     path:'/',
     element:<Home/>,

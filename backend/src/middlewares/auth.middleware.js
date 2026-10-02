@@ -12,7 +12,9 @@ export const verifyJWT = asyncHandler(async (req, res, next) => {
 
   let decoded;
   try {
-    decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
+    const accessTokenSecret =
+      process.env.ACCESS_TOKEN_SECRET ?? process.env.ACCESS_TOKEN_SECRETE;
+    decoded = jwt.verify(token, accessTokenSecret);
   } catch {
     throw new ApiError(401, "Access token expired or invalid");
   }

@@ -1,12 +1,13 @@
 import { Router } from "express";
-import { loginUser, logoutUser, registerUser } from "../controllers/user.controller.js";
+import { checkAuthStatus, loginUser, logoutUser, registerUser } from "../controllers/user.controller.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 
 const router = Router()
 
-router.post("/api/v1/auth/register", registerUser)
-router.post("/api/v1/auth/login", loginUser)
-router.post("/api/v1/auth/logout", verifyJWT, logoutUser)
+router.get("/check", verifyJWT, checkAuthStatus)
+router.post("/register", registerUser)
+router.post("/login", loginUser)
+router.post("/logout", verifyJWT, logoutUser)
 
 
 export { router as userRouter }

@@ -36,11 +36,20 @@ export const registerUser = asyncHandler(async (req, res) => {
   if (exists) throw new ApiError(409, "Username or email already in use");
 
   const user = await User.create({ username, email, fullname, password });
-  const createdUser = await User.findById(user._id); // password/refreshToken hidden by select:false
+  const { accessToken, refreshToken } = await generateTokens(user);
+  const createdUser = await User.findById(user._id).select("-password -refreshToken");
 
   return res
     .status(201)
-    .json(new ApiResponse(201, createdUser, "User registered successfully"));
+    .cookie("accessToken", accessToken, cookieOptions)
+    .cookie("refreshToken", refreshToken, cookieOptions)
+    .json(
+      new ApiResponse(
+        201,
+        { user: createdUser, accessToken, refreshToken },
+        "User registered successfully"
+      )
+    );
 });
 
 // POST /api/auth/login
@@ -76,6 +85,12 @@ export const loginUser = asyncHandler(async (req, res) => {
         "User logged in successfully"
       )
     );
+});
+
+export const checkAuthStatus = asyncHandler(async (req, res) => {
+  return res
+    .status(200)
+    .json(new ApiResponse(200, { user: req.user }, "User authenticated"));
 });
 
 // POST /api/auth/logout (needs verifyJWT so req.user exists)

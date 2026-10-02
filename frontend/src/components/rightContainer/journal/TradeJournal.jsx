@@ -2,7 +2,7 @@ import { useState } from 'react'
 import TradeCard from './TradeCard'
 import TradeForm from './TradeForm'
 
-function TradeJournal({ journal, isSidebarOpen, onAddTrade, onUpdateTrade, onDeleteTrade }) {
+function TradeJournal({ journal, isSidebarOpen, onAddTrade, onUpdateTrade, onDeleteTrade, onUploadTradeImage }) {
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [editingTrade, setEditingTrade] = useState(null)
 
@@ -61,6 +61,7 @@ function TradeJournal({ journal, isSidebarOpen, onAddTrade, onUpdateTrade, onDel
           initialTrade={editingTrade}
           onSubmit={handleSubmitTrade}
           onClose={handleCloseForm}
+          onUploadImage={(file) => onUploadTradeImage(journal.id, file)}
         />
       )}
 

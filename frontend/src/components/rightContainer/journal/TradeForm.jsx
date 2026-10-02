@@ -102,13 +102,16 @@ function ToolbarButton({ title, icon, onClick }) {
 }
 
 //---------------------Main Form-------------
-function TradeForm({ journalName, initialTrade = null, onSubmit, onClose, respectReducedMotion = false }) {
+function TradeForm({ journalName, initialTrade = null, onSubmit, onClose, onUploadImage, respectReducedMotion = false }) {
   const [drawerWidth, setDrawerWidth] = useState(640)
   const [expanded, setExpanded] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [visible, setVisible] = useState(false)
+  const [isUploadingImage, setIsUploadingImage] = useState(false)
+  const [imageUploadError, setImageUploadError] = useState('')
   const [reduceMotion] = useState(() => respectReducedMotion && typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)
   const editorRef = useRef(null)
+  const editorSelectionRef = useRef(null)
   const imageInputRef = useRef(null)
   const isResizingRef = useRef(false)
   const closeTimerRef = useRef(null)
@@ -195,35 +198,90 @@ function TradeForm({ journalName, initialTrade = null, onSubmit, onClose, respec
     setValue('analysis', event.currentTarget.innerHTML, { shouldDirty: true })
   }
 
-  const handleImageUpload = (event) => {
+  const saveEditorSelection = () => {
+    const selection = window.getSelection()
+    if (selection?.rangeCount && editorRef.current?.contains(selection.anchorNode)) {
+      editorSelectionRef.current = selection.getRangeAt(0).cloneRange()
+    }
+  }
+
+  const handleImageUpload = async (event) => {
     const file = event.target.files?.[0]
     if (!file || !file.type.startsWith('image/')) return
 
-    const reader = new FileReader()
-    reader.onload = () => {
+    setImageUploadError('')
+    setIsUploadingImage(true)
+    try {
+      const imageUrl = await onUploadImage(file)
       editorRef.current?.focus()
-      document.execCommand('insertImage', false, reader.result)
+      const selection = window.getSelection()
+      const savedRange = editorSelectionRef.current
+      if (savedRange && editorRef.current?.contains(savedRange.startContainer)) {
+        selection?.removeAllRanges()
+        selection?.addRange(savedRange)
+      }
+      document.execCommand('insertImage', false, imageUrl)
       setValue('images', [...(editorRef.current?.querySelectorAll('img') ?? [])].map((image) => image.src), { shouldDirty: true })
       setValue('analysis', editorRef.current?.innerHTML ?? '', { shouldDirty: true })
+      saveEditorSelection()
+    } catch (error) {
+      setImageUploadError(error.message || 'Image upload failed. Please try again.')
+    } finally {
+      setIsUploadingImage(false)
     }
-    reader.readAsDataURL(file)
     event.target.value = ''
   }
 
-  const handleFormSubmit = (values) => {
-    onSubmit({
-      ...values,
-      symbol: values.symbol.trim().toUpperCase(),
-      quantity: values.quantity.trim(),
-      entry: values.entry.trim(),
-      exit: values.exit.trim(),
-      pnl: '$0',
-      side: values.direction,
-      qty: values.quantity.trim(),
-      status: values.exit.trim() ? 'Closed' : 'Open',
-      date: values.date || 'Today'
-    })
-    reset(defaultValues)
+  const handleFormSubmit = async (values) => {
+    const normalizedQuantity = String(values.quantity ?? '').trim()
+    const normalizedEntry = String(values.entry ?? '').trim()
+    const normalizedExit = String(values.exit ?? '').trim()
+    const normalizedSymbol = String(values.symbol ?? '').trim().toUpperCase()
+
+    setImageUploadError('')
+    setIsUploadingImage(true)
+    try {
+      const editor = editorRef.current
+      const embeddedImages = [...(editor?.querySelectorAll('img') ?? [])]
+
+      for (const image of embeddedImages) {
+        if (!image.src.startsWith('data:image/')) continue
+
+        const blob = await fetch(image.src).then((response) => response.blob())
+        const extension = blob.type.split('/')[1]?.split('+')[0] || 'png'
+        const file = new File([blob], `trade-image-${Date.now()}.${extension}`, { type: blob.type })
+        image.src = await onUploadImage(file)
+      }
+
+      const analysis = editor?.innerHTML ?? values.analysis ?? ''
+      const images = [...(editor?.querySelectorAll('img') ?? [])].map((image) => image.src)
+      setValue('analysis', analysis, { shouldDirty: true })
+      setValue('images', images, { shouldDirty: true })
+
+      onSubmit({
+        ...values,
+        analysis,
+        images,
+        symbol: normalizedSymbol,
+        assetName: normalizedSymbol,
+        quantity: normalizedQuantity,
+        qty: normalizedQuantity,
+        entry: normalizedEntry,
+        entryPrice: normalizedEntry,
+        exit: normalizedExit,
+        exitPrice: normalizedExit,
+        side: values.direction,
+        direction: values.direction,
+        pnl: '$0',
+        status: normalizedExit ? 'Closed' : 'Open',
+        date: values.date || new Date().toISOString().slice(0, 10)
+      })
+      reset(defaultValues)
+    } catch (error) {
+      setImageUploadError(error.message || 'Could not prepare images for saving. Please try again.')
+    } finally {
+      setIsUploadingImage(false)
+    }
   }
 
   const slide = `transform ${duration}ms ${EASE}`
@@ -366,11 +424,12 @@ function TradeForm({ journalName, initialTrade = null, onSubmit, onClose, respec
                 <button
                   type="button"
                   onMouseDown={keepSelection}
+                  disabled={isUploadingImage}
                   onClick={() => imageInputRef.current?.click()}
-                  className="flex h-7 items-center gap-1.5 rounded-md px-2 text-xs text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-zinc-100"
+                  className="flex h-7 items-center gap-1.5 rounded-md px-2 text-xs text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 disabled:cursor-wait disabled:opacity-50 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-zinc-100"
                 >
                   <Icon name="image" size={14} />
-                  Add image
+                  {isUploadingImage ? 'Uploading...' : 'Add image'}
                 </button>
                 <input ref={imageInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
               </div>
@@ -384,8 +443,11 @@ function TradeForm({ journalName, initialTrade = null, onSubmit, onClose, respec
                 aria-labelledby="trade-analysis-label"
                 data-placeholder="Start writing your setup, what you noticed, and what you learned..."
                 onInput={handleEditorInput}
+                onMouseUp={saveEditorSelection}
+                onKeyUp={saveEditorSelection}
                 className={editorClass}
               />
+              {imageUploadError && <p role="alert" className="mt-2 text-xs text-rose-500">{imageUploadError}</p>}
               <input type="hidden" {...register('analysis')} />
               <input type="hidden" {...register('images')} />
             </section>
@@ -394,7 +456,7 @@ function TradeForm({ journalName, initialTrade = null, onSubmit, onClose, respec
 
         <footer className="flex shrink-0 items-center justify-end gap-2 border-t border-zinc-200 px-6 py-3 dark:border-white/[0.08]">
           <button type="button" onClick={requestClose} className="h-8 rounded-md px-3 text-[13px] font-medium text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-zinc-100">Cancel</button>
-          <button type="submit" className="h-8 rounded-md bg-sky-500 px-3.5 text-[13px] font-medium text-white transition-colors hover:bg-sky-600">{initialTrade ? 'Save review' : 'Save trade'}</button>
+          <button type="submit" disabled={isUploadingImage} className="h-8 rounded-md bg-sky-500 px-3.5 text-[13px] font-medium text-white transition-colors hover:bg-sky-600 disabled:cursor-wait disabled:opacity-50">{isUploadingImage ? 'Uploading...' : initialTrade ? 'Save review' : 'Save trade'}</button>
         </footer>
       </form>
     </div>

@@ -3,7 +3,6 @@ const asyncHandler = (requestHandler) => {
          try {
             await requestHandler(req, res, next)
          } catch (error) {
-            console.log("Fetch Error: ", error);
             next(error)
          }   
     }   
