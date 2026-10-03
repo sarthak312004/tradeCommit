@@ -6,6 +6,8 @@ import Home from './Home.jsx'
 import {createBrowserRouter, RouterProvider } from 'react-router'
 import MainJournal from './pages/MainJournal.jsx'
 import AuthPage from './pages/AuthPage.jsx'
+import PlannerPage from './pages/PlannerPage.jsx'
+import { PlannerContextProvider } from './context/plannerContextProvider.jsx'
 
 const router = createBrowserRouter([
   {
@@ -19,6 +21,10 @@ const router = createBrowserRouter([
       {
         path:'',
         element:<MainJournal/>
+      },
+      {
+        path:'planner/:plannerId',
+        element:<PlannerPage/>
       }
     ]
   }
@@ -26,7 +32,9 @@ const router = createBrowserRouter([
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <JournalContextProvider>
-      <RouterProvider router={router}/>
+      <PlannerContextProvider>
+        <RouterProvider router={router}/>
+      </PlannerContextProvider>
     </JournalContextProvider>
   </StrictMode>,
 )

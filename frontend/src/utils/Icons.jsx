@@ -90,3 +90,77 @@ export const LogoutIcon = (props) => (
 		<path d="m16 17 5-5-5-5M21 12H9" />
 	</Icon>
 )
+
+
+/* ---- icons added for the trade planner ---------------------------------- */
+
+export const CalendarIcon = (props) => (
+	<Icon {...props}>
+		<path d="M8 2v4M16 2v4" />
+		<rect width="18" height="18" x="3" y="4" rx="2" />
+		<path d="M3 10h18" />
+	</Icon>
+)
+
+export const ChevronLeftIcon = (props) => (
+	<Icon {...props}>
+		<path d="m15 18-6-6 6-6" />
+	</Icon>
+)
+
+export const ChevronRightIcon = (props) => (
+	<Icon {...props}>
+		<path d="m9 18 6-6-6-6" />
+	</Icon>
+)
+
+export const BoldIcon = (props) => (
+	<Icon {...props}>
+		<path d="M6 12h9a4 4 0 0 1 0 8H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h7a4 4 0 0 1 0 8" />
+	</Icon>
+)
+
+export const ItalicIcon = (props) => (
+	<Icon {...props}>
+		<path d="M19 4h-9M14 20H5M15 4 9 20" />
+	</Icon>
+)
+
+export const ListIcon = (props) => (
+	<Icon {...props}>
+		<path d="M3 6h.01M3 12h.01M3 18h.01M8 6h13M8 12h13M8 18h13" />
+	</Icon>
+)
+
+export const ListOrderedIcon = (props) => (
+	<Icon {...props}>
+		<path d="M11 5h10M11 12h10M11 19h10M4 4h1v5M4 9h2" />
+		<path d="M6.5 20H3.4c0-1 2.6-1.925 2.6-3.5a1.5 1.5 0 0 0-2.6-1.02" />
+	</Icon>
+)
+
+export const QuoteIcon = (props) => (
+	<Icon {...props}>
+		<path d="M4 5v14M9 8h11M9 12h11M9 16h7" />
+	</Icon>
+)
+
+export const ImageIcon = (props) => (
+	<Icon {...props}>
+		<rect width="18" height="18" x="3" y="3" rx="2" />
+		<circle cx="9" cy="9" r="2" />
+		<path d="m21 15-3.09-3.09a2 2 0 0 0-2.82 0L6 21" />
+	</Icon>
+)
+
+export const MaximizeIcon = (props) => (
+	<Icon {...props}>
+		<path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
+	</Icon>
+)
+
+export const MinimizeIcon = (props) => (
+	<Icon {...props}>
+		<path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7" />
+	</Icon>
+)

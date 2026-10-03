@@ -35,13 +35,6 @@ body {
   background: #f6f5f3;
 }
 
-button,
-input,
-textarea,
-select {
-  font: inherit;
-}
-
 #root {
   min-height: 100vh;
 }
