@@ -1,8 +1,12 @@
 import { useContext, useEffect, useRef, useState } from "react"
+import { createPortal } from "react-dom"
+import { useNavigate } from "react-router"
 import { journalContext } from "../../context/Context"
 import JournalCard from "./JournalCard"
+import { ThemeCycleButton, ThemeSegmented } from "./ThemeToggle"
+import { useTheme } from "../../hooks/useTheme"
 import { CURRENCY_OPTIONS, DEFAULT_CURRENCY } from "../../utils/currencies"
-
+import { ChevronsLeftIcon, LogoutIcon, PlusIcon } from "../../utils/Icons.jsx"
 
 const EASE = "ease-[cubic-bezier(0.22,1,0.36,1)]"
 
@@ -15,59 +19,41 @@ const fade = (visible) =>
     : "invisible -translate-x-2 opacity-0"
 
 const focusRing =
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60"
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400/60"
 
-/* ----------------------------- Icons ------------------------------ */
-const PlusIcon = (props) => (
-  <svg
-    viewBox="0 0 20 20"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.75"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden="true"
-    {...props}
-  >
-    <path d="M10 4.5v11M4.5 10h11" />
-  </svg>
-)
+const ghostBtn = `cursor-pointer text-zinc-600 transition-colors hover:bg-black/[0.05] hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-white/[0.07] dark:hover:text-zinc-100 ${focusRing}`
 
-const ChevronsLeftIcon = (props) => (
-  <svg
-    viewBox="0 0 20 20"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.75"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden="true"
-    {...props}
-  >
-    <path d="M9.5 5 4.5 10l5 5M15.5 5l-5 5 5 5" />
-  </svg>
-)
-
-/* ---------------------------- Component --------------------------- */
+const fieldCls =
+  "w-full rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-[13px] text-zinc-900 outline-none transition placeholder:text-zinc-400 focus:border-zinc-400 focus:ring-2 focus:ring-zinc-400/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-zinc-500"
 
 function Sidebar({ isSidebarOpen, setIsSidebarOpen, journals }) {
   const { createJournal, selectedJournal } = useContext(journalContext)
+  const { theme, setTheme } = useTheme()
+  const navigate = useNavigate()
 
   const [isCreateFormOpen, setIsCreateFormOpen] = useState(false)
   const [journalName, setJournalName] = useState("")
   const [currency, setCurrency] = useState(DEFAULT_CURRENCY)
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false)
   const inputRef = useRef(null)
 
   const showForm = isSidebarOpen && isCreateFormOpen
 
   useEffect(() => {
     if (!showForm) return
-    const id = setTimeout(
-      () => inputRef.current?.focus({ preventScroll: true }),
-      60
-    )
+    const id = setTimeout(() => inputRef.current?.focus({ preventScroll: true }), 60)
     return () => clearTimeout(id)
   }, [showForm])
+
+  useEffect(() => {
+    if (!isLogoutConfirmOpen) return
+    const onKeyDown = (event) => {
+      if (event.key === "Escape" && !isLoggingOut) setIsLogoutConfirmOpen(false)
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [isLogoutConfirmOpen, isLoggingOut])
 
   const toggleSidebar = () => setIsSidebarOpen((prev) => !prev)
 
@@ -80,48 +66,60 @@ function Sidebar({ isSidebarOpen, setIsSidebarOpen, journals }) {
     setIsCreateFormOpen((prev) => !prev)
   }
 
-  // Trim the name so whitespace-only names are ignored.
-  const handleCreateJournal = (event) => {
-    event.preventDefault()
-
-    const trimmedName = journalName.trim()
-    if (!trimmedName) return
-
-    createJournal(trimmedName, currency)
+  const resetForm = () => {
     setJournalName("")
     setCurrency(DEFAULT_CURRENCY)
     setIsCreateFormOpen(false)
   }
 
-  const handleCancelCreate = () => {
-    setJournalName("")
-    setCurrency(DEFAULT_CURRENCY)
-    setIsCreateFormOpen(false)
+  const handleCreateJournal = (event) => {
+    event.preventDefault()
+    const trimmedName = journalName.trim()
+    if (!trimmedName) return
+    createJournal(trimmedName, currency)
+    resetForm()
+  }
+
+  // Uses the existing POST /api/v1/auth/logout controller (clears cookies + refresh token).
+  const handleLogout = async () => {
+    if (isLoggingOut) return
+    setIsLoggingOut(true)
+    try {
+      await fetch("/api/v1/auth/logout", {
+        method: "POST",
+        credentials: "include",
+      })
+    } catch {
+      /* network failure: still leave the session view */
+    } finally {
+      window.dispatchEvent(new Event("auth-state-changed"))
+      navigate("/auth", { replace: true })
+    }
   }
 
   return (
     <aside
-      aria-label="Journals"
+      aria-label="Sidebar"
       className={`${
-        isSidebarOpen ? "w-[300px]" : "w-[68px]"
-      } relative flex shrink-0 flex-col overflow-hidden border-r border-zinc-200 bg-stone-100/80 backdrop-blur-sm transition-[width] duration-500 ${EASE} will-change-[width] motion-reduce:transition-none dark:border-zinc-800 dark:bg-[#171a1d]/80`}
+        isSidebarOpen ? "w-[260px]" : "w-[56px]"
+      } relative flex shrink-0 flex-col overflow-hidden border-r border-zinc-200/80 bg-[#f7f7f5] transition-[width] duration-300 ${EASE} will-change-[width] motion-reduce:transition-none dark:border-white/[0.07] dark:bg-[#202020]`}
     >
       {/* ------------------------------ Header ------------------------------ */}
-      <div className="flex h-16 shrink-0 items-center border-b border-zinc-200 dark:border-zinc-800">
-        <div className="flex w-[300px] shrink-0 items-center justify-between px-4">
-          <div className="flex items-center gap-3">
+      <div className="flex h-12 shrink-0 items-center">
+        <div className="flex w-[260px] shrink-0 items-center justify-between pl-[10px] pr-2">
+          <div className="flex items-center gap-2.5">
             <button
               type="button"
               onClick={toggleSidebar}
               aria-label={isSidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
-              className={`flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-xl bg-gradient-to-br from-sky-400 to-violet-400 text-sm font-bold text-white shadow-sm transition-transform duration-150 hover:scale-105 active:scale-95 ${focusRing}`}
+              className={`flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-md ${ghostBtn}`}
             >
-              T
+              <span className="flex h-6 w-6 items-center justify-center rounded bg-zinc-900 text-[11px] font-bold text-white dark:bg-zinc-100 dark:text-zinc-900">
+                T
+              </span>
             </button>
             <span
-              className={`whitespace-nowrap text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-100 ${FADE_BASE} ${fade(
-                isSidebarOpen
-              )}`}
+              className={`whitespace-nowrap text-sm font-medium text-zinc-800 dark:text-zinc-100 ${FADE_BASE} ${fade(isSidebarOpen)}`}
             >
               TradeCommit
             </span>
@@ -133,102 +131,111 @@ function Sidebar({ isSidebarOpen, setIsSidebarOpen, journals }) {
             title="Collapse sidebar"
             aria-label="Collapse sidebar"
             aria-expanded={isSidebarOpen}
-            className={`flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-200/70 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-white ${focusRing} ${FADE_BASE} ${fade(
-              isSidebarOpen
-            )}`}
+            className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${ghostBtn} ${FADE_BASE} ${fade(isSidebarOpen)}`}
           >
             <ChevronsLeftIcon className="h-4 w-4" />
           </button>
         </div>
       </div>
 
-      {/* --------------------------- Create button --------------------------- */}
-      <div className="shrink-0 px-4 pt-4">
-        <button
-          type="button"
-          onClick={handleCreateClick}
-          aria-expanded={showForm}
-          title="Create new journal"
-          aria-label="Create new journal"
-          className={`flex h-9 w-full cursor-pointer items-center overflow-hidden rounded-xl border border-dashed border-zinc-300 text-sm font-medium text-zinc-600 transition-colors duration-150 hover:border-sky-400 hover:bg-sky-500/5 hover:text-sky-700 dark:border-zinc-700 dark:text-zinc-300 dark:hover:border-sky-500 dark:hover:text-sky-300 ${focusRing}`}
+      {/* --------------------------- Section label + add --------------------------- */}
+      <div className="relative h-8 shrink-0">
+        <div
+          className={`absolute inset-y-0 left-0 flex w-[260px] items-center justify-between pl-4 pr-2 ${FADE_BASE} ${fade(isSidebarOpen)}`}
         >
-          <span className="flex h-full w-[34px] shrink-0 items-center justify-center">
-            <PlusIcon className="h-[18px] w-[18px]" />
+          <span className="text-[11px] font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+            Journals
           </span>
-          <span
-            className={`whitespace-nowrap pr-3 ${FADE_BASE} ${fade(
-              isSidebarOpen
-            )}`}
+          <button
+            type="button"
+            onClick={handleCreateClick}
+            aria-expanded={showForm}
+            title="New journal"
+            aria-label="New journal"
+            className={`flex h-6 w-6 items-center justify-center rounded-md ${ghostBtn}`}
           >
-            Create new journal
-          </span>
-        </button>
+            <PlusIcon className="h-4 w-4" />
+          </button>
+        </div>
+        <div
+          className={`absolute inset-y-0 left-0 flex w-[56px] items-center justify-center ${FADE_BASE} ${fade(!isSidebarOpen)}`}
+        >
+          <button
+            type="button"
+            onClick={handleCreateClick}
+            title="New journal"
+            aria-label="New journal"
+            className={`flex h-8 w-8 items-center justify-center rounded-md ${ghostBtn}`}
+          >
+            <PlusIcon className="h-4 w-4" />
+          </button>
+        </div>
       </div>
 
+      {/* ------------------------------ Create form ------------------------------ */}
       <div
-        className={`grid shrink-0 transition-[grid-template-rows,opacity,visibility] duration-300 ${EASE} motion-reduce:transition-none ${
+        className={`grid shrink-0 transition-[grid-template-rows,opacity,visibility] duration-200 ${EASE} motion-reduce:transition-none ${
           showForm
             ? "visible grid-rows-[1fr] opacity-100"
             : "invisible grid-rows-[0fr] opacity-0"
         }`}
       >
         <div className="min-h-0 overflow-hidden">
-          <form
-            onSubmit={handleCreateJournal}
-            className="w-[300px] shrink-0 px-4 pt-3"
-          >
-            <div className="rounded-xl border border-zinc-200 bg-white/70 p-3 shadow-sm dark:border-zinc-700 dark:bg-zinc-900/60">
-              <label htmlFor="journal-name" className="sr-only">
-                Journal name
+          <form onSubmit={handleCreateJournal} className="w-[260px] shrink-0 px-3 pb-2 pt-1">
+            <div className="rounded-lg border border-zinc-200 bg-white p-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)] dark:border-white/[0.09] dark:bg-[#2a2a2a]">
+              <label
+                htmlFor="journal-name"
+                className="mb-1 block text-[11px] font-medium text-zinc-500 dark:text-zinc-400"
+              >
+                Name
               </label>
               <input
                 ref={inputRef}
                 id="journal-name"
                 type="text"
                 value={journalName}
-                onChange={(event) => setJournalName(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Escape") handleCancelCreate()
-                }}
-                placeholder="Journal name"
+                onChange={(e) => setJournalName(e.target.value)}
+                onKeyDown={(e) => e.key === "Escape" && resetForm()}
+                placeholder="e.g. Swing trades"
                 autoComplete="off"
-                className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition placeholder:text-zinc-400 focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-sky-500"
+                className={fieldCls}
               />
-              <div className="mt-2.5">
-                <label htmlFor="journal-currency" className="text-xs text-zinc-500 dark:text-zinc-400">
-                  Currency
-                </label>
-                <select
-                  id="journal-currency"
-                  value={currency}
-                  onChange={(event) => setCurrency(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Escape") handleCancelCreate()
-                  }}
-                  className="mt-1 w-full cursor-pointer rounded-lg border border-zinc-200 bg-white px-2.5 py-2 text-sm text-zinc-900 outline-none transition [color-scheme:light] focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:[color-scheme:dark] dark:focus:border-sky-500"
-                >
-                  {CURRENCY_OPTIONS.map((option) => (
-                    <option key={option.code} value={option.code}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-                <p className="mt-1.5 text-[11px] text-zinc-400 dark:text-zinc-500">
-                  Used for all P&amp;L in this journal. Can&apos;t be changed later.
-                </p>
-              </div>
-              <div className="mt-2.5 flex justify-end gap-2">
+
+              <label
+                htmlFor="journal-currency"
+                className="mb-1 mt-3 block text-[11px] font-medium text-zinc-500 dark:text-zinc-400"
+              >
+                Currency
+              </label>
+              <select
+                id="journal-currency"
+                value={currency}
+                onChange={(e) => setCurrency(e.target.value)}
+                onKeyDown={(e) => e.key === "Escape" && resetForm()}
+                className={`${fieldCls} cursor-pointer [color-scheme:light] dark:[color-scheme:dark]`}
+              >
+                {CURRENCY_OPTIONS.map((option) => (
+                  <option key={option.code} value={option.code}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1.5 text-[11px] leading-snug text-zinc-400 dark:text-zinc-500">
+                Used for all P&amp;L here. Can&apos;t be changed later.
+              </p>
+
+              <div className="mt-3 flex items-center justify-end gap-1.5">
                 <button
                   type="button"
-                  onClick={handleCancelCreate}
-                  className={`cursor-pointer rounded-lg px-3 py-1.5 text-xs font-medium text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100 ${focusRing}`}
+                  onClick={resetForm}
+                  className={`rounded-md px-2.5 py-1 text-xs font-medium ${ghostBtn}`}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={!journalName.trim()}
-                  className={`cursor-pointer rounded-lg bg-sky-500 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-sky-600 disabled:cursor-not-allowed disabled:opacity-50 ${focusRing}`}
+                  className={`cursor-pointer rounded-md bg-zinc-900 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white ${focusRing}`}
                 >
                   Create
                 </button>
@@ -238,21 +245,17 @@ function Sidebar({ isSidebarOpen, setIsSidebarOpen, journals }) {
         </div>
       </div>
 
-      <div className="mx-4 mt-4 shrink-0 border-t border-zinc-200 dark:border-zinc-800" />
-
       {/* ------------------------------ Journals ------------------------------ */}
       <div className="relative min-h-0 flex-1">
         <div
-          className={`absolute inset-y-0 left-0 w-[300px] overflow-y-auto overscroll-contain px-4 py-4 [scrollbar-width:thin] ${FADE_BASE} ${fade(
-            isSidebarOpen
-          )}`}
+          className={`subtle-scrollbar absolute inset-y-0 left-0 w-[260px] overflow-y-auto overscroll-contain px-2 pb-2 ${FADE_BASE} ${fade(isSidebarOpen)}`}
         >
           {journals.length === 0 ? (
-            <p className="px-2 py-6 text-center text-sm text-zinc-500 dark:text-zinc-400">
-              No journals yet. Create one to get started.
+            <p className="px-2 py-4 text-[13px] text-zinc-400 dark:text-zinc-500">
+              No journals yet.
             </p>
           ) : (
-            <div className="relative space-y-1 pl-5 before:absolute before:bottom-3 before:left-2 before:top-3 before:w-px before:bg-zinc-300 dark:before:bg-zinc-700 [&>*]:cursor-pointer">
+            <div className="space-y-px">
               {journals.map((journal) => (
                 <JournalCard
                   key={journal.id}
@@ -264,11 +267,9 @@ function Sidebar({ isSidebarOpen, setIsSidebarOpen, journals }) {
           )}
         </div>
 
-        {/* Collapsed layer: fixed 68px rail of journal badges */}
+        {/* Collapsed rail */}
         <div
-          className={`absolute inset-y-0 left-0 flex w-[68px] flex-col items-center gap-2 overflow-y-auto overscroll-contain py-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${FADE_BASE} ${fade(
-            !isSidebarOpen
-          )}`}
+          className={`absolute inset-y-0 left-0 flex w-[56px] flex-col items-center gap-1 overflow-y-auto overscroll-contain py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${FADE_BASE} ${fade(!isSidebarOpen)}`}
         >
           {journals.map((journal) => {
             const isSelected = selectedJournal?.id === journal.id
@@ -278,10 +279,10 @@ function Sidebar({ isSidebarOpen, setIsSidebarOpen, journals }) {
                 title={journal.name}
                 aria-label={journal.name}
                 aria-current={isSelected ? "true" : undefined}
-                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[11px] font-semibold ring-1 transition-colors duration-150 ${
+                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[11px] font-medium transition-colors ${
                   isSelected
-                    ? "bg-sky-500/10 text-sky-700 ring-sky-500/40 dark:bg-sky-400/10 dark:text-sky-300 dark:ring-sky-400/40"
-                    : "bg-white text-zinc-700 ring-zinc-200 dark:bg-zinc-900 dark:text-zinc-200 dark:ring-zinc-700"
+                    ? "bg-black/[0.07] text-zinc-900 dark:bg-white/[0.1] dark:text-zinc-50"
+                    : "text-zinc-500 dark:text-zinc-400"
                 }`}
               >
                 {journal.name.slice(0, 2).toUpperCase()}
@@ -290,6 +291,95 @@ function Sidebar({ isSidebarOpen, setIsSidebarOpen, journals }) {
           })}
         </div>
       </div>
+
+      {/* ------------------------------ Footer ------------------------------ */}
+      <div className="relative h-[84px] shrink-0 border-t border-zinc-200/80 dark:border-white/[0.07]">
+        {/* Expanded */}
+        <div
+          className={`absolute inset-y-0 left-0 flex w-[260px] flex-col justify-center gap-1 px-2 ${FADE_BASE} ${fade(isSidebarOpen)}`}
+        >
+          <div className="flex items-center justify-between pl-2">
+            <span className="text-xs text-zinc-500 dark:text-zinc-400">Theme</span>
+            <ThemeSegmented theme={theme} setTheme={setTheme} />
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsLogoutConfirmOpen(true)}
+            className={`flex h-8 w-full items-center gap-2 rounded-md px-2 text-[13px] ${ghostBtn}`}
+          >
+            <LogoutIcon className="h-4 w-4" />
+            Log out
+          </button>
+        </div>
+
+        {/* Collapsed */}
+        <div
+          className={`absolute inset-y-0 left-0 flex w-[56px] flex-col items-center justify-center gap-1 ${FADE_BASE} ${fade(!isSidebarOpen)}`}
+        >
+          <ThemeCycleButton theme={theme} setTheme={setTheme} />
+          <button
+            type="button"
+            onClick={() => setIsLogoutConfirmOpen(true)}
+            title="Log out"
+            aria-label="Log out"
+            className={`flex h-8 w-8 items-center justify-center rounded-md ${ghostBtn}`}
+          >
+            <LogoutIcon className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+      {isLogoutConfirmOpen &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget && !isLoggingOut) {
+                setIsLogoutConfirmOpen(false)
+              }
+            }}
+          >
+            <div
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby="logout-title"
+              aria-describedby="logout-desc"
+              className="w-full max-w-[340px] rounded-xl border border-zinc-200 bg-white p-5 shadow-[0_16px_48px_-12px_rgba(0,0,0,0.3)] dark:border-white/[0.09] dark:bg-[#2a2a2a]"
+            >
+              <h2
+                id="logout-title"
+                className="text-sm font-semibold text-zinc-900 dark:text-zinc-50"
+              >
+                Log out of TradeCommit?
+              </h2>
+              <p
+                id="logout-desc"
+                className="mt-1.5 text-[13px] leading-snug text-zinc-500 dark:text-zinc-400"
+              >
+                You&apos;ll need to sign in again to access your journals.
+              </p>
+              <div className="mt-5 flex justify-end gap-2">
+                <button
+                  type="button"
+                  autoFocus
+                  disabled={isLoggingOut}
+                  onClick={() => setIsLogoutConfirmOpen(false)}
+                  className={`rounded-md px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50 ${ghostBtn}`}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  disabled={isLoggingOut}
+                  className="cursor-pointer rounded-md bg-rose-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/40 disabled:cursor-wait disabled:opacity-60 dark:bg-rose-500 dark:hover:bg-rose-600"
+                >
+                  {isLoggingOut ? "Logging out…" : "Log out"}
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
     </aside>
   )
 }

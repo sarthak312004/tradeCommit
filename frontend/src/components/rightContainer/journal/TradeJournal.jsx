@@ -21,6 +21,12 @@ function TradeJournal({ journal, isSidebarOpen, onAddTrade, onUpdateTrade, onDel
   const allTrades = journal?.trades
   const visibleTrades = useMemo(() => filterTradesByDate(allTrades ?? [], range), [allTrades, range])
 
+  // new trades start with the custom fields of the most recent trade in this journal
+  const templateFields = useMemo(() => {
+    const latest = [...(allTrades ?? [])].sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')))[0]
+    return (latest?.customFields ?? []).map(({ key, label, type }) => ({ key, label, type }))
+  }, [allTrades])
+
   const handleOpenNewTrade = () => {
     setEditingTrade(null)
     setIsFormOpen(true)
@@ -48,7 +54,7 @@ function TradeJournal({ journal, isSidebarOpen, onAddTrade, onUpdateTrade, onDel
 
   if (!journal) {
     return (
-      <section className="rounded-2xl border border-dashed border-zinc-300 bg-white/40 p-10 text-center dark:border-zinc-700 dark:bg-zinc-900/30">
+      <section className="rounded-lg border border-dashed border-zinc-300 p-10 text-center dark:border-white/10">
         <p className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Create or select a journal to view trades.</p>
       </section>
     )
@@ -103,6 +109,8 @@ function TradeJournal({ journal, isSidebarOpen, onAddTrade, onUpdateTrade, onDel
       {isFormOpen && (
         <TradeForm
           journalName={journal.name}
+          currency={currency}
+          templateFields={templateFields}
           initialTrade={editingTrade}
           onSubmit={handleSubmitTrade}
           onClose={handleCloseForm}
@@ -111,12 +119,12 @@ function TradeJournal({ journal, isSidebarOpen, onAddTrade, onUpdateTrade, onDel
       )}
 
       {journal.trades.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-zinc-300 bg-white/40 p-10 text-center dark:border-zinc-700 dark:bg-zinc-900/30">
+        <div className="rounded-lg border border-dashed border-zinc-300 p-10 text-center dark:border-white/10">
           <p className="text-sm font-medium text-zinc-600 dark:text-zinc-300">No trades in this journal yet.</p>
           <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Add your first trade to start tracking this journal.</p>
         </div>
       ) : visibleTrades.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-zinc-300 bg-white/40 p-10 text-center dark:border-zinc-700 dark:bg-zinc-900/30">
+        <div className="rounded-lg border border-dashed border-zinc-300 p-10 text-center dark:border-white/10">
           <p className="text-sm font-medium text-zinc-600 dark:text-zinc-300">No trades in {describeRangeInline(range)}.</p>
           <button
             type="button"
@@ -129,7 +137,7 @@ function TradeJournal({ journal, isSidebarOpen, onAddTrade, onUpdateTrade, onDel
       ) : view === 'analysis' ? (
         <TradeAnalysis trades={visibleTrades} currency={currency} rangeLabel={isFiltered ? describeRangeInline(range) : null} />
       ) : (
-        <div className={`grid gap-4 ${isSidebarOpen ? 'lg:grid-cols-2' : 'lg:grid-cols-3'}`}>
+        <div className={`grid gap-3 sm:grid-cols-2 ${isSidebarOpen ? 'xl:grid-cols-3' : 'lg:grid-cols-3 2xl:grid-cols-4'}`}>
           {visibleTrades.map((currentTrade) => (
             <TradeCard
               key={currentTrade.id}

@@ -41,6 +41,7 @@ const normalizeTradeForBackend = (trade) => {
             ...(Array.isArray(trade.images) ? trade.images : []),
             ...extractImagesFromAnalysis(trade.analysis ?? ""),
         ])],
+        customFields: Array.isArray(trade.customFields) ? trade.customFields : [],
     }
 }
 
@@ -70,6 +71,7 @@ const normalizeJournalForFrontend = (journal) => ({
         stopLoss: trade.stopLoss ?? "",
         analysis: trade.analysis ?? "",
         images: Array.isArray(trade.images) ? trade.images : [],
+        customFields: Array.isArray(trade.customFields) ? trade.customFields : [],
         status: trade.status ?? ((trade.exit == null || trade.exit === "") ? "Open" : "Closed"),
         pnl: trade.pnl ?? "$0",
         createdAt: trade.createdAt ?? new Date().toISOString(),
@@ -215,6 +217,7 @@ function JournalContextProvider({children}){
             stopLoss: created.stopLoss ?? "",
             analysis: created.analysis ?? "",
             images: Array.isArray(created.images) ? created.images : [],
+            customFields: Array.isArray(created.customFields) ? created.customFields : [],
             status: created.status ?? ((created.exit == null || created.exit === "") ? "Open" : "Closed"),
             pnl: created.pnl ?? "$0",
         }
@@ -252,6 +255,7 @@ function JournalContextProvider({children}){
             stopLoss: updated.stopLoss ?? "",
             analysis: updated.analysis ?? "",
             images: Array.isArray(updated.images) ? updated.images : [],
+            customFields: Array.isArray(updated.customFields) ? updated.customFields : [],
             status: updated.status ?? ((updated.exit == null || updated.exit === "") ? "Open" : "Closed"),
             pnl: updated.pnl ?? "$0",
         }

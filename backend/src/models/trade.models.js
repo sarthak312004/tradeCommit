@@ -1,5 +1,16 @@
 import mongoose from "mongoose";
 
+// user-defined extra properties (name + type + value) stored on each trade
+const customFieldSchema = new mongoose.Schema(
+  {
+    key: { type: String, required: true },
+    label: { type: String, required: true, trim: true, maxlength: 40 },
+    type: { type: String, enum: ["text", "number", "date", "checkbox"], required: true },
+    value: { type: mongoose.Schema.Types.Mixed, default: null },
+  },
+  { _id: false }
+);
+
 const tradeSchema = new mongoose.Schema(
   {
     date: {
@@ -43,6 +54,11 @@ const tradeSchema = new mongoose.Schema(
         validator: (value) => Array.isArray(value) && value.every((item) => typeof item === "string"),
         message: "Images must be a list of strings",
       },
+    },
+
+    customFields: {
+      type: [customFieldSchema],
+      default: [],
     },
 
     // set by the backend, never sent from the form

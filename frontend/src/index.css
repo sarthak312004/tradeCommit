@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   font-family: Inter, 'Segoe UI', sans-serif;
   line-height: 1.5;
@@ -18,6 +20,12 @@
 
 html {
   background: #f6f5f3;
+}
+
+html.dark,
+html.dark body {
+  background: #191919;
+  color: #e6e6e4;
 }
 
 body {

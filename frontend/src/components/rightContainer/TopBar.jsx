@@ -1,6 +1,6 @@
 function TopBar({ journalName }) {
   return (
-    <header className="flex items-center justify-between border-b border-zinc-200 bg-stone-100/80 px-6 py-4 backdrop-blur-sm dark:border-zinc-800 dark:bg-[#111315]/80">
+    <header className="flex items-center justify-between border-b border-zinc-200/80 bg-white/80 px-6 py-4 backdrop-blur-sm dark:border-white/[0.07] dark:bg-[#191919]/80">
       <div>
         <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-400">Journal</p>
         <h1 className="mt-1 text-2xl font-semibold tracking-[-0.06em]">{journalName || 'Home'}</h1>

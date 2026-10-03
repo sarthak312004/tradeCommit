@@ -4,16 +4,12 @@ import { CheckIcon, CloseIcon, FileIcon, PencilIcon, TrashIcon } from "../../uti
 
 // ---- Styles -----------------------------------------------------------------
 
-const rowBase =
-	"group relative flex w-full items-center rounded-md border transition-colors before:absolute before:-left-3 before:top-1/2 before:h-px before:w-3 before:bg-zinc-300 dark:before:bg-zinc-700"
+const rowBase = "group relative flex w-full items-center rounded-md transition-colors"
 
-// colour underneath instead of fighting it. Blue is reserved for the tree dot.
 const rowStates = {
-	selected:
-		"border-zinc-900/[0.15] bg-zinc-900/[0.07] dark:border-white/[0.14] dark:bg-white/[0.09]",
-	editing:
-		"border-zinc-900/[0.1] bg-zinc-900/[0.05] dark:border-white/[0.1] dark:bg-white/[0.06]",
-	idle: "border-zinc-900/[0.08] bg-zinc-900/[0.03] hover:border-zinc-900/[0.12] hover:bg-zinc-900/[0.055] dark:border-white/[0.07] dark:bg-white/[0.04] dark:hover:border-white/[0.11] dark:hover:bg-white/[0.065]",
+	selected: "bg-black/[0.06] dark:bg-white/[0.08]",
+	editing: "bg-black/[0.04] dark:bg-white/[0.05]",
+	idle: "hover:bg-black/[0.04] dark:hover:bg-white/[0.05]",
 }
 
 const getRowClasses = ({ isEditing, isSelected }) => {
@@ -85,7 +81,7 @@ function JournalCard({ journal, isSelected }) {
 	const fileIcon = (
 		<FileIcon
 			strokeWidth={1.5}
-			className={`h-4 w-4 shrink-0 transition-colors ${
+			className={`h-[15px] w-[15px] shrink-0 transition-colors ${
 				isSelected ? "text-zinc-600 dark:text-zinc-300" : "text-zinc-400 dark:text-zinc-500"
 			}`}
 		/>
@@ -93,16 +89,8 @@ function JournalCard({ journal, isSelected }) {
 
 	return (
 		<div className={getRowClasses({ isEditing, isSelected })}>
-			{/* Tree node: the only blue on the card, turns on when selected */}
-			<span
-				aria-hidden="true"
-				className={`absolute -left-1 top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full ring-2 ring-stone-100 transition-colors dark:ring-[#171a1d] ${
-					isSelected ? "bg-sky-500" : "bg-zinc-400 dark:bg-zinc-500"
-				}`}
-			/>
-
 			{isEditing ? (
-				<form onSubmit={handleUpdate} className="flex min-w-0 flex-1 items-center gap-1 py-1.5 pl-2 pr-1">
+				<form onSubmit={handleUpdate} className="flex min-w-0 flex-1 items-center gap-1 py-1 pl-2 pr-1">
 					<div className="flex min-w-0 flex-1 items-center gap-2">
 						{fileIcon}
 						<label htmlFor={`edit-journal-${journal.id}`} className="sr-only">
@@ -145,7 +133,7 @@ function JournalCard({ journal, isSelected }) {
 						type="button"
 						onClick={() => selectJournal(journal.id)}
 						aria-current={isSelected ? "true" : undefined}
-						className={`flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md py-1.5 pl-2 pr-1 text-left focus-visible:ring-inset ${focusRing}`}
+						className={`flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md py-1 pl-2 pr-1 text-left focus-visible:ring-inset ${focusRing}`}
 					>
 						{fileIcon}
 						<span
@@ -187,7 +175,7 @@ function JournalCard({ journal, isSelected }) {
 							role="alertdialog"
 							aria-label={`Delete ${journal.name}?`}
 							onKeyDown={(event) => event.key === "Escape" && setIsDeleteConfirmationOpen(false)}
-							className="absolute right-0 top-[calc(100%+6px)] z-10 w-52 rounded-lg border border-zinc-900/10 bg-white p-3 text-left shadow-[0_8px_24px_-6px_rgba(0,0,0,0.18)] dark:border-white/10 dark:bg-zinc-900 dark:shadow-black/50"
+							className="absolute right-0 top-[calc(100%+6px)] z-10 w-52 rounded-lg border border-zinc-900/10 bg-white p-3 text-left shadow-[0_8px_24px_-6px_rgba(0,0,0,0.18)] dark:border-white/10 dark:bg-[#2a2a2a] dark:shadow-black/50"
 						>
 							<p className="text-[13px] font-medium text-zinc-900 dark:text-zinc-100">Delete this journal?</p>
 							<p className="mt-0.5 truncate text-xs text-zinc-500 dark:text-zinc-400">{journal.name}</p>

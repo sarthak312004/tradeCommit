@@ -25,6 +25,9 @@ const serializeTrade = (trade) => {
     stopLoss: trade.stopLoss ?? "",
     analysis: trade.analysis ?? "",
     images: Array.isArray(trade.images) ? trade.images : [],
+    customFields: Array.isArray(trade.customFields)
+      ? trade.customFields.map(({ key, label, type, value }) => ({ key, label, type, value }))
+      : [],
     status: trade.exitPrice == null ? "Open" : "Closed",
     pnl: trade.exitPrice == null ? "$0" : `$${((trade.exitPrice - trade.entryPrice) * (trade.direction === "short" ? -1 : 1) * quantity).toFixed(2)}`,
     createdAt: trade.createdAt ? new Date(trade.createdAt).toISOString() : new Date().toISOString(),

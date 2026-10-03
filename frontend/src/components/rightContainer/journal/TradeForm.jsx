@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { useForm } from 'react-hook-form'
+import { useFieldArray, useForm } from 'react-hook-form'
+import { formatMoney, formatR, getTradePnl, getTradeR, toneOf } from '../../../utils/tradeAnalytics'
+import { DEFAULT_CURRENCY } from '../../../utils/currencies'
 
 const defaultValues = {
   date: new Date().toISOString().slice(0, 10),
@@ -10,14 +12,17 @@ const defaultValues = {
   exit: '',
   direction: 'Long',
   analysis: '',
-  images: []
+  images: [],
+  customFields: []
 }
 
 /* ---------- motion + layout constants ---------- */
 const EASE = 'cubic-bezier(0.32, 0.72, 0, 1)'
 const DURATION = 320
-const EDGE_GAP = 16 // gap between the floating panel and the viewport edge (md:p-4)
-const EXPANDED_WIDTH = 1100 // clamped by max-w-full on small screens
+const EDGE_GAP = 12 // gap between the floating panel and the viewport edge (md:p-3)
+const DEFAULT_WIDTH = 860
+const MAX_WIDTH = 1400
+const EXPANDED_WIDTH = 1400 // clamped by max-w-full on small screens
 
 /* ---------- tiny stroke icon set (inherits currentColor) ---------- */
 const iconPaths = {
@@ -36,8 +41,32 @@ const iconPaths = {
   image: (<><rect width="18" height="18" x="3" y="3" rx="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-3.09-3.09a2 2 0 0 0-2.82 0L6 21" /></>),
   maximize: (<><path d="M15 3h6v6" /><path d="M9 21H3v-6" /><path d="m21 3-7 7" /><path d="m3 21 7-7" /></>),
   minimize: (<><path d="M4 14h6v6" /><path d="M20 10h-6V4" /><path d="m14 10 7-7" /><path d="m3 21 7-7" /></>),
-  x: (<><path d="M18 6 6 18" /><path d="m6 6 12 12" /></>)
+  x: (<><path d="M18 6 6 18" /><path d="m6 6 12 12" /></>),
+  trendUp: (<><path d="M22 7 13.5 15.5l-5-5L2 17" /><path d="M16 7h6v6" /></>),
+  trendDown: (<><path d="M22 17 13.5 8.5l-5 5L2 7" /><path d="M16 17h6v-6" /></>),
+  check: <path d="m5 12.5 4.5 4.5L19 7.5" />,
+  text: (<><path d="M4 7V4h16v3" /><path d="M9 20h6" /><path d="M12 4v16" /></>),
+  checkSquare: (<><path d="m9 11 3 3L22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></>),
+  plus: <path d="M12 5v14M5 12h14" />
 }
+
+/* ---------- user-defined fields ---------- */
+const MAX_CUSTOM_FIELDS = 20
+const FIELD_TYPES = {
+  text: { label: 'Text', icon: 'text', empty: '' },
+  number: { label: 'Number', icon: 'hash', empty: '' },
+  date: { label: 'Date', icon: 'calendar', empty: '' },
+  checkbox: { label: 'Checkbox', icon: 'checkSquare', empty: false }
+}
+
+const toFormField = (field) => ({
+  key: field.key,
+  label: field.label ?? '',
+  type: FIELD_TYPES[field.type] ? field.type : 'text',
+  value: field.value ?? (FIELD_TYPES[field.type] ?? FIELD_TYPES.text).empty
+})
+
+const makeFieldKey = () => (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `f-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`)
 
 function Icon({ name, size = 16 }) {
   return (
@@ -50,14 +79,14 @@ function Icon({ name, size = 16 }) {
 /* ---------- shared styles ---------- */
 const iconButtonClass = 'flex h-7 w-7 items-center justify-center rounded-md text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-500 dark:hover:bg-white/10 dark:hover:text-zinc-200'
 
-const inputClass = 'h-[30px] w-full rounded-md bg-transparent px-2 text-sm text-zinc-800 outline-none transition-colors placeholder:text-zinc-400 hover:bg-zinc-100 focus:bg-zinc-100 focus:ring-1 focus:ring-sky-500/40 dark:text-zinc-100 dark:placeholder:text-zinc-600 dark:hover:bg-white/[0.06] dark:focus:bg-white/[0.06]'
+const inputClass = 'h-8 w-full rounded-md bg-transparent px-2 text-sm text-zinc-800 outline-none transition-colors placeholder:text-zinc-400 hover:bg-zinc-100/80 focus:bg-zinc-100 focus:ring-1 focus:ring-zinc-300 dark:text-zinc-100 dark:placeholder:text-zinc-600 dark:hover:bg-white/[0.05] dark:focus:bg-white/[0.06] dark:focus:ring-white/15'
 const numberInputClass = `${inputClass} [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`
 const dateInputClass = `${inputClass} [color-scheme:light] dark:[color-scheme:dark]`
 
 const toolbarButtonClass = 'flex h-7 w-7 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-zinc-100'
 
 const editorClass = [
-  'min-h-64 py-4 text-[15px] leading-7 text-zinc-800 outline-none dark:text-zinc-200',
+  'min-h-[420px] py-4 text-[15px] leading-7 text-zinc-800 outline-none dark:text-zinc-200',
   'empty:before:pointer-events-none empty:before:text-zinc-400 empty:before:content-[attr(data-placeholder)] dark:empty:before:text-zinc-600',
   '[&_h2]:mb-1 [&_h2]:mt-6 [&_h2]:text-2xl [&_h2]:font-semibold [&_h2]:leading-9',
   '[&_h3]:mb-1 [&_h3]:mt-4 [&_h3]:text-xl [&_h3]:font-semibold [&_h3]:leading-8',
@@ -68,9 +97,15 @@ const editorClass = [
 ].join(' ')
 
 const directionOptions = [
-  { value: 'Long', tone: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300' },
-  { value: 'Short', tone: 'bg-rose-100 text-rose-800 dark:bg-rose-500/20 dark:text-rose-300' }
+  { value: 'Long', icon: 'trendUp', tone: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300' },
+  { value: 'Short', icon: 'trendDown', tone: 'bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300' }
 ]
+
+const pnlTextClass = {
+  positive: 'text-emerald-600 dark:text-emerald-400',
+  negative: 'text-rose-500 dark:text-rose-400',
+  neutral: 'text-zinc-600 dark:text-zinc-300'
+}
 
 // keep the text selection inside the editor when a toolbar button is pressed
 const keepSelection = (event) => event.preventDefault()
@@ -82,14 +117,14 @@ function PropertyRow({ icon, label, hint, htmlFor, error, children }) {
 
   return (
     <div className="flex items-start gap-2 py-0.5">
-      <Label {...labelProps} className="flex h-[30px] w-36 shrink-0 items-center gap-2 text-[13px] text-zinc-500 sm:w-40 dark:text-zinc-400">
-        <span className="text-zinc-400 dark:text-zinc-500"><Icon name={icon} size={16} /></span>
+      <Label {...labelProps} className="flex h-8 w-32 shrink-0 items-center gap-2 text-[13px] text-zinc-500 dark:text-zinc-400">
+        <span className="text-zinc-400 dark:text-zinc-500"><Icon name={icon} size={15} /></span>
         <span className="truncate">{label}</span>
         {hint && <span className="text-[11px] text-zinc-400/80 dark:text-zinc-600">{hint}</span>}
       </Label>
       <div className="min-w-0 flex-1">
         {children}
-        {error && <p className="mt-0.5 px-2 text-[11px] text-rose-500">{error}</p>}
+        {error && <p className="mt-0.5 px-1 text-[11px] text-rose-500">{error}</p>}
       </div>
     </div>
   )
@@ -104,23 +139,42 @@ function ToolbarButton({ title, icon, onClick }) {
 }
 
 //---------------------Main Form-------------
-function TradeForm({ journalName, initialTrade = null, onSubmit, onClose, onUploadImage, respectReducedMotion = false }) {
-  const [drawerWidth, setDrawerWidth] = useState(640)
+function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = [], initialTrade = null, onSubmit, onClose, onUploadImage, respectReducedMotion = false }) {
+  const [drawerWidth, setDrawerWidth] = useState(DEFAULT_WIDTH)
   const [expanded, setExpanded] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [visible, setVisible] = useState(false)
   const [isUploadingImage, setIsUploadingImage] = useState(false)
   const [imageUploadError, setImageUploadError] = useState('')
+  const [hoverImage, setHoverImage] = useState(null)
+  const [addMenuOpen, setAddMenuOpen] = useState(false)
   const [reduceMotion] = useState(() => respectReducedMotion && typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)
   const editorRef = useRef(null)
   const editorSelectionRef = useRef(null)
   const imageInputRef = useRef(null)
   const isResizingRef = useRef(false)
   const closeTimerRef = useRef(null)
-  const { register, handleSubmit, setValue, reset, watch, formState: { errors } } = useForm({ defaultValues })
+  const addMenuRef = useRef(null)
+  const pendingFocusKeyRef = useRef(null)
+  const templateRef = useRef(templateFields) // fields of the latest trade, read once when the form opens
+  const { register, handleSubmit, setValue, reset, watch, control, formState: { errors } } = useForm({ defaultValues })
+  const { fields: customFields, append: appendCustomField, remove: removeCustomField } = useFieldArray({ control, name: 'customFields' })
 
   const duration = reduceMotion ? 0 : DURATION
-  const direction = watch('direction')
+  const live = watch()
+  const direction = live.direction
+  const draftPnl = getTradePnl(live)
+  const draftR = getTradeR(live)
+  const isDraftClosed = String(live.exit ?? '').trim() !== ''
+
+  // hide the remove button whenever the editor content changes (typing, delete key, reset)
+  useEffect(() => {
+    const editor = editorRef.current
+    if (!editor) return undefined
+    const observer = new MutationObserver(() => setHoverImage(null))
+    observer.observe(editor, { childList: true, subtree: true })
+    return () => observer.disconnect()
+  }, [])
 
   useEffect(() => {
     const formValues = initialTrade
@@ -128,13 +182,49 @@ function TradeForm({ journalName, initialTrade = null, onSubmit, onClose, onUplo
           ...defaultValues,
           ...initialTrade,
           quantity: initialTrade.quantity ?? initialTrade.qty ?? '',
-          direction: initialTrade.direction ?? initialTrade.side ?? 'Long'
+          direction: initialTrade.direction ?? initialTrade.side ?? 'Long',
+          customFields: (initialTrade.customFields ?? []).map(toFormField)
         }
-      : defaultValues
+      : { ...defaultValues, customFields: templateRef.current.map(toFormField) }
 
     reset(formValues)
     if (editorRef.current) editorRef.current.innerHTML = formValues.analysis ?? ''
   }, [initialTrade, reset])
+
+  // close the "Add property" menu on outside click / Esc
+  useEffect(() => {
+    if (!addMenuOpen) return undefined
+    const onPointerDown = (event) => {
+      if (!addMenuRef.current?.contains(event.target)) setAddMenuOpen(false)
+    }
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') setAddMenuOpen(false)
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [addMenuOpen])
+
+  // a freshly added field jumps straight into renaming
+  useEffect(() => {
+    const key = pendingFocusKeyRef.current
+    if (!key) return
+    pendingFocusKeyRef.current = null
+    const input = document.getElementById(`cf-label-${key}`)
+    input?.focus()
+    input?.select()
+  }, [customFields.length])
+
+  const addCustomField = (type) => {
+    if (customFields.length >= MAX_CUSTOM_FIELDS) return
+    const key = makeFieldKey()
+    pendingFocusKeyRef.current = key
+    appendCustomField({ key, label: FIELD_TYPES[type].label, type, value: FIELD_TYPES[type].empty })
+    setAddMenuOpen(false)
+  }
 
   // slide-in on mount (two frames so the browser paints the starting position first)
   useEffect(() => {
@@ -153,7 +243,7 @@ function TradeForm({ journalName, initialTrade = null, onSubmit, onClose, onUplo
   useEffect(() => {
     const handlePointerMove = (event) => {
       if (!isResizingRef.current) return
-      setDrawerWidth(Math.min(900, Math.max(420, window.innerWidth - EDGE_GAP - event.clientX)))
+      setDrawerWidth(Math.min(MAX_WIDTH, window.innerWidth - EDGE_GAP * 2, Math.max(420, window.innerWidth - EDGE_GAP - event.clientX)))
     }
 
     const stopResizing = () => {
@@ -207,31 +297,81 @@ function TradeForm({ journalName, initialTrade = null, onSubmit, onClose, onUplo
     }
   }
 
-  const handleImageUpload = async (event) => {
-    const file = event.target.files?.[0]
-    if (!file || !file.type.startsWith('image/')) return
+  const syncFormFromEditor = () => {
+    const editor = editorRef.current
+    setValue('images', [...(editor?.querySelectorAll('img') ?? [])].map((image) => image.src), { shouldDirty: true })
+    setValue('analysis', editor?.innerHTML ?? '', { shouldDirty: true })
+  }
+
+  const insertImageFile = async (file) => {
+    const imageUrl = await onUploadImage(file)
+    editorRef.current?.focus()
+    const selection = window.getSelection()
+    const savedRange = editorSelectionRef.current
+    if (savedRange && editorRef.current?.contains(savedRange.startContainer)) {
+      selection?.removeAllRanges()
+      selection?.addRange(savedRange)
+    }
+    document.execCommand('insertImage', false, imageUrl)
+    syncFormFromEditor()
+    saveEditorSelection()
+  }
+
+  const uploadFiles = async (files) => {
+    const imageFiles = files.filter((file) => file.type.startsWith('image/'))
+    if (!imageFiles.length) return
 
     setImageUploadError('')
     setIsUploadingImage(true)
     try {
-      const imageUrl = await onUploadImage(file)
-      editorRef.current?.focus()
-      const selection = window.getSelection()
-      const savedRange = editorSelectionRef.current
-      if (savedRange && editorRef.current?.contains(savedRange.startContainer)) {
-        selection?.removeAllRanges()
-        selection?.addRange(savedRange)
-      }
-      document.execCommand('insertImage', false, imageUrl)
-      setValue('images', [...(editorRef.current?.querySelectorAll('img') ?? [])].map((image) => image.src), { shouldDirty: true })
-      setValue('analysis', editorRef.current?.innerHTML ?? '', { shouldDirty: true })
-      saveEditorSelection()
+      for (const file of imageFiles) await insertImageFile(file)
     } catch (error) {
       setImageUploadError(error.message || 'Image upload failed. Please try again.')
     } finally {
       setIsUploadingImage(false)
     }
+  }
+
+  const handleImageUpload = async (event) => {
+    const files = [...(event.target.files ?? [])]
     event.target.value = ''
+    await uploadFiles(files)
+  }
+
+  // screenshots are usually on the clipboard, so let Ctrl/Cmd+V work directly
+  const handleEditorPaste = (event) => {
+    const files = [...(event.clipboardData?.files ?? [])].filter((file) => file.type.startsWith('image/'))
+    if (!files.length) return
+    event.preventDefault()
+    saveEditorSelection()
+    uploadFiles(files)
+  }
+
+  /* ---------- hover a screenshot to reveal its remove button ---------- */
+  const showRemoveFor = (image) => {
+    const index = [...(editorRef.current?.querySelectorAll('img') ?? [])].indexOf(image)
+    if (index === -1) return
+    const next = { index, top: image.offsetTop, left: image.offsetLeft, width: image.offsetWidth }
+    setHoverImage((prev) => (prev && prev.index === next.index && prev.top === next.top && prev.left === next.left && prev.width === next.width ? prev : next))
+  }
+
+  const handleEditorMouseMove = (event) => {
+    const { target } = event
+    if (target instanceof HTMLImageElement) showRemoveFor(target)
+    else if (!(target instanceof Element && target.closest('[data-image-remove]'))) setHoverImage(null)
+  }
+
+  // tapping an image reveals the button on touch screens, where there is no hover
+  const handleEditorClick = (event) => {
+    if (event.target instanceof HTMLImageElement) showRemoveFor(event.target)
+  }
+
+  const removeImage = (index) => {
+    const image = editorRef.current?.querySelectorAll('img')[index]
+    if (!image) return
+    image.remove()
+    setHoverImage(null)
+    syncFormFromEditor()
   }
 
   const handleFormSubmit = async (values) => {
@@ -261,10 +401,18 @@ function TradeForm({ journalName, initialTrade = null, onSubmit, onClose, onUplo
       setValue('analysis', analysis, { shouldDirty: true })
       setValue('images', images, { shouldDirty: true })
 
+      const cleanCustomFields = (values.customFields ?? []).map((field) => ({
+        key: field.key,
+        type: field.type,
+        label: String(field.label ?? '').trim() || (FIELD_TYPES[field.type] ?? FIELD_TYPES.text).label,
+        value: field.type === 'checkbox' ? Boolean(field.value) : field.value ?? ''
+      }))
+
       onSubmit({
         ...values,
         analysis,
         images,
+        customFields: cleanCustomFields,
         symbol: normalizedSymbol,
         assetName: normalizedSymbol,
         quantity: normalizedQuantity,
@@ -293,7 +441,7 @@ function TradeForm({ journalName, initialTrade = null, onSubmit, onClose, onUplo
 
   return (
     <div
-      className="fixed inset-0 z-50 flex justify-end overflow-hidden bg-black/30 p-3 backdrop-blur-[2px] md:p-4"
+      className="fixed inset-0 z-50 flex justify-end overflow-hidden bg-black/30 p-2 backdrop-blur-[2px] md:p-3"
       style={{ opacity: visible ? 1 : 0, transition: `opacity ${duration}ms ${EASE}` }}
       role="dialog"
       aria-modal="true"
@@ -347,83 +495,194 @@ function TradeForm({ journalName, initialTrade = null, onSubmit, onClose, onUplo
 
         {/* page body */}
         <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-color:#d4d4d8_transparent] [scrollbar-width:thin] dark:[scrollbar-color:#3f3f46_transparent]">
-          <div className="mx-auto w-full max-w-[720px] px-8 pb-16 pt-4 sm:px-10">
+          <div className={`mx-auto w-full px-6 pb-16 pt-4 sm:px-10 ${expanded ? 'max-w-[1080px]' : 'max-w-[920px]'}`}>
             {/* title = asset name */}
             <input
               {...register('symbol', { required: 'Asset name is required' })}
               aria-label="Asset name"
               autoComplete="off"
               placeholder="e.g. BTCUSD"
-              className="w-full bg-transparent text-3xl font-bold uppercase tracking-tight text-zinc-900 outline-none placeholder:font-bold placeholder:normal-case placeholder:text-zinc-300 sm:text-[40px] sm:leading-tight dark:text-zinc-50 dark:placeholder:text-zinc-700"
+              className="w-full bg-transparent text-3xl font-bold uppercase tracking-tight text-zinc-900 outline-none placeholder:font-bold placeholder:normal-case placeholder:text-zinc-300 sm:text-4xl sm:leading-tight dark:text-zinc-50 dark:placeholder:text-zinc-700"
             />
             {errors.symbol && <p className="mt-1 text-xs text-rose-500">{errors.symbol.message}</p>}
 
-            {/* properties */}
-            <div className="mt-6">
-              <PropertyRow icon="calendar" label="Date" htmlFor="trade-date">
-                <input id="trade-date" type="date" {...register('date')} className={dateInputClass} />
-              </PropertyRow>
-
-              <PropertyRow icon="hash" label="Quantity" htmlFor="trade-quantity" error={errors.quantity?.message}>
-                <input id="trade-quantity" type="number" min="0" step="any" {...register('quantity', { required: 'Quantity is required' })} placeholder="0.00" className={numberInputClass} />
-              </PropertyRow>
-
-              <PropertyRow icon="direction" label="Direction">
-                <div role="radiogroup" aria-label="Direction" className="flex h-[30px] items-center gap-1 px-1">
-                  {directionOptions.map(({ value, tone }) => (
-                    <label key={value} className="cursor-pointer">
-                      <input type="radio" value={value} {...register('direction')} className="peer sr-only" />
-                      <span
-                        className={`block rounded-[4px] px-2 py-0.5 text-[13px] transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-sky-400/50 ${
-                          direction === value
-                            ? tone
-                            : 'text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:text-zinc-500 dark:hover:bg-white/[0.06] dark:hover:text-zinc-300'
-                        }`}
-                      >
-                        {value}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              </PropertyRow>
-
-              <PropertyRow icon="entry" label="Entry price" htmlFor="trade-entry" error={errors.entry?.message}>
-                <input id="trade-entry" type="number" min="0" step="any" {...register('entry', { required: 'Entry price is required' })} placeholder="0.00" className={numberInputClass} />
-              </PropertyRow>
-
-              <PropertyRow icon="shield" label="Stop loss" hint="optional" htmlFor="trade-stop-loss" error={errors.stopLoss?.message}>
-                <input
-                  id="trade-stop-loss"
-                  type="number"
-                  min="0"
-                  step="any"
-                  {...register('stopLoss', {
-                    validate: (value, formValues) => {
-                      const stop = Number(value)
-                      const entry = Number(formValues.entry)
-                      if (value === '' || value === null || value === undefined || !entry || !Number.isFinite(stop)) return true
-                      if (stop === entry) return 'Stop loss can\'t equal the entry price'
-                      if (formValues.direction === 'Short') return stop > entry || 'For a short, the stop sits above entry'
-                      return stop < entry || 'For a long, the stop sits below entry'
-                    }
-                  })}
-                  placeholder="Used for RRR"
-                  className={numberInputClass}
-                />
-              </PropertyRow>
-
-              <PropertyRow icon="exit" label="Exit price" hint="optional" htmlFor="trade-exit">
-                <input id="trade-exit" type="number" min="0" step="any" {...register('exit')} placeholder="Leave open" className={numberInputClass} />
-              </PropertyRow>
+            {/* live status */}
+            <div className="mt-3 flex flex-wrap items-center gap-1.5 text-xs" aria-live="polite">
+              <span className="inline-flex items-center gap-1.5 rounded-md bg-zinc-100 px-2 py-1 font-medium text-zinc-600 dark:bg-white/[0.06] dark:text-zinc-300">
+                <span className={`h-1.5 w-1.5 rounded-full ${isDraftClosed ? 'bg-zinc-400' : 'bg-amber-400'}`} />
+                {isDraftClosed ? 'Closed' : 'Open'}
+              </span>
+              {draftPnl !== null && (
+                <span className={`rounded-md bg-zinc-100 px-2 py-1 font-semibold tabular-nums dark:bg-white/[0.06] ${pnlTextClass[toneOf(draftPnl)]}`}>
+                  {formatMoney(draftPnl, { signed: true, currency })}
+                </span>
+              )}
+              {draftR !== null && (
+                <span className="rounded-md bg-zinc-100 px-2 py-1 font-semibold tabular-nums text-zinc-600 dark:bg-white/[0.06] dark:text-zinc-300">
+                  {formatR(draftR)}
+                </span>
+              )}
             </div>
 
-            <hr className="my-8 border-zinc-200 dark:border-white/[0.08]" />
+            {/* properties: two columns when the drawer is wide enough */}
+            <div className="@container mt-6">
+              <div className="grid gap-x-10 @2xl:grid-cols-2">
+                <PropertyRow icon="calendar" label="Date" htmlFor="trade-date">
+                  <input id="trade-date" type="date" {...register('date')} className={dateInputClass} />
+                </PropertyRow>
+
+                <PropertyRow icon="hash" label="Quantity" htmlFor="trade-quantity" error={errors.quantity?.message}>
+                  <input id="trade-quantity" type="number" min="0" step="any" {...register('quantity', { required: 'Quantity is required' })} placeholder="0.00" className={numberInputClass} />
+                </PropertyRow>
+
+                <PropertyRow icon="direction" label="Direction">
+                  <div role="radiogroup" aria-label="Direction" className="flex h-8 items-center gap-1">
+                    {directionOptions.map(({ value, icon, tone }) => (
+                      <label key={value} className="cursor-pointer">
+                        <input type="radio" value={value} {...register('direction')} className="peer sr-only" />
+                        <span
+                          className={`inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[13px] font-medium transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-zinc-400/50 ${
+                            direction === value
+                              ? tone
+                              : 'text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:text-zinc-500 dark:hover:bg-white/[0.06] dark:hover:text-zinc-300'
+                          }`}
+                        >
+                          <Icon name={icon} size={14} />
+                          {value}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </PropertyRow>
+
+                <PropertyRow icon="entry" label="Entry price" htmlFor="trade-entry" error={errors.entry?.message}>
+                  <input id="trade-entry" type="number" min="0" step="any" {...register('entry', { required: 'Entry price is required' })} placeholder="0.00" className={numberInputClass} />
+                </PropertyRow>
+
+                <PropertyRow icon="shield" label="Stop loss" hint="optional" htmlFor="trade-stop-loss" error={errors.stopLoss?.message}>
+                  <input
+                    id="trade-stop-loss"
+                    type="number"
+                    min="0"
+                    step="any"
+                    {...register('stopLoss', {
+                      validate: (value, formValues) => {
+                        const stop = Number(value)
+                        const entry = Number(formValues.entry)
+                        if (value === '' || value === null || value === undefined || !entry || !Number.isFinite(stop)) return true
+                        if (stop === entry) return 'Stop loss can\'t equal the entry price'
+                        if (formValues.direction === 'Short') return stop > entry || 'For a short, the stop sits above entry'
+                        return stop < entry || 'For a long, the stop sits below entry'
+                      }
+                    })}
+                    placeholder="Used for RRR"
+                    className={numberInputClass}
+                  />
+                </PropertyRow>
+
+                <PropertyRow icon="exit" label="Exit price" hint="optional" htmlFor="trade-exit">
+                  <input id="trade-exit" type="number" min="0" step="any" {...register('exit')} placeholder="Leave open" className={numberInputClass} />
+                </PropertyRow>
+
+                {customFields.map((field, index) => {
+                  const typeConfig = FIELD_TYPES[field.type] ?? FIELD_TYPES.text
+                  const name = `customFields.${index}.value`
+                  return (
+                    <div key={field.id} className="group/row flex items-start gap-2 py-0.5">
+                      <div className="flex h-8 w-32 shrink-0 items-center gap-2 text-zinc-400 dark:text-zinc-500">
+                        <Icon name={typeConfig.icon} size={15} />
+                        <input
+                          id={`cf-label-${field.key}`}
+                          {...register(`customFields.${index}.label`)}
+                          aria-label="Field name"
+                          placeholder="Name"
+                          maxLength={40}
+                          autoComplete="off"
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') {
+                              event.preventDefault()
+                              event.currentTarget.blur()
+                            }
+                          }}
+                          className="h-8 min-w-0 flex-1 rounded-md bg-transparent px-1.5 text-[13px] text-zinc-500 outline-none transition-colors placeholder:text-zinc-400 hover:bg-zinc-100/80 focus:bg-zinc-100 focus:text-zinc-800 dark:text-zinc-400 dark:hover:bg-white/[0.05] dark:focus:bg-white/[0.06] dark:focus:text-zinc-100"
+                        />
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        {field.type === 'checkbox' ? (
+                          <div className="flex h-8 items-center px-2">
+                            <input type="checkbox" {...register(name)} aria-label={`${field.label || typeConfig.label} value`} className="h-4 w-4 cursor-pointer rounded accent-zinc-700 dark:accent-zinc-300" />
+                          </div>
+                        ) : (
+                          <input
+                            type={field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : 'text'}
+                            step={field.type === 'number' ? 'any' : undefined}
+                            {...register(name)}
+                            aria-label={`${field.label || typeConfig.label} value`}
+                            autoComplete="off"
+                            placeholder="Empty"
+                            className={field.type === 'number' ? numberInputClass : field.type === 'date' ? dateInputClass : inputClass}
+                          />
+                        )}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => removeCustomField(index)}
+                        title="Remove field"
+                        aria-label={`Remove ${field.label || typeConfig.label} field`}
+                        className="flex h-8 w-6 shrink-0 items-center justify-center rounded-md text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700 focus-visible:opacity-100 md:opacity-0 md:group-hover/row:opacity-100 dark:text-zinc-500 dark:hover:bg-white/10 dark:hover:text-zinc-200"
+                      >
+                        <Icon name="x" size={14} />
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+
+              <div ref={addMenuRef} className="relative mt-1">
+                <button
+                  type="button"
+                  onClick={() => setAddMenuOpen((open) => !open)}
+                  disabled={customFields.length >= MAX_CUSTOM_FIELDS}
+                  aria-haspopup="menu"
+                  aria-expanded={addMenuOpen}
+                  className="flex h-8 items-center gap-1.5 rounded-md px-2 text-[13px] text-zinc-400 transition-colors hover:bg-zinc-100/80 hover:text-zinc-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-zinc-500 dark:hover:bg-white/[0.05] dark:hover:text-zinc-200"
+                >
+                  <Icon name="plus" size={14} />
+                  Add property
+                </button>
+
+                {addMenuOpen && (
+                  <div role="menu" className="absolute left-0 top-9 z-30 w-52 rounded-lg border border-zinc-200 bg-white p-1 shadow-lg dark:border-white/10 dark:bg-[#2a2a2a]">
+                    <p className="px-2 py-1 text-[11px] text-zinc-400 dark:text-zinc-500">Property type</p>
+                    {Object.entries(FIELD_TYPES).map(([type, config]) => (
+                      <button
+                        key={type}
+                        type="button"
+                        role="menuitem"
+                        onClick={() => addCustomField(type)}
+                        className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-[13px] text-zinc-700 transition-colors hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-white/[0.07]"
+                      >
+                        <span className="text-zinc-400 dark:text-zinc-500"><Icon name={config.icon} size={15} /></span>
+                        {config.label}
+                      </button>
+                    ))}
+                    <p className="mt-1 border-t border-zinc-100 px-2 pb-1 pt-2 text-[11px] leading-snug text-zinc-400 dark:border-white/[0.06] dark:text-zinc-500">
+                      Saved with this trade and added to your next one.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <hr className="my-6 border-zinc-200 dark:border-white/[0.08]" />
 
             {/* analysis */}
             <section className="group">
               <div className="mb-2 flex items-baseline justify-between">
                 <span id="trade-analysis-label" className="text-[13px] font-medium text-zinc-500 dark:text-zinc-400">Trade analysis</span>
-                <span className="hidden text-[11px] text-zinc-400 sm:block dark:text-zinc-600">Your notes, thesis, and screenshots</span>
+                <span className="hidden text-[11px] text-zinc-400 sm:block dark:text-zinc-600">Tip: paste screenshots straight in with Ctrl/⌘ + V</span>
               </div>
 
               <div className="sticky top-0 z-10 flex flex-wrap items-center gap-0.5 border-b border-zinc-200/80 bg-white py-1.5 opacity-70 transition-opacity focus-within:opacity-100 group-focus-within:opacity-100 hover:opacity-100 dark:border-white/[0.08] dark:bg-[#202020]">
@@ -454,24 +713,43 @@ function TradeForm({ journalName, initialTrade = null, onSubmit, onClose, onUplo
                   className="flex h-7 items-center gap-1.5 rounded-md px-2 text-xs text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 disabled:cursor-wait disabled:opacity-50 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-zinc-100"
                 >
                   <Icon name="image" size={14} />
-                  {isUploadingImage ? 'Uploading...' : 'Add image'}
+                  {isUploadingImage ? 'Uploading...' : 'Add screenshot'}
                 </button>
-                <input ref={imageInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+                <input ref={imageInputRef} type="file" accept="image/*" multiple onChange={handleImageUpload} className="hidden" />
               </div>
 
-              <div
-                ref={editorRef}
-                id="trade-analysis"
-                contentEditable
-                role="textbox"
-                aria-multiline="true"
-                aria-labelledby="trade-analysis-label"
-                data-placeholder="Start writing your setup, what you noticed, and what you learned..."
-                onInput={handleEditorInput}
-                onMouseUp={saveEditorSelection}
-                onKeyUp={saveEditorSelection}
-                className={editorClass}
-              />
+              <div className="relative" onMouseMove={handleEditorMouseMove} onMouseLeave={() => setHoverImage(null)}>
+                <div
+                  ref={editorRef}
+                  id="trade-analysis"
+                  contentEditable
+                  role="textbox"
+                  aria-multiline="true"
+                  aria-labelledby="trade-analysis-label"
+                  data-placeholder="What did you see? What did you do? What would you change next time?"
+                  onInput={handleEditorInput}
+                  onClick={handleEditorClick}
+                  onPaste={handleEditorPaste}
+                  onMouseUp={saveEditorSelection}
+                  onKeyUp={saveEditorSelection}
+                  className={editorClass}
+                />
+
+                {hoverImage && (
+                  <button
+                    type="button"
+                    data-image-remove
+                    onMouseDown={keepSelection}
+                    onClick={() => removeImage(hoverImage.index)}
+                    title="Remove screenshot"
+                    aria-label="Remove screenshot"
+                    className="absolute flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white transition-colors hover:bg-black/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+                    style={{ top: hoverImage.top + 8, left: hoverImage.left + hoverImage.width - 32 }}
+                  >
+                    <Icon name="x" size={13} />
+                  </button>
+                )}
+              </div>
               {imageUploadError && <p role="alert" className="mt-2 text-xs text-rose-500">{imageUploadError}</p>}
               <input type="hidden" {...register('analysis')} />
               <input type="hidden" {...register('images')} />
@@ -480,8 +758,8 @@ function TradeForm({ journalName, initialTrade = null, onSubmit, onClose, onUplo
         </div>
 
         <footer className="flex shrink-0 items-center justify-end gap-2 border-t border-zinc-200 px-6 py-3 dark:border-white/[0.08]">
-          <button type="button" onClick={requestClose} className="h-8 rounded-md px-3 text-[13px] font-medium text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-zinc-100">Cancel</button>
-          <button type="submit" disabled={isUploadingImage} className="h-8 rounded-md bg-sky-500 px-3.5 text-[13px] font-medium text-white transition-colors hover:bg-sky-600 disabled:cursor-wait disabled:opacity-50">{isUploadingImage ? 'Uploading...' : initialTrade ? 'Save review' : 'Save trade'}</button>
+          <button type="button" onClick={requestClose} className="h-9 rounded-md px-3 text-[13px] font-medium text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-zinc-100">Cancel</button>
+          <button type="submit" disabled={isUploadingImage} className="h-9 rounded-md bg-zinc-900 px-3.5 text-[13px] font-medium text-white transition-colors hover:bg-zinc-700 disabled:cursor-wait disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white">{isUploadingImage ? 'Uploading...' : initialTrade ? 'Save review' : 'Save trade'}</button>
         </footer>
       </form>
     </div>
