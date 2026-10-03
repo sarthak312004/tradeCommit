@@ -1,10 +1,24 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import TradeCard from './TradeCard'
 import TradeForm from './TradeForm'
+import TradeAnalysis from './TradeAnalysis'
+import DateRangeFilter from './DateRangeFilter'
+import { ALL_TIME, describeRangeInline, isRangeActive } from '../../../utils/dateRange'
+import { filterTradesByDate } from '../../../utils/tradeAnalytics'
+
+const VIEWS = [
+  { id: 'trades', label: 'Trades' },
+  { id: 'analysis', label: 'Analysis' }
+]
 
 function TradeJournal({ journal, isSidebarOpen, onAddTrade, onUpdateTrade, onDeleteTrade, onUploadTradeImage }) {
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [editingTrade, setEditingTrade] = useState(null)
+  const [view, setView] = useState('trades')
+  const [range, setRange] = useState(ALL_TIME)
+
+  const allTrades = journal?.trades
+  const visibleTrades = useMemo(() => filterTradesByDate(allTrades ?? [], range), [allTrades, range])
 
   const handleOpenNewTrade = () => {
     setEditingTrade(null)
@@ -39,20 +53,49 @@ function TradeJournal({ journal, isSidebarOpen, onAddTrade, onUpdateTrade, onDel
     )
   }
 
+  const isFiltered = isRangeActive(range)
+  const subtitle = isFiltered
+    ? `${visibleTrades.length} of ${journal.trades.length} trades, ${describeRangeInline(range)}`
+    : `Trades in ${journal.name}`
+
   return (
     <section>
-      <div className="mb-5 flex items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-semibold tracking-[-0.05em]">Recent trades</h2>
-          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Trades in {journal.name}</p>
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+        <div className="min-w-0">
+          <h2 className="text-xl font-semibold tracking-[-0.05em]">{view === 'analysis' ? 'Analysis' : 'Recent trades'}</h2>
+          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{subtitle}</p>
         </div>
-        <button
-          type="button"
-          onClick={isFormOpen ? handleCloseForm : handleOpenNewTrade}
-          className="cursor-pointer rounded-lg bg-sky-500 px-3 py-2 text-xs font-semibold text-white transition hover:bg-sky-600"
-        >
-          + Add trade
-        </button>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <div role="tablist" aria-label="Journal view" className="inline-flex h-8 items-center rounded-lg border border-zinc-200 bg-white/60 p-0.5 dark:border-white/10 dark:bg-transparent">
+            {VIEWS.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                role="tab"
+                aria-selected={view === item.id}
+                onClick={() => setView(item.id)}
+                className={`h-full cursor-pointer rounded-md px-3 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/40 ${
+                  view === item.id
+                    ? 'bg-zinc-900 text-white dark:bg-white/10 dark:text-zinc-100'
+                    : 'text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+
+          <DateRangeFilter range={range} onChange={setRange} />
+
+          <button
+            type="button"
+            onClick={isFormOpen ? handleCloseForm : handleOpenNewTrade}
+            className="h-8 cursor-pointer rounded-lg bg-sky-500 px-3 text-xs font-semibold text-white transition hover:bg-sky-600"
+          >
+            + Add trade
+          </button>
+        </div>
       </div>
 
       {isFormOpen && (
@@ -70,9 +113,22 @@ function TradeJournal({ journal, isSidebarOpen, onAddTrade, onUpdateTrade, onDel
           <p className="text-sm font-medium text-zinc-600 dark:text-zinc-300">No trades in this journal yet.</p>
           <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Add your first trade to start tracking this journal.</p>
         </div>
+      ) : visibleTrades.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-zinc-300 bg-white/40 p-10 text-center dark:border-zinc-700 dark:bg-zinc-900/30">
+          <p className="text-sm font-medium text-zinc-600 dark:text-zinc-300">No trades in {describeRangeInline(range)}.</p>
+          <button
+            type="button"
+            onClick={() => setRange(ALL_TIME)}
+            className="mt-2 cursor-pointer text-xs font-medium text-sky-600 transition hover:text-sky-500 dark:text-sky-400"
+          >
+            Clear filter
+          </button>
+        </div>
+      ) : view === 'analysis' ? (
+        <TradeAnalysis trades={visibleTrades} rangeLabel={isFiltered ? describeRangeInline(range) : null} />
       ) : (
         <div className={`grid gap-4 ${isSidebarOpen ? 'lg:grid-cols-2' : 'lg:grid-cols-3'}`}>
-          {journal.trades.map((currentTrade) => (
+          {visibleTrades.map((currentTrade) => (
             <TradeCard
               key={currentTrade.id}
               trade={currentTrade}

@@ -21,6 +21,7 @@ const serializeTrade = (trade) => {
     entryPrice: trade.entryPrice,
     exit: trade.exitPrice ?? "",
     exitPrice: trade.exitPrice ?? "",
+    stopLoss: trade.stopLoss ?? "",
     analysis: trade.analysis ?? "",
     images: Array.isArray(trade.images) ? trade.images : [],
     status: trade.exitPrice == null ? "Open" : "Closed",

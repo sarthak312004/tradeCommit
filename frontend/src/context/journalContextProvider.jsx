@@ -19,6 +19,7 @@ const normalizeTradeForBackend = (trade) => {
     const entryPrice = Number(trade.entryPrice ?? trade.entry ?? 0)
     const exitPriceValue = trade.exitPrice ?? trade.exit ?? ""
     const exitPrice = exitPriceValue === "" || exitPriceValue === null || exitPriceValue === undefined ? "" : Number(exitPriceValue)
+    const stopLoss = trade.stopLoss === "" || trade.stopLoss === null || trade.stopLoss === undefined ? "" : Number(trade.stopLoss)
 
     return {
         assetName,
@@ -32,6 +33,7 @@ const normalizeTradeForBackend = (trade) => {
         entry: entryPrice,
         exitPrice,
         exit: exitPrice,
+        stopLoss,
         analysis: trade.analysis ?? "",
         images: [...new Set([
             ...(Array.isArray(trade.images) ? trade.images : []),
@@ -62,6 +64,7 @@ const normalizeJournalForFrontend = (journal) => ({
         entryPrice: trade.entryPrice ?? trade.entry ?? "",
         exit: trade.exit ?? trade.exitPrice ?? "",
         exitPrice: trade.exitPrice ?? trade.exit ?? "",
+        stopLoss: trade.stopLoss ?? "",
         analysis: trade.analysis ?? "",
         images: Array.isArray(trade.images) ? trade.images : [],
         status: trade.status ?? ((trade.exit == null || trade.exit === "") ? "Open" : "Closed"),
@@ -206,6 +209,7 @@ function JournalContextProvider({children}){
             entryPrice: created.entryPrice ?? created.entry ?? "",
             exit: created.exit ?? created.exitPrice ?? "",
             exitPrice: created.exitPrice ?? created.exit ?? "",
+            stopLoss: created.stopLoss ?? "",
             analysis: created.analysis ?? "",
             images: Array.isArray(created.images) ? created.images : [],
             status: created.status ?? ((created.exit == null || created.exit === "") ? "Open" : "Closed"),
@@ -242,6 +246,7 @@ function JournalContextProvider({children}){
             entryPrice: updated.entryPrice ?? updated.entry ?? "",
             exit: updated.exit ?? updated.exitPrice ?? "",
             exitPrice: updated.exitPrice ?? updated.exit ?? "",
+            stopLoss: updated.stopLoss ?? "",
             analysis: updated.analysis ?? "",
             images: Array.isArray(updated.images) ? updated.images : [],
             status: updated.status ?? ((updated.exit == null || updated.exit === "") ? "Open" : "Closed"),

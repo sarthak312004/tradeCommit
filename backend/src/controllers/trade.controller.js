@@ -23,6 +23,7 @@ const serializeTrade = (trade) => {
     entryPrice: trade.entryPrice,
     exit: trade.exitPrice ?? "",
     exitPrice: trade.exitPrice ?? "",
+    stopLoss: trade.stopLoss ?? "",
     analysis: trade.analysis ?? "",
     images: Array.isArray(trade.images) ? trade.images : [],
     status: trade.exitPrice == null ? "Open" : "Closed",
@@ -41,6 +42,7 @@ const parseTradePayload = (body) => {
   const quantity = Number(fullBody.quantity ?? fullBody.qty ?? 0);
   const entryPrice = Number(fullBody.entry ?? fullBody.entryPrice ?? 0);
   const exitPrice = fullBody.exit ?? fullBody.exitPrice ?? "";
+  const stopLoss = fullBody.stopLoss ?? "";
   const analysis = typeof fullBody.analysis === "string" ? fullBody.analysis : "";
   const imagesFromBody = Array.isArray(fullBody.images) ? fullBody.images : [];
   const extractedImages = Array.from(new Set((analysis.match(/<img[^>]+src=["'][^"']+["']/gi) ?? [])
@@ -66,11 +68,21 @@ const parseTradePayload = (body) => {
     throw new ApiError(400, "Direction must be long or short");
   }
 
-  let parsedExitPrice;
+  // null (not undefined) so that clearing the exit on edit re-opens the trade instead of keeping the old exit
+  let parsedExitPrice = null;
   if (exitPrice !== undefined && exitPrice !== null && exitPrice !== "") {
     parsedExitPrice = Number(exitPrice);
     if (!Number.isFinite(parsedExitPrice) || parsedExitPrice < 0) {
       throw new ApiError(400, "Exit price must be a valid non-negative number");
+    }
+  }
+
+  // null (not undefined) so that clearing the field on edit actually removes the stored stop
+  let parsedStopLoss = null;
+  if (stopLoss !== undefined && stopLoss !== null && stopLoss !== "") {
+    parsedStopLoss = Number(stopLoss);
+    if (!Number.isFinite(parsedStopLoss) || parsedStopLoss < 0) {
+      throw new ApiError(400, "Stop loss must be a valid non-negative number");
     }
   }
 
@@ -80,7 +92,8 @@ const parseTradePayload = (body) => {
     quantity,
     direction,
     entryPrice,
-    ...(parsedExitPrice === undefined ? {} : { exitPrice: parsedExitPrice }),
+    exitPrice: parsedExitPrice,
+    stopLoss: parsedStopLoss,
     analysis: analysis.trim(),
     images: extractedImages,
   };

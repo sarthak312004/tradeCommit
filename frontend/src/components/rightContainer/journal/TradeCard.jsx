@@ -1,13 +1,10 @@
 import { useState } from 'react'
+import { formatMoney, getTradePnl, toneOf } from '../../../utils/tradeAnalytics'
 
 function TradeCard({ trade, onSelect, onDelete }) {
   const [isDeleteConfirmationOpen, setIsDeleteConfirmationOpen] = useState(false)
-  const pnlValue = String(trade.pnl ?? '')
-  const pnlState = pnlValue.trim().startsWith('-')
-    ? 'negative'
-    : Number.parseFloat(pnlValue.replace(/[^0-9.-]/g, '')) === 0
-      ? 'neutral'
-      : 'positive'
+  const pnlAmount = getTradePnl(trade)
+  const pnlState = toneOf(pnlAmount)
   const pnlStyles = {
     positive: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-300',
     negative: 'bg-red-100 text-red-600 dark:bg-red-500/10 dark:text-red-300',
@@ -79,7 +76,7 @@ function TradeCard({ trade, onSelect, onDelete }) {
         </div>
 
         <span data-pnl-state={pnlState} className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${pnlStyles[pnlState]}`}>
-          {trade.pnl}
+          {pnlAmount === null ? 'Open' : formatMoney(pnlAmount, { signed: true })}
         </span>
       </div>
 

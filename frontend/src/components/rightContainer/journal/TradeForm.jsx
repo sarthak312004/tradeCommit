@@ -6,6 +6,7 @@ const defaultValues = {
   symbol: '',
   quantity: '',
   entry: '',
+  stopLoss: '',
   exit: '',
   direction: 'Long',
   analysis: '',
@@ -24,6 +25,7 @@ const iconPaths = {
   hash: (<><path d="M4 9h16" /><path d="M4 15h16" /><path d="M10 3 8 21" /><path d="m16 3-2 18" /></>),
   direction: (<><path d="m21 16-4 4-4-4" /><path d="M17 20V4" /><path d="m3 8 4-4 4 4" /><path d="M7 4v16" /></>),
   entry: (<><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /><path d="m10 17 5-5-5-5" /><path d="M15 12H3" /></>),
+  shield: <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />,
   exit: (<><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="m16 17 5-5-5-5" /><path d="M21 12H9" /></>),
   bold: <path d="M6 12h9a4 4 0 0 1 0 8H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h7a4 4 0 0 1 0 8" />,
   italic: (<><path d="M19 4h-9" /><path d="M14 20H5" /><path d="M15 4 9 20" /></>),
@@ -236,6 +238,7 @@ function TradeForm({ journalName, initialTrade = null, onSubmit, onClose, onUplo
     const normalizedQuantity = String(values.quantity ?? '').trim()
     const normalizedEntry = String(values.entry ?? '').trim()
     const normalizedExit = String(values.exit ?? '').trim()
+    const normalizedStopLoss = String(values.stopLoss ?? '').trim()
     const normalizedSymbol = String(values.symbol ?? '').trim().toUpperCase()
 
     setImageUploadError('')
@@ -270,6 +273,7 @@ function TradeForm({ journalName, initialTrade = null, onSubmit, onClose, onUplo
         entryPrice: normalizedEntry,
         exit: normalizedExit,
         exitPrice: normalizedExit,
+        stopLoss: normalizedStopLoss,
         side: values.direction,
         direction: values.direction,
         pnl: '$0',
@@ -385,6 +389,27 @@ function TradeForm({ journalName, initialTrade = null, onSubmit, onClose, onUplo
 
               <PropertyRow icon="entry" label="Entry price" htmlFor="trade-entry" error={errors.entry?.message}>
                 <input id="trade-entry" type="number" min="0" step="any" {...register('entry', { required: 'Entry price is required' })} placeholder="0.00" className={numberInputClass} />
+              </PropertyRow>
+
+              <PropertyRow icon="shield" label="Stop loss" hint="optional" htmlFor="trade-stop-loss" error={errors.stopLoss?.message}>
+                <input
+                  id="trade-stop-loss"
+                  type="number"
+                  min="0"
+                  step="any"
+                  {...register('stopLoss', {
+                    validate: (value, formValues) => {
+                      const stop = Number(value)
+                      const entry = Number(formValues.entry)
+                      if (value === '' || value === null || value === undefined || !entry || !Number.isFinite(stop)) return true
+                      if (stop === entry) return 'Stop loss can\'t equal the entry price'
+                      if (formValues.direction === 'Short') return stop > entry || 'For a short, the stop sits above entry'
+                      return stop < entry || 'For a long, the stop sits below entry'
+                    }
+                  })}
+                  placeholder="Used for RRR"
+                  className={numberInputClass}
+                />
               </PropertyRow>
 
               <PropertyRow icon="exit" label="Exit price" hint="optional" htmlFor="trade-exit">

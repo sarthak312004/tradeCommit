@@ -28,6 +28,10 @@ const tradeSchema = new mongoose.Schema(
     exitPrice: {
       type: Number, // optional: empty means the trade is still open
     },
+    stopLoss: {
+      type: Number, // optional: initial stop, used to compute risk and the R multiple
+      min: [0, "Stop loss must be positive"],
+    },
     analysis: {
       type: String, // sanitized HTML from the rich text editor
       default: "",
