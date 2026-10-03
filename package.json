@@ -1,0 +1,15 @@
+{
+  "name": "tradecommit",
+  "private": true,
+  "version": "1.0.0",
+  "description": "TradeCommit - trading journal (React frontend + Express API)",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "dev:backend": "npm --prefix backend run dev",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "build": "npm --prefix backend ci --omit=dev && npm --prefix frontend ci --include=dev && npm --prefix frontend run build",
+    "start": "node backend/src/index.js"
+  }
+}
