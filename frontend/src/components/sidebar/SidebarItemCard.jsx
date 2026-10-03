@@ -52,6 +52,8 @@ function SidebarItemCard({ id, label, noun, Icon, badge, isSelected, onSelect, o
 	const [isEditing, setIsEditing] = useState(false)
 	const [draftName, setDraftName] = useState(label)
 	const [isDeleteConfirmationOpen, setIsDeleteConfirmationOpen] = useState(false)
+	const [isDeleting, setIsDeleting] = useState(false)
+	const [deleteError, setDeleteError] = useState("")
 	const dialogId = useId()
 	const inputRef = useRef(null)
 
@@ -64,11 +66,11 @@ function SidebarItemCard({ id, label, noun, Icon, badge, isSelected, onSelect, o
 	useEffect(() => {
 		if (!isDeleteConfirmationOpen) return
 		const handleKeyDown = (event) => {
-			if (event.key === "Escape") setIsDeleteConfirmationOpen(false)
+			if (event.key === "Escape" && !isDeleting) setIsDeleteConfirmationOpen(false)
 		}
 		window.addEventListener("keydown", handleKeyDown)
 		return () => window.removeEventListener("keydown", handleKeyDown)
-	}, [isDeleteConfirmationOpen])
+	}, [isDeleteConfirmationOpen, isDeleting])
 
 	const handleStartEditing = () => {
 		setDraftName(label)
@@ -96,8 +98,13 @@ function SidebarItemCard({ id, label, noun, Icon, badge, isSelected, onSelect, o
 	}
 
 	const handleDelete = () => {
-		onDelete()
-		setIsDeleteConfirmationOpen(false)
+		if (isDeleting) return
+		setIsDeleting(true)
+		setDeleteError("")
+		Promise.resolve(onDelete())
+			.then(() => setIsDeleteConfirmationOpen(false))
+			.catch((error) => setDeleteError(error.message || `Could not delete this ${noun}. Please try again.`))
+			.finally(() => setIsDeleting(false))
 	}
 
 	const leadingIcon = (
@@ -201,12 +208,13 @@ function SidebarItemCard({ id, label, noun, Icon, badge, isSelected, onSelect, o
 						<div
 							className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4"
 							onMouseDown={(event) => {
-								if (event.target === event.currentTarget) setIsDeleteConfirmationOpen(false)
+								if (event.target === event.currentTarget && !isDeleting) setIsDeleteConfirmationOpen(false)
 							}}
 						>
 							<div
 								role="alertdialog"
 								aria-modal="true"
+								aria-busy={isDeleting}
 								aria-labelledby={`${dialogId}-title`}
 								aria-describedby={`${dialogId}-description`}
 								className="w-full max-w-[360px] rounded-xl border border-zinc-200 bg-white p-5 shadow-[0_16px_48px_-12px_rgba(0,0,0,0.3)] dark:border-white/[0.09] dark:bg-[#2a2a2a]"
@@ -214,24 +222,27 @@ function SidebarItemCard({ id, label, noun, Icon, badge, isSelected, onSelect, o
 								<h2 id={`${dialogId}-title`} className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
 									Delete this {noun}?
 								</h2>
-								<p id={`${dialogId}-description`} className="mt-1.5 break-words text-[13px] leading-snug text-zinc-500 dark:text-zinc-400">
-									“{label}” will be permanently deleted.
+								<p id={`${dialogId}-description`} role={deleteError ? "alert" : isDeleting ? "status" : undefined} aria-live="polite" className="mt-1.5 break-words text-[13px] leading-snug text-zinc-500 dark:text-zinc-400">
+									{deleteError || (isDeleting ? `Deleting ${noun}...` : `“${label}” will be permanently deleted.`)}
 								</p>
 								<div className="mt-5 flex justify-end gap-2">
 									<button
 										type="button"
 										autoFocus
+										disabled={isDeleting}
 										onClick={() => setIsDeleteConfirmationOpen(false)}
-										className={`h-8 rounded-md px-3 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-900/[0.06] dark:text-zinc-300 dark:hover:bg-white/10 ${focusRing}`}
+										className={`h-8 rounded-md px-3 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-900/[0.06] disabled:cursor-default disabled:opacity-50 dark:text-zinc-300 dark:hover:bg-white/10 ${focusRing}`}
 									>
 										Cancel
 									</button>
 									<button
 										type="button"
+										disabled={isDeleting}
 										onClick={handleDelete}
-										className="h-8 rounded-md bg-rose-600 px-3 text-xs font-medium text-white transition-colors hover:bg-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/40 dark:bg-rose-500 dark:hover:bg-rose-600"
+										className="inline-flex h-8 min-w-[92px] shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-rose-600 px-3 text-xs font-medium text-white transition-colors hover:bg-rose-700 disabled:cursor-default disabled:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/40 dark:bg-rose-500 dark:hover:bg-rose-600"
 									>
-										Delete
+										{isDeleting && <span aria-hidden="true" className="h-3 w-3 animate-spin rounded-full border border-white/50 border-t-white" />}
+										{isDeleting ? "Deleting..." : "Delete"}
 									</button>
 								</div>
 							</div>

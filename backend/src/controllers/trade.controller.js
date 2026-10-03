@@ -215,7 +215,7 @@ export const createTrade = asyncHandler(async (req, res) => {
   });
 
   const retainedImages = new Set(parsed.images);
-  await deleteImagesFromCloudinary(
+  void deleteImagesFromCloudinary(
     removedImageUrlsFromBody(req.body).filter((url) => !retainedImages.has(url)),
     `trading-journal/${journal._id}`
   );
@@ -250,7 +250,7 @@ export const updateTrade = asyncHandler(async (req, res) => {
   Object.assign(trade, parsed);
   await trade.save();
 
-  await deleteImagesFromCloudinary(
+  void deleteImagesFromCloudinary(
     [
       ...previousImages.filter((url) => !retainedImages.has(url)),
       ...removedImageUrlsFromBody(req.body).filter((url) => !retainedImages.has(url)),
@@ -280,7 +280,7 @@ export const deleteTrade = asyncHandler(async (req, res) => {
     throw new ApiError(404, "Trade not found");
   }
 
-  await deleteImagesFromCloudinary(getTradeImages(trade), `trading-journal/${journal._id}`);
+  void deleteImagesFromCloudinary(getTradeImages(trade), `trading-journal/${journal._id}`);
 
   return res.status(200).json(new ApiResponse(200, { journalId, tradeId }, "Trade deleted successfully"));
 });

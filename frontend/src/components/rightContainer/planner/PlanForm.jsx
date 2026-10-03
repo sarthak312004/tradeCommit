@@ -80,9 +80,12 @@ function PlanForm({ plannerName, plannerType, initialEntry = null, initialDate, 
         )}
         {onDelete && isConfirmingDelete && (
           <>
-            <span className="text-[13px] text-zinc-500 dark:text-zinc-400">Delete this plan?</span>
+            <span role={isSaving ? 'status' : undefined} aria-live="polite" className="text-[13px] text-zinc-500 dark:text-zinc-400">
+              {isSaving ? 'Deleting plan...' : 'Delete this plan?'}
+            </span>
             <button type="button" onClick={() => setIsConfirmingDelete(false)} disabled={isSaving} className={ghostFooterButton}>Keep</button>
-            <button type="button" onClick={handleDelete} disabled={isSaving} className="h-9 rounded-md bg-rose-600 px-3 text-[13px] font-medium text-white transition-colors hover:bg-rose-700 disabled:cursor-wait disabled:opacity-50 dark:bg-rose-500 dark:hover:bg-rose-600">
+            <button type="button" onClick={handleDelete} disabled={isSaving} className="inline-flex h-9 min-w-[100px] shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-md bg-rose-600 px-3 text-[13px] font-medium text-white transition-colors hover:bg-rose-700 disabled:cursor-default disabled:opacity-70 dark:bg-rose-500 dark:hover:bg-rose-600">
+              {isSaving && <span aria-hidden="true" className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/50 border-t-white" />}
               {isSaving ? 'Deleting...' : 'Delete'}
             </button>
           </>

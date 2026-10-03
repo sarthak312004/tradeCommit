@@ -123,7 +123,7 @@ export const deletePlanner = asyncHandler(async (req, res) => {
   await PlanEntry.deleteMany({ planner: planner._id, owner: req.user._id });
   await Planner.deleteOne({ _id: planner._id, owner: req.user._id });
 
-  await deleteImagesFromCloudinary(
+  void deleteImagesFromCloudinary(
     entries.flatMap(getEntryImages),
     `trade-planner/${planner._id}`
   );
@@ -149,7 +149,7 @@ export const createPlanEntry = asyncHandler(async (req, res) => {
   const entry = await PlanEntry.create({ ...parsed, owner: req.user._id, planner: planner._id });
 
   const retainedImages = new Set(parsed.images);
-  await deleteImagesFromCloudinary(
+  void deleteImagesFromCloudinary(
     removedImageUrlsFromBody(req.body).filter((url) => !retainedImages.has(url)),
     `trade-planner/${planner._id}`
   );
@@ -170,7 +170,7 @@ export const updatePlanEntry = asyncHandler(async (req, res) => {
   Object.assign(entry, parsed);
   await entry.save();
 
-  await deleteImagesFromCloudinary(
+  void deleteImagesFromCloudinary(
     [
       ...previousImages.filter((url) => !retainedImages.has(url)),
       ...removedImageUrlsFromBody(req.body).filter((url) => !retainedImages.has(url)),
@@ -189,7 +189,7 @@ export const deletePlanEntry = asyncHandler(async (req, res) => {
   const entry = await PlanEntry.findOneAndDelete({ _id: entryId, planner: planner._id, owner: req.user._id });
   if (!entry) throw new ApiError(404, "Plan not found");
 
-  await deleteImagesFromCloudinary(getEntryImages(entry), `trade-planner/${planner._id}`);
+  void deleteImagesFromCloudinary(getEntryImages(entry), `trade-planner/${planner._id}`);
 
   return res.status(200).json(new ApiResponse(200, { entryId }, "Plan deleted successfully"));
 });

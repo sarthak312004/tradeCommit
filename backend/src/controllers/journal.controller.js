@@ -136,7 +136,7 @@ export const deleteJournal = asyncHandler(async (req, res) => {
   await Trade.deleteMany({ journal: journal._id, owner: req.user._id });
   await Journal.deleteOne({ _id: journal._id, owner: req.user._id });
 
-  await deleteImagesFromCloudinary(
+  void deleteImagesFromCloudinary(
     trades.flatMap((trade) => [
       ...(Array.isArray(trade.images) ? trade.images : []),
       ...imageUrlsFromHtml(trade.analysis),

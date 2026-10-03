@@ -17,6 +17,8 @@ function Metric({ label, value }) {
 
 function TradeCard({ trade, onSelect, onDelete }) {
   const [isDeleteConfirmationOpen, setIsDeleteConfirmationOpen] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
   const side = String(trade.side ?? trade.direction ?? '').toLowerCase()
   const direction = side === 'long' ? 'Long' : side === 'short' ? 'Short' : 'Unspecified'
   const isOpen = String(trade.status ?? '').toLowerCase() === 'open' || trade.exit == null || trade.exit === ''
@@ -29,10 +31,18 @@ function TradeCard({ trade, onSelect, onDelete }) {
     }
   }
 
-  const handleDelete = (event) => {
+  const handleDelete = async (event) => {
     event.stopPropagation()
-    onDelete(trade.id)
-    setIsDeleteConfirmationOpen(false)
+    setIsDeleting(true)
+    setDeleteError('')
+    try {
+      await onDelete(trade.id)
+      setIsDeleteConfirmationOpen(false)
+    } catch (error) {
+      setDeleteError(error.message || 'Could not delete this trade. Please try again.')
+    } finally {
+      setIsDeleting(false)
+    }
   }
 
   return (
@@ -88,26 +98,32 @@ function TradeCard({ trade, onSelect, onDelete }) {
           onClick={(event) => event.stopPropagation()}
           onKeyDown={(event) => {
             event.stopPropagation()
-            if (event.key === 'Escape') setIsDeleteConfirmationOpen(false)
+            if (event.key === 'Escape' && !isDeleting) setIsDeleteConfirmationOpen(false)
           }}
+          aria-busy={isDeleting}
           className="mt-3 flex items-center justify-between gap-3 rounded-md bg-rose-500/[0.07] px-3 py-2"
         >
-          <p className="text-xs font-medium text-rose-700 dark:text-rose-300">Delete this trade?</p>
+          <p role={deleteError ? 'alert' : 'status'} aria-live="polite" className="text-xs font-medium text-rose-700 dark:text-rose-300">
+            {deleteError || (isDeleting ? 'Deleting trade...' : 'Delete this trade?')}
+          </p>
           <div className="flex gap-1">
             <button
               type="button"
               autoFocus
+              disabled={isDeleting}
               onClick={() => setIsDeleteConfirmationOpen(false)}
-              className="rounded px-2 py-1 text-[11px] font-medium text-zinc-500 transition-colors hover:bg-black/[0.05] hover:text-zinc-800 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-zinc-100"
+              className="rounded px-2 py-1 text-[11px] font-medium text-zinc-500 transition-colors hover:bg-black/[0.05] hover:text-zinc-800 disabled:cursor-default disabled:opacity-50 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-zinc-100"
             >
               Cancel
             </button>
             <button
               type="button"
+              disabled={isDeleting}
               onClick={handleDelete}
-              className="rounded bg-rose-600 px-2 py-1 text-[11px] font-medium text-white transition-colors hover:bg-rose-700 dark:bg-rose-500 dark:hover:bg-rose-600"
+              className="inline-flex min-w-[92px] shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded bg-rose-600 px-2 py-1 text-[11px] font-medium text-white transition-colors hover:bg-rose-700 disabled:cursor-default disabled:opacity-70 dark:bg-rose-500 dark:hover:bg-rose-600"
             >
-              Delete
+              {isDeleting && <span aria-hidden="true" className="h-3 w-3 animate-spin rounded-full border border-white/50 border-t-white" />}
+              {isDeleting ? 'Deleting...' : 'Delete'}
             </button>
           </div>
         </div>
