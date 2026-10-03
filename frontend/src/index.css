@@ -39,6 +39,16 @@ body {
   min-height: 100vh;
 }
 
+@media (prefers-reduced-motion: no-preference) {
+  button:not(:disabled) {
+    transition: scale 110ms ease;
+  }
+
+  button:not(:disabled):active {
+    scale: 0.98;
+  }
+}
+
 .subtle-scrollbar {
   scrollbar-width: thin;
   scrollbar-color: rgba(113, 113, 122, 0.45) transparent;

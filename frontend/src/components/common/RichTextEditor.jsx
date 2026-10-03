@@ -1,5 +1,5 @@
-import { useEffect, useImperativeHandle, useRef, useState } from 'react'
-import { BoldIcon, CloseIcon, ImageIcon, ItalicIcon, ListIcon, ListOrderedIcon, QuoteIcon } from '../../utils/Icons.jsx'
+import { useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
+import { BoldIcon, CloseIcon, ImageIcon, ItalicIcon, ListIcon, ListOrderedIcon, MaximizeIcon, QuoteIcon } from '../../utils/Icons.jsx'
 
 const editorClass = [
   'min-h-[420px] py-4 text-[15px] leading-7 text-zinc-800 outline-none dark:text-zinc-200',
@@ -44,6 +44,8 @@ function RichTextEditor({ ref, id, label, initialHtml = '', placeholder, onUploa
   const imageInputRef = useRef(null)
   const removedImagesRef = useRef(new Set())
   const currentImageUrlsRef = useRef(new Set())
+  const imageResizeRef = useRef(null)
+  const emitChangeRef = useRef(null)
   const [isUploading, setIsUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
   const [hoverImage, setHoverImage] = useState(null)
@@ -70,7 +72,7 @@ function RichTextEditor({ ref, id, label, initialHtml = '', placeholder, onUploa
     return () => observer.disconnect()
   }, [])
 
-  const emitChange = () => {
+  const emitChange = useCallback(() => {
     const editor = editorRef.current
     const imageUrls = [...(editor?.querySelectorAll('img') ?? [])].map((image) => image.src)
     const nextImageUrls = new Set(imageUrls)
@@ -79,7 +81,55 @@ function RichTextEditor({ ref, id, label, initialHtml = '', placeholder, onUploa
     }
     currentImageUrlsRef.current = nextImageUrls
     onChange?.(editor?.innerHTML ?? '')
-  }
+  }, [onChange])
+
+  useEffect(() => {
+    emitChangeRef.current = emitChange
+  }, [emitChange])
+
+  useEffect(() => {
+    const updateImageWidth = (event) => {
+      const activeResize = imageResizeRef.current
+      const editor = editorRef.current
+      if (!activeResize || !editor || event.pointerId !== activeResize.pointerId) return
+
+      const maxWidth = Math.max(120, editor.clientWidth - activeResize.image.offsetLeft)
+      const width = Math.min(maxWidth, Math.max(120, activeResize.startWidth + event.clientX - activeResize.startX))
+      activeResize.image.style.width = `${width}px`
+      activeResize.image.style.height = 'auto'
+      setHoverImage({
+        index: activeResize.index,
+        top: activeResize.image.offsetTop,
+        left: activeResize.image.offsetLeft,
+        width: activeResize.image.offsetWidth,
+        height: activeResize.image.offsetHeight
+      })
+    }
+
+    const finishResize = (event) => {
+      const activeResize = imageResizeRef.current
+      if (!activeResize || event.pointerId !== activeResize.pointerId) return
+      updateImageWidth(event)
+      imageResizeRef.current = null
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      emitChangeRef.current?.()
+    }
+
+    window.addEventListener('pointermove', updateImageWidth)
+    window.addEventListener('pointerup', finishResize)
+    window.addEventListener('pointercancel', finishResize)
+    return () => {
+      window.removeEventListener('pointermove', updateImageWidth)
+      window.removeEventListener('pointerup', finishResize)
+      window.removeEventListener('pointercancel', finishResize)
+      if (imageResizeRef.current) {
+        imageResizeRef.current = null
+        document.body.style.cursor = ''
+        document.body.style.userSelect = ''
+      }
+    }
+  }, [])
 
   const runCommand = (command, value = null) => {
     editorRef.current?.focus()
@@ -104,6 +154,7 @@ function RichTextEditor({ ref, id, label, initialHtml = '', placeholder, onUploa
       selection?.addRange(savedRange)
     }
     document.execCommand('insertImage', false, imageUrl)
+    document.execCommand('insertParagraph', false, null)
     emitChange()
     saveSelection()
   }
@@ -142,14 +193,24 @@ function RichTextEditor({ ref, id, label, initialHtml = '', placeholder, onUploa
   const showRemoveFor = (image) => {
     const index = [...(editorRef.current?.querySelectorAll('img') ?? [])].indexOf(image)
     if (index === -1) return
-    const next = { index, top: image.offsetTop, left: image.offsetLeft, width: image.offsetWidth }
-    setHoverImage((prev) => (prev && prev.index === next.index && prev.top === next.top && prev.left === next.left && prev.width === next.width ? prev : next))
+    const next = { index, top: image.offsetTop, left: image.offsetLeft, width: image.offsetWidth, height: image.offsetHeight }
+    setHoverImage((prev) => (prev && prev.index === next.index && prev.top === next.top && prev.left === next.left && prev.width === next.width && prev.height === next.height ? prev : next))
+  }
+
+  const startImageResize = (event) => {
+    event.preventDefault()
+    event.stopPropagation()
+    const image = editorRef.current?.querySelectorAll('img')[hoverImage?.index]
+    if (!image) return
+    imageResizeRef.current = { image, index: hoverImage.index, pointerId: event.pointerId, startX: event.clientX, startWidth: image.offsetWidth }
+    document.body.style.cursor = 'nwse-resize'
+    document.body.style.userSelect = 'none'
   }
 
   const handleMouseMove = (event) => {
     const { target } = event
     if (target instanceof HTMLImageElement) showRemoveFor(target)
-    else if (!(target instanceof Element && target.closest('[data-image-remove]'))) setHoverImage(null)
+    else if (!(target instanceof Element && target.closest('[data-image-control]'))) setHoverImage(null)
   }
 
   // tapping an image reveals the button on touch screens, where there is no hover
@@ -251,6 +312,7 @@ function RichTextEditor({ ref, id, label, initialHtml = '', placeholder, onUploa
           <button
             type="button"
             data-image-remove
+            data-image-control
             onMouseDown={keepSelection}
             onClick={() => removeImage(hoverImage.index)}
             title="Remove screenshot"
@@ -259,6 +321,19 @@ function RichTextEditor({ ref, id, label, initialHtml = '', placeholder, onUploa
             style={{ top: hoverImage.top + 8, left: hoverImage.left + hoverImage.width - 32 }}
           >
             <CloseIcon className="h-[13px] w-[13px]" />
+          </button>
+        )}
+        {hoverImage && (
+          <button
+            type="button"
+            data-image-control
+            onPointerDown={startImageResize}
+            title="Drag to resize screenshot"
+            aria-label="Resize screenshot"
+            className="absolute flex h-6 w-6 touch-none items-center justify-center rounded-full bg-black/60 text-white shadow-sm cursor-nwse-resize focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+            style={{ top: hoverImage.top + hoverImage.height - 12, left: hoverImage.left + hoverImage.width - 12 }}
+          >
+            <MaximizeIcon className="h-3 w-3" />
           </button>
         )}
       </div>
