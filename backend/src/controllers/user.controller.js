@@ -4,11 +4,14 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 
 const isProd = process.env.NODE_ENV === "production";
+const isCrossSite = isProd && Boolean(
+  process.env.CORS_ORIGIN?.split(",").some((origin) => origin.trim())
+);
 
 const cookieOptions = {
   httpOnly: true,
   secure: isProd,
-  sameSite: isProd ? "none" : "lax",
+  sameSite: isCrossSite ? "none" : "lax",
 };
 
 const generateTokens = async (user) => {

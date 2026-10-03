@@ -18,11 +18,12 @@ Generate two different secrets (run twice):
     cp backend/.env.example backend/.env      # fill in the values
     npm run build                              # installs deps + builds the frontend
     npm start                                  # open http://localhost:3000
-Keep `NODE_ENV=development` for this local check (secure cookies need HTTPS).
+Keep `NODE_ENV=development` for this local check (secure cookies need HTTPS). The server defaults to port 3000 if `PORT` is not set.
 
 ## 4. Deploy on Render
 Option A - Blueprint: *New + -> Blueprint*, pick the repo (uses `render.yaml`), then fill
-`MONGODB_CONNECTION_URL` and the three `CLOUDINARY_*` values.
+`MONGODB_CONNECTION_URL` and the three `CLOUDINARY_*` values. The service starts only after
+MongoDB connects; `/api/health` reports unhealthy until the database is ready.
 
 Option B - manual *Web Service*:
 - Build command: `npm run build`
