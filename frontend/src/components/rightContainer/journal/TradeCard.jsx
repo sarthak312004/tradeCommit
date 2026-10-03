@@ -1,12 +1,5 @@
 import { useState } from 'react'
-import { formatMoney, getTradePnl, toneOf } from '../../../utils/tradeAnalytics'
 import { TrashIcon } from '../../../utils/Icons.jsx'
-
-const pnlText = {
-  positive: 'text-emerald-600 dark:text-emerald-400',
-  negative: 'text-rose-500 dark:text-rose-400',
-  neutral: 'text-zinc-500 dark:text-zinc-400'
-}
 
 const sideChip = {
   long: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
@@ -22,12 +15,11 @@ function Metric({ label, value }) {
   )
 }
 
-function TradeCard({ trade, currency, onSelect, onDelete }) {
+function TradeCard({ trade, onSelect, onDelete }) {
   const [isDeleteConfirmationOpen, setIsDeleteConfirmationOpen] = useState(false)
-  const pnlAmount = getTradePnl(trade)
-  const pnlState = toneOf(pnlAmount)
-  const isOpen = pnlAmount === null
   const side = String(trade.side ?? trade.direction ?? '').toLowerCase()
+  const direction = side === 'long' ? 'Long' : side === 'short' ? 'Short' : 'Unspecified'
+  const isOpen = String(trade.status ?? '').toLowerCase() === 'open' || trade.exit == null || trade.exit === ''
 
   const handleCardKeyDown = (event) => {
     if (event.target !== event.currentTarget) return
@@ -54,15 +46,10 @@ function TradeCard({ trade, currency, onSelect, onDelete }) {
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
           <p className="truncate text-[15px] font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{trade.symbol}</p>
-          {side && (
-            <span className={`shrink-0 rounded px-1.5 py-px text-[11px] font-medium capitalize ${sideChip[side] ?? 'bg-zinc-500/10 text-zinc-600 dark:text-zinc-300'}`}>
-              {side}
-            </span>
-          )}
         </div>
 
-        <span data-pnl-state={pnlState} className={`shrink-0 text-sm font-semibold tabular-nums ${isOpen ? 'text-zinc-400 dark:text-zinc-500' : pnlText[pnlState]}`}>
-          {isOpen ? 'Open' : formatMoney(pnlAmount, { signed: true, currency })}
+        <span className={`shrink-0 rounded-md px-2 py-1 text-xs font-semibold ${sideChip[side] ?? 'bg-zinc-500/10 text-zinc-600 dark:text-zinc-300'}`}>
+          {direction}
         </span>
       </div>
 

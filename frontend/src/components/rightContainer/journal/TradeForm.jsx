@@ -150,6 +150,8 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
   const [addMenuOpen, setAddMenuOpen] = useState(false)
   const [reduceMotion] = useState(() => respectReducedMotion && typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)
   const editorRef = useRef(null)
+  const removedImagesRef = useRef(new Set())
+  const currentImageUrlsRef = useRef(new Set())
   const editorSelectionRef = useRef(null)
   const imageInputRef = useRef(null)
   const isResizingRef = useRef(false)
@@ -187,8 +189,14 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
         }
       : { ...defaultValues, customFields: templateRef.current.map(toFormField) }
 
+    removedImagesRef.current.clear()
     reset(formValues)
-    if (editorRef.current) editorRef.current.innerHTML = formValues.analysis ?? ''
+    if (editorRef.current) {
+      editorRef.current.innerHTML = formValues.analysis ?? ''
+      currentImageUrlsRef.current = new Set(
+        [...editorRef.current.querySelectorAll('img')].map((image) => image.src)
+      )
+    }
   }, [initialTrade, reset])
 
   // close the "Add property" menu on outside click / Esc
@@ -286,9 +294,7 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
     setValue('analysis', editorRef.current?.innerHTML ?? '', { shouldDirty: true })
   }
 
-  const handleEditorInput = (event) => {
-    setValue('analysis', event.currentTarget.innerHTML, { shouldDirty: true })
-  }
+  const handleEditorInput = () => syncFormFromEditor()
 
   const saveEditorSelection = () => {
     const selection = window.getSelection()
@@ -299,7 +305,13 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
 
   const syncFormFromEditor = () => {
     const editor = editorRef.current
-    setValue('images', [...(editor?.querySelectorAll('img') ?? [])].map((image) => image.src), { shouldDirty: true })
+    const imageUrls = [...(editor?.querySelectorAll('img') ?? [])].map((image) => image.src)
+    const nextImageUrls = new Set(imageUrls)
+    for (const imageUrl of currentImageUrlsRef.current) {
+      if (!nextImageUrls.has(imageUrl)) removedImagesRef.current.add(imageUrl)
+    }
+    currentImageUrlsRef.current = nextImageUrls
+    setValue('images', imageUrls, { shouldDirty: true })
     setValue('analysis', editor?.innerHTML ?? '', { shouldDirty: true })
   }
 
@@ -369,6 +381,7 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
   const removeImage = (index) => {
     const image = editorRef.current?.querySelectorAll('img')[index]
     if (!image) return
+    removedImagesRef.current.add(image.src)
     image.remove()
     setHoverImage(null)
     syncFormFromEditor()
@@ -398,6 +411,7 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
 
       const analysis = editor?.innerHTML ?? values.analysis ?? ''
       const images = [...(editor?.querySelectorAll('img') ?? [])].map((image) => image.src)
+      currentImageUrlsRef.current = new Set(images)
       setValue('analysis', analysis, { shouldDirty: true })
       setValue('images', images, { shouldDirty: true })
 
@@ -412,6 +426,7 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
         ...values,
         analysis,
         images,
+        removedImages: [...removedImagesRef.current].filter((url) => !images.includes(url)),
         customFields: cleanCustomFields,
         symbol: normalizedSymbol,
         assetName: normalizedSymbol,

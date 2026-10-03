@@ -41,8 +41,8 @@ function PlanForm({ plannerName, plannerType, initialEntry = null, initialDate, 
     setSubmitError('')
     setIsSaving(true)
     try {
-      const { html, images } = await editorRef.current.getContent()
-      await onSubmit({ title: values.title.trim(), date: values.date || todayKey(), content: html, images })
+      const { html, images, removedImages } = await editorRef.current.getContent()
+      await onSubmit({ title: values.title.trim(), date: values.date || todayKey(), content: html, images, removedImages })
       drawerRef.current?.close()
     } catch (error) {
       setSubmitError(error.message || 'Could not save this plan. Please try again.')

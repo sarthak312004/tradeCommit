@@ -3,7 +3,11 @@ import { Trade } from "../models/trade.models.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
+import { deleteImagesFromCloudinary } from "../utils/cloudinary.js";
 import { DEFAULT_CURRENCY, isValidCurrency, normalizeCurrency } from "../constants/currency.js";
+
+const imageUrlsFromHtml = (html = "") =>
+  [...html.matchAll(/<img[^>]+src=["']([^"']+)["']/gi)].map((match) => match[1].trim()).filter(Boolean);
 
 const serializeTrade = (trade) => {
   const direction = trade.direction === "long" ? "Long" : "Short";
@@ -128,8 +132,17 @@ export const deleteJournal = asyncHandler(async (req, res) => {
     throw new ApiError(404, "Journal not found");
   }
 
+  const trades = await Trade.find({ journal: journal._id, owner: req.user._id });
   await Trade.deleteMany({ journal: journal._id, owner: req.user._id });
   await Journal.deleteOne({ _id: journal._id, owner: req.user._id });
+
+  await deleteImagesFromCloudinary(
+    trades.flatMap((trade) => [
+      ...(Array.isArray(trade.images) ? trade.images : []),
+      ...imageUrlsFromHtml(trade.analysis),
+    ]),
+    `trading-journal/${journal._id}`
+  );
 
   return res.status(200).json(new ApiResponse(200, { journalId }, "Journal deleted successfully"));
 });

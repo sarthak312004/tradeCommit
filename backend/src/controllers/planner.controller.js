@@ -4,10 +4,20 @@ import { PlanEntry } from "../models/planEntry.models.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
-import { uploadOnCloudinary } from "../utils/cloudinary.js";
+import { deleteImagesFromCloudinary, uploadOnCloudinary } from "../utils/cloudinary.js";
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const DEFAULT_TYPE = "Intraday";
+const imageUrlsFromHtml = (html = "") =>
+  [...html.matchAll(/<img[^>]+src=["']([^"']+)["']/gi)].map((match) => match[1].trim()).filter(Boolean);
+
+const getEntryImages = (entry) => [...new Set([
+  ...(Array.isArray(entry.images) ? entry.images : []),
+  ...imageUrlsFromHtml(entry.content),
+])];
+
+const removedImageUrlsFromBody = (body) =>
+  Array.isArray(body?.removedImages) ? body.removedImages.filter((url) => typeof url === "string") : [];
 
 /* ------------------------------- serializers ------------------------------- */
 
@@ -68,9 +78,7 @@ const parseEntryPayload = (body) => {
   }
 
   // images are derived from the content so the two can never drift apart
-  const images = [...new Set(
-    [...content.matchAll(/<img[^>]+src=["']([^"']+)["']/gi)].map((match) => match[1].trim()).filter(Boolean)
-  )];
+  const images = [...new Set(imageUrlsFromHtml(content))];
 
   return { title, date, content: content.trim(), images };
 };
@@ -111,8 +119,14 @@ export const updatePlanner = asyncHandler(async (req, res) => {
 export const deletePlanner = asyncHandler(async (req, res) => {
   const planner = await findOwnedPlanner(req);
 
+  const entries = await PlanEntry.find({ planner: planner._id, owner: req.user._id });
   await PlanEntry.deleteMany({ planner: planner._id, owner: req.user._id });
   await Planner.deleteOne({ _id: planner._id, owner: req.user._id });
+
+  await deleteImagesFromCloudinary(
+    entries.flatMap(getEntryImages),
+    `trade-planner/${planner._id}`
+  );
 
   return res.status(200).json(new ApiResponse(200, { plannerId: String(planner._id) }, "Planner deleted successfully"));
 });
@@ -134,6 +148,12 @@ export const createPlanEntry = asyncHandler(async (req, res) => {
 
   const entry = await PlanEntry.create({ ...parsed, owner: req.user._id, planner: planner._id });
 
+  const retainedImages = new Set(parsed.images);
+  await deleteImagesFromCloudinary(
+    removedImageUrlsFromBody(req.body).filter((url) => !retainedImages.has(url)),
+    `trade-planner/${planner._id}`
+  );
+
   return res.status(201).json(new ApiResponse(201, serializeEntry(entry), "Plan saved successfully"));
 });
 
@@ -141,14 +161,22 @@ export const updatePlanEntry = asyncHandler(async (req, res) => {
   const planner = await findOwnedPlanner(req);
   const { entryId } = req.params;
   requireObjectId(entryId, "plan");
-  const parsed = parseEntryPayload(req.body);
-
-  const entry = await PlanEntry.findOneAndUpdate(
-    { _id: entryId, planner: planner._id, owner: req.user._id },
-    parsed,
-    { new: true }
-  );
+  const entry = await PlanEntry.findOne({ _id: entryId, planner: planner._id, owner: req.user._id });
   if (!entry) throw new ApiError(404, "Plan not found");
+
+  const previousImages = getEntryImages(entry);
+  const parsed = parseEntryPayload(req.body);
+  const retainedImages = new Set(parsed.images);
+  Object.assign(entry, parsed);
+  await entry.save();
+
+  await deleteImagesFromCloudinary(
+    [
+      ...previousImages.filter((url) => !retainedImages.has(url)),
+      ...removedImageUrlsFromBody(req.body).filter((url) => !retainedImages.has(url)),
+    ],
+    `trade-planner/${planner._id}`
+  );
 
   return res.status(200).json(new ApiResponse(200, serializeEntry(entry), "Plan updated successfully"));
 });
@@ -160,6 +188,8 @@ export const deletePlanEntry = asyncHandler(async (req, res) => {
 
   const entry = await PlanEntry.findOneAndDelete({ _id: entryId, planner: planner._id, owner: req.user._id });
   if (!entry) throw new ApiError(404, "Plan not found");
+
+  await deleteImagesFromCloudinary(getEntryImages(entry), `trade-planner/${planner._id}`);
 
   return res.status(200).json(new ApiResponse(200, { entryId }, "Plan deleted successfully"));
 });

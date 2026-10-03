@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react"
+import { createPortal } from "react-dom"
+import { useEffect, useId, useRef, useState } from "react"
 import { CheckIcon, CloseIcon, PencilIcon, TrashIcon } from "../../utils/Icons.jsx"
 
 // Generic sidebar row (select / rename / delete-with-confirmation).
@@ -51,6 +52,7 @@ function SidebarItemCard({ id, label, noun, Icon, badge, isSelected, onSelect, o
 	const [isEditing, setIsEditing] = useState(false)
 	const [draftName, setDraftName] = useState(label)
 	const [isDeleteConfirmationOpen, setIsDeleteConfirmationOpen] = useState(false)
+	const dialogId = useId()
 	const inputRef = useRef(null)
 
 	useEffect(() => {
@@ -58,6 +60,15 @@ function SidebarItemCard({ id, label, noun, Icon, badge, isSelected, onSelect, o
 		inputRef.current?.focus()
 		inputRef.current?.select()
 	}, [isEditing])
+
+	useEffect(() => {
+		if (!isDeleteConfirmationOpen) return
+		const handleKeyDown = (event) => {
+			if (event.key === "Escape") setIsDeleteConfirmationOpen(false)
+		}
+		window.addEventListener("keydown", handleKeyDown)
+		return () => window.removeEventListener("keydown", handleKeyDown)
+	}, [isDeleteConfirmationOpen])
 
 	const handleStartEditing = () => {
 		setDraftName(label)
@@ -186,33 +197,46 @@ function SidebarItemCard({ id, label, noun, Icon, badge, isSelected, onSelect, o
 						</button>
 					</div>
 
-					{isDeleteConfirmationOpen && (
+					{isDeleteConfirmationOpen && createPortal(
 						<div
-							role="alertdialog"
-							aria-label={`Delete ${label}?`}
-							onKeyDown={(event) => event.key === "Escape" && setIsDeleteConfirmationOpen(false)}
-							className="absolute right-0 top-[calc(100%+6px)] z-10 w-52 rounded-lg border border-zinc-900/10 bg-white p-3 text-left shadow-[0_8px_24px_-6px_rgba(0,0,0,0.18)] dark:border-white/10 dark:bg-[#2a2a2a] dark:shadow-black/50"
+							className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4"
+							onMouseDown={(event) => {
+								if (event.target === event.currentTarget) setIsDeleteConfirmationOpen(false)
+							}}
 						>
-							<p className="text-[13px] font-medium text-zinc-900 dark:text-zinc-100">Delete this {noun}?</p>
-							<p className="mt-0.5 truncate text-xs text-zinc-500 dark:text-zinc-400">{label}</p>
-							<div className="mt-3 flex justify-end gap-1.5">
-								<button
-									type="button"
-									autoFocus
-									onClick={() => setIsDeleteConfirmationOpen(false)}
-									className={`rounded-md px-2.5 py-1 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-900/[0.06] dark:text-zinc-300 dark:hover:bg-white/10 ${focusRing}`}
-								>
-									Cancel
-								</button>
-								<button
-									type="button"
-									onClick={handleDelete}
-									className="rounded-md bg-rose-600 px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/40 dark:bg-rose-500 dark:hover:bg-rose-600"
-								>
-									Delete
-								</button>
+							<div
+								role="alertdialog"
+								aria-modal="true"
+								aria-labelledby={`${dialogId}-title`}
+								aria-describedby={`${dialogId}-description`}
+								className="w-full max-w-[360px] rounded-xl border border-zinc-200 bg-white p-5 shadow-[0_16px_48px_-12px_rgba(0,0,0,0.3)] dark:border-white/[0.09] dark:bg-[#2a2a2a]"
+							>
+								<h2 id={`${dialogId}-title`} className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+									Delete this {noun}?
+								</h2>
+								<p id={`${dialogId}-description`} className="mt-1.5 break-words text-[13px] leading-snug text-zinc-500 dark:text-zinc-400">
+									“{label}” will be permanently deleted.
+								</p>
+								<div className="mt-5 flex justify-end gap-2">
+									<button
+										type="button"
+										autoFocus
+										onClick={() => setIsDeleteConfirmationOpen(false)}
+										className={`h-8 rounded-md px-3 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-900/[0.06] dark:text-zinc-300 dark:hover:bg-white/10 ${focusRing}`}
+									>
+										Cancel
+									</button>
+									<button
+										type="button"
+										onClick={handleDelete}
+										className="h-8 rounded-md bg-rose-600 px-3 text-xs font-medium text-white transition-colors hover:bg-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/40 dark:bg-rose-500 dark:hover:bg-rose-600"
+									>
+										Delete
+									</button>
+								</div>
 							</div>
-						</div>
+						</div>,
+						document.body
 					)}
 				</>
 			)}

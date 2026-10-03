@@ -36,3 +36,48 @@ export const deleteFromCloudinary = async (publicId) => {
   if (!publicId) return null;
   return cloudinary.uploader.destroy(publicId);
 };
+
+export const cloudinaryPublicIdFromUrl = (imageUrl, expectedFolder) => {
+  const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+  if (typeof imageUrl !== "string" || !cloudName || !expectedFolder) return null;
+
+  try {
+    const url = new URL(imageUrl);
+    const uploadPath = `/${cloudName}/image/upload/`;
+    if (url.protocol !== "https:" || url.hostname !== "res.cloudinary.com" || !url.pathname.startsWith(uploadPath)) {
+      return null;
+    }
+
+    const path = decodeURIComponent(url.pathname.slice(uploadPath.length));
+    const segments = path.split("/");
+    if (/^v\d+$/.test(segments[0] ?? "")) segments.shift();
+    if (segments.length < 2 || segments.some((segment) => segment === "." || segment === "..")) return null;
+
+    const filename = segments.pop().replace(/\.(?:avif|bmp|gif|jpe?g|png|tiff?|webp)$/i, "");
+    const publicId = [...segments, filename].join("/");
+    return publicId.startsWith(`${expectedFolder}/`) ? publicId : null;
+  } catch {
+    return null;
+  }
+};
+
+export const deleteImagesFromCloudinary = async (imageUrls, expectedFolder) => {
+  if (!Array.isArray(imageUrls)) return;
+
+  const publicIds = new Set(
+    imageUrls
+      .map((imageUrl) => cloudinaryPublicIdFromUrl(imageUrl, expectedFolder))
+      .filter(Boolean)
+  );
+
+  await Promise.all([...publicIds].map(async (publicId) => {
+    try {
+      const result = await deleteFromCloudinary(publicId);
+      if (result?.result === "error") {
+        console.error("Cloudinary image deletion failed", publicId, result);
+      }
+    } catch (error) {
+      console.error("Cloudinary image deletion failed", publicId, error);
+    }
+  }));
+};

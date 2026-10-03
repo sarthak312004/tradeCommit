@@ -4,7 +4,7 @@ import { Trade } from "../models/trade.models.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
-import { uploadOnCloudinary } from "../utils/cloudinary.js";
+import { deleteImagesFromCloudinary, uploadOnCloudinary } from "../utils/cloudinary.js";
 
 const serializeTrade = (trade) => {
   const direction = trade.direction === "long" ? "Long" : "Short";
@@ -38,6 +38,16 @@ const serializeTrade = (trade) => {
 
 const CUSTOM_FIELD_TYPES = ["text", "number", "date", "checkbox"];
 const MAX_CUSTOM_FIELDS = 20;
+const imageUrlsFromHtml = (html = "") =>
+  [...html.matchAll(/<img[^>]+src=["']([^"']+)["']/gi)].map((match) => match[1].trim()).filter(Boolean);
+
+const getTradeImages = (trade) => [...new Set([
+  ...(Array.isArray(trade.images) ? trade.images : []),
+  ...imageUrlsFromHtml(trade.analysis),
+])];
+
+const removedImageUrlsFromBody = (body) =>
+  Array.isArray(body?.removedImages) ? body.removedImages.filter((url) => typeof url === "string") : [];
 
 // validates and normalises user-defined fields so only clean name/type/value triples are stored
 const parseCustomFields = (raw) => {
@@ -90,9 +100,7 @@ const parseTradePayload = (body) => {
   const stopLoss = fullBody.stopLoss ?? "";
   const analysis = typeof fullBody.analysis === "string" ? fullBody.analysis : "";
   const imagesFromBody = Array.isArray(fullBody.images) ? fullBody.images : [];
-  const extractedImages = Array.from(new Set((analysis.match(/<img[^>]+src=["'][^"']+["']/gi) ?? [])
-    .map((tag) => tag.match(/src=["']([^"']+)["']/i)?.[1])
-    .filter(Boolean)
+  const extractedImages = Array.from(new Set(imageUrlsFromHtml(analysis)
     .concat(imagesFromBody.filter((image) => typeof image === "string" && image.trim()))
     .map((image) => image.trim())
     .filter(Boolean)));
@@ -206,6 +214,12 @@ export const createTrade = asyncHandler(async (req, res) => {
     journal: journal._id,
   });
 
+  const retainedImages = new Set(parsed.images);
+  await deleteImagesFromCloudinary(
+    removedImageUrlsFromBody(req.body).filter((url) => !retainedImages.has(url)),
+    `trading-journal/${journal._id}`
+  );
+
   return res
     .status(201)
     .json(new ApiResponse(201, serializeTrade(trade), "Trade logged successfully"));
@@ -223,17 +237,26 @@ export const updateTrade = asyncHandler(async (req, res) => {
     throw new ApiError(404, "Journal not found");
   }
 
-  const parsed = parseTradePayload(req.body);
-
-  const trade = await Trade.findOneAndUpdate(
+  const trade = await Trade.findOne(
     { _id: tradeId, journal: journal._id, owner: req.user._id },
-    { ...parsed },
-    { new: true }
   );
-
   if (!trade) {
     throw new ApiError(404, "Trade not found");
   }
+
+  const previousImages = getTradeImages(trade);
+  const parsed = parseTradePayload(req.body);
+  const retainedImages = new Set(parsed.images);
+  Object.assign(trade, parsed);
+  await trade.save();
+
+  await deleteImagesFromCloudinary(
+    [
+      ...previousImages.filter((url) => !retainedImages.has(url)),
+      ...removedImageUrlsFromBody(req.body).filter((url) => !retainedImages.has(url)),
+    ],
+    `trading-journal/${journal._id}`
+  );
 
   return res
     .status(200)
@@ -256,6 +279,8 @@ export const deleteTrade = asyncHandler(async (req, res) => {
   if (!trade) {
     throw new ApiError(404, "Trade not found");
   }
+
+  await deleteImagesFromCloudinary(getTradeImages(trade), `trading-journal/${journal._id}`);
 
   return res.status(200).json(new ApiResponse(200, { journalId, tradeId }, "Trade deleted successfully"));
 });

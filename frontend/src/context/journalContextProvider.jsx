@@ -42,6 +42,7 @@ const normalizeTradeForBackend = (trade) => {
             ...extractImagesFromAnalysis(trade.analysis ?? ""),
         ])],
         customFields: Array.isArray(trade.customFields) ? trade.customFields : [],
+        removedImages: Array.isArray(trade.removedImages) ? trade.removedImages : [],
     }
 }
 

@@ -142,7 +142,6 @@ function TradeJournal({ journal, isSidebarOpen, onAddTrade, onUpdateTrade, onDel
             <TradeCard
               key={currentTrade.id}
               trade={currentTrade}
-              currency={currency}
               onSelect={handleOpenEditTrade}
               onDelete={(tradeId) => onDeleteTrade(journal.id, tradeId)}
             />

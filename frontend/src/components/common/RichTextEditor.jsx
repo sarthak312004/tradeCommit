@@ -42,12 +42,19 @@ function RichTextEditor({ ref, id, label, initialHtml = '', placeholder, onUploa
   const editorRef = useRef(null)
   const selectionRef = useRef(null)
   const imageInputRef = useRef(null)
+  const removedImagesRef = useRef(new Set())
+  const currentImageUrlsRef = useRef(new Set())
   const [isUploading, setIsUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
   const [hoverImage, setHoverImage] = useState(null)
 
   useEffect(() => {
-    if (editorRef.current) editorRef.current.innerHTML = initialHtml
+    if (!editorRef.current) return
+    editorRef.current.innerHTML = initialHtml
+    currentImageUrlsRef.current = new Set(
+      [...editorRef.current.querySelectorAll('img')].map((image) => image.src)
+    )
+    removedImagesRef.current.clear()
   }, [initialHtml])
 
   useEffect(() => {
@@ -63,7 +70,16 @@ function RichTextEditor({ ref, id, label, initialHtml = '', placeholder, onUploa
     return () => observer.disconnect()
   }, [])
 
-  const emitChange = () => onChange?.(editorRef.current?.innerHTML ?? '')
+  const emitChange = () => {
+    const editor = editorRef.current
+    const imageUrls = [...(editor?.querySelectorAll('img') ?? [])].map((image) => image.src)
+    const nextImageUrls = new Set(imageUrls)
+    for (const imageUrl of currentImageUrlsRef.current) {
+      if (!nextImageUrls.has(imageUrl)) removedImagesRef.current.add(imageUrl)
+    }
+    currentImageUrlsRef.current = nextImageUrls
+    onChange?.(editor?.innerHTML ?? '')
+  }
 
   const runCommand = (command, value = null) => {
     editorRef.current?.focus()
@@ -144,6 +160,7 @@ function RichTextEditor({ ref, id, label, initialHtml = '', placeholder, onUploa
   const removeImage = (index) => {
     const image = editorRef.current?.querySelectorAll('img')[index]
     if (!image) return
+    removedImagesRef.current.add(image.src)
     image.remove()
     setHoverImage(null)
     emitChange()
@@ -162,9 +179,13 @@ function RichTextEditor({ ref, id, label, initialHtml = '', placeholder, onUploa
         image.src = await onUploadImage(file)
       }
 
+      const html = editor?.innerHTML ?? ''
+      const images = [...(editor?.querySelectorAll('img') ?? [])].map((image) => image.src)
+      currentImageUrlsRef.current = new Set(images)
       return {
-        html: editor?.innerHTML ?? '',
-        images: [...(editor?.querySelectorAll('img') ?? [])].map((image) => image.src)
+        html,
+        images,
+        removedImages: [...removedImagesRef.current].filter((url) => !images.includes(url))
       }
     }
   }), [onUploadImage])
