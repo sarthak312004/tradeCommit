@@ -5,6 +5,7 @@ import TradeAnalysis from './TradeAnalysis'
 import DateRangeFilter from './DateRangeFilter'
 import { ALL_TIME, describeRangeInline, isRangeActive } from '../../../utils/dateRange'
 import { filterTradesByDate } from '../../../utils/tradeAnalytics'
+import { DEFAULT_CURRENCY } from '../../../utils/currencies'
 
 const VIEWS = [
   { id: 'trades', label: 'Trades' },
@@ -53,10 +54,11 @@ function TradeJournal({ journal, isSidebarOpen, onAddTrade, onUpdateTrade, onDel
     )
   }
 
+  const currency = journal.currency ?? DEFAULT_CURRENCY
   const isFiltered = isRangeActive(range)
   const subtitle = isFiltered
     ? `${visibleTrades.length} of ${journal.trades.length} trades, ${describeRangeInline(range)}`
-    : `Trades in ${journal.name}`
+    : `Trades in ${journal.name} (${currency})`
 
   return (
     <section>
@@ -125,13 +127,14 @@ function TradeJournal({ journal, isSidebarOpen, onAddTrade, onUpdateTrade, onDel
           </button>
         </div>
       ) : view === 'analysis' ? (
-        <TradeAnalysis trades={visibleTrades} rangeLabel={isFiltered ? describeRangeInline(range) : null} />
+        <TradeAnalysis trades={visibleTrades} currency={currency} rangeLabel={isFiltered ? describeRangeInline(range) : null} />
       ) : (
         <div className={`grid gap-4 ${isSidebarOpen ? 'lg:grid-cols-2' : 'lg:grid-cols-3'}`}>
           {visibleTrades.map((currentTrade) => (
             <TradeCard
               key={currentTrade.id}
               trade={currentTrade}
+              currency={currency}
               onSelect={handleOpenEditTrade}
               onDelete={(tradeId) => onDeleteTrade(journal.id, tradeId)}
             />

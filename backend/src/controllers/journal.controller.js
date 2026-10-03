@@ -3,6 +3,7 @@ import { Trade } from "../models/trade.models.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
+import { DEFAULT_CURRENCY, isValidCurrency, normalizeCurrency } from "../constants/currency.js";
 
 const serializeTrade = (trade) => {
   const direction = trade.direction === "long" ? "Long" : "Short";
@@ -37,6 +38,7 @@ const serializeJournal = (journal) => ({
   name: journal.journalName,
   journalName: journal.journalName,
   description: journal.description ?? "",
+  currency: journal.currency ?? DEFAULT_CURRENCY,
   createdAt: journal.createdAt ? new Date(journal.createdAt).toISOString() : new Date().toISOString(),
   updatedAt: journal.updatedAt ? new Date(journal.updatedAt).toISOString() : new Date().toISOString(),
   updated: "Just now",
@@ -57,11 +59,15 @@ export const getAllJournals = asyncHandler(async (req, res) => {
 });
 
 export const createJournal = asyncHandler(async (req, res) => {
-  const { journalName, name, description } = req.body ?? {};
+  const { journalName, name, description, currency } = req.body ?? {};
   const trimmedName = (journalName ?? name)?.trim();
+  const normalizedCurrency = currency === undefined || currency === null || currency === "" ? DEFAULT_CURRENCY : normalizeCurrency(currency);
 
   if (!trimmedName) {
     throw new ApiError(400, "Journal name is required");
+  }
+  if (!isValidCurrency(normalizedCurrency)) {
+    throw new ApiError(400, "Unsupported currency code");
   }
   if (description !== undefined && typeof description !== "string") {
     throw new ApiError(400, "Journal description must be a string");
@@ -70,6 +76,7 @@ export const createJournal = asyncHandler(async (req, res) => {
   const journal = await Journal.create({
     journalName: trimmedName,
     description: description?.trim(),
+    currency: normalizedCurrency,
     owner: req.user._id,
   });
 

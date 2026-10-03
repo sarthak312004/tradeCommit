@@ -39,26 +39,27 @@ function MetricList({ title, rows }) {
   )
 }
 
-function TradeAnalysis({ trades, rangeLabel }) {
+function TradeAnalysis({ trades, currency, rangeLabel }) {
+  const money = (value, options) => formatMoney(value, { currency, ...options })
   const stats = useMemo(() => computeAnalytics(trades), [trades])
   const hasClosed = stats.closedTrades > 0
 
   const sideNote = (side) => (side.count ? `${plural(side.count, 'trade')}, ${formatPercent(side.winRate)} win` : 'no trades')
 
   const performanceRows = [
-    { label: 'Average win', value: formatMoney(stats.avgWin), tone: stats.avgWin ? 'positive' : 'neutral' },
-    { label: 'Average loss', value: formatMoney(stats.avgLoss === null ? null : -stats.avgLoss), tone: stats.avgLoss ? 'negative' : 'neutral' },
+    { label: 'Average win', value: money(stats.avgWin), tone: stats.avgWin ? 'positive' : 'neutral' },
+    { label: 'Average loss', value: money(stats.avgLoss === null ? null : -stats.avgLoss), tone: stats.avgLoss ? 'negative' : 'neutral' },
     { label: 'Payoff ratio', value: formatRatio(stats.payoffRatio), note: 'avg win / avg loss' },
-    { label: 'Best trade', value: formatMoney(stats.bestTrade, { signed: true }), tone: toneOf(stats.bestTrade) },
-    { label: 'Worst trade', value: formatMoney(stats.worstTrade, { signed: true }), tone: toneOf(stats.worstTrade) }
+    { label: 'Best trade', value: money(stats.bestTrade, { signed: true }), tone: toneOf(stats.bestTrade) },
+    { label: 'Worst trade', value: money(stats.worstTrade, { signed: true }), tone: toneOf(stats.worstTrade) }
   ]
 
   const consistencyRows = [
-    { label: 'Max drawdown', value: hasClosed ? formatMoney(-stats.maxDrawdown) : '-', tone: stats.maxDrawdown > 0 ? 'negative' : 'neutral' },
+    { label: 'Max drawdown', value: hasClosed ? money(-stats.maxDrawdown) : '-', tone: stats.maxDrawdown > 0 ? 'negative' : 'neutral' },
     { label: 'Longest win streak', value: hasClosed ? String(stats.winStreak) : '-' },
     { label: 'Longest losing streak', value: hasClosed ? String(stats.lossStreak) : '-' },
-    { label: 'Long', value: formatMoney(stats.long.count ? stats.long.netPnl : null, { signed: true }), note: sideNote(stats.long), tone: stats.long.count ? toneOf(stats.long.netPnl) : 'neutral' },
-    { label: 'Short', value: formatMoney(stats.short.count ? stats.short.netPnl : null, { signed: true }), note: sideNote(stats.short), tone: stats.short.count ? toneOf(stats.short.netPnl) : 'neutral' }
+    { label: 'Long', value: money(stats.long.count ? stats.long.netPnl : null, { signed: true }), note: sideNote(stats.long), tone: stats.long.count ? toneOf(stats.long.netPnl) : 'neutral' },
+    { label: 'Short', value: money(stats.short.count ? stats.short.netPnl : null, { signed: true }), note: sideNote(stats.short), tone: stats.short.count ? toneOf(stats.short.netPnl) : 'neutral' }
   ]
 
   return (
@@ -66,14 +67,14 @@ function TradeAnalysis({ trades, rangeLabel }) {
       <div className="p-5 pb-3 sm:p-6 sm:pb-4">
         <p className="text-xs text-zinc-500 dark:text-zinc-400">Net P&amp;L</p>
         <p className={`mt-1 text-3xl font-semibold tracking-tight tabular-nums ${toneClass[toneOf(stats.netPnl)]}`}>
-          {formatMoney(stats.netPnl, { signed: true })}
+          {money(stats.netPnl, { signed: true })}
         </p>
         <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">{plural(stats.closedTrades, 'closed trade')}{rangeLabel ? ` in ${rangeLabel}` : ''}</p>
       </div>
 
       <div className="px-3 pb-4 sm:px-4">
         {hasClosed ? (
-          <EquityCurve points={stats.equity} />
+          <EquityCurve points={stats.equity} currency={currency} />
         ) : (
           <div className="grid h-52 place-items-center px-6 text-center">
             <div>
@@ -88,7 +89,7 @@ function TradeAnalysis({ trades, rangeLabel }) {
         <Stat label="Total trades" value={String(stats.totalTrades)} hint={`${stats.closedTrades} closed, ${stats.openTrades} open`} />
         <Stat label="Win rate" value={formatPercent(stats.winRate)} hint={hasClosed ? `${stats.wins} won, ${stats.losses} lost` : undefined} />
         <Stat label="Profit factor" value={formatRatio(stats.profitFactor)} hint="gross profit / gross loss" />
-        <Stat label="Expectancy" value={formatMoney(stats.expectancy, { signed: true })} tone={toneOf(stats.expectancy)} hint="average per closed trade" />
+        <Stat label="Expectancy" value={money(stats.expectancy, { signed: true })} tone={toneOf(stats.expectancy)} hint="average per closed trade" />
         <Stat
           label="Avg RRR"
           value={formatR(stats.avgRrr)}

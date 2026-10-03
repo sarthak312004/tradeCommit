@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react"
 import { journalContext } from "./Context"
 
+import { DEFAULT_CURRENCY } from "../utils/currencies"
+
 const API_BASE = "/api/v1/journals"
 
 const extractImagesFromAnalysis = (analysis) => {
@@ -48,6 +50,7 @@ const normalizeJournalForFrontend = (journal) => ({
     name: journal.name ?? journal.journalName ?? "Untitled journal",
     journalName: journal.journalName ?? journal.name ?? "Untitled journal",
     description: journal.description ?? "",
+    currency: journal.currency ?? DEFAULT_CURRENCY,
     createdAt: journal.createdAt ?? new Date().toISOString(),
     updatedAt: journal.updatedAt ?? new Date().toISOString(),
     updated: "Just now",
@@ -126,13 +129,13 @@ function JournalContextProvider({children}){
         }
     }, [])
 
-    const createJournal = async (name) => {
+    const createJournal = async (name, currency = DEFAULT_CURRENCY) => {
         const trimmed = name.trim()
         const response = await fetch(API_BASE, {
             method: "POST",
             credentials: "include",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name: trimmed })
+            body: JSON.stringify({ name: trimmed, currency })
         })
 
         const created = normalizeJournalForFrontend(await readJson(response))

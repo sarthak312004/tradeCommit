@@ -1,3 +1,5 @@
+import { DEFAULT_CURRENCY, localeForCurrency } from './currencies'
+
 /* ------------------------------------------------------------------
  * Trade analytics helpers
  * Pure functions only: no React, no I/O. Everything is derived from the
@@ -158,15 +160,30 @@ export const computeAnalytics = (trades) => {
 
 /* -------------------------- formatting -------------------------- */
 
-const currency = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 })
-const compactCurrency = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: 'compact', maximumFractionDigits: 1 })
+const formatters = new Map()
 
-/** $1,234.50 / -$80.00; pass `signed` to prefix gains with "+". */
-export const formatMoney = (value, { signed = false, compact = false } = {}) => {
+const getFormatter = (currency, compact) => {
+  const key = `${currency}:${compact}`
+  if (!formatters.has(key)) {
+    // currency decides the decimals (USD 2, JPY 0) and the locale decides the digit grouping
+    formatters.set(key, new Intl.NumberFormat(localeForCurrency(currency), {
+      style: 'currency',
+      currency,
+      ...(compact ? { notation: 'compact', maximumFractionDigits: 1 } : {})
+    }))
+  }
+  return formatters.get(key)
+}
+
+/**
+ * $1,234.50 / -$80.00 / ₹1,25,000.00 depending on the journal's currency.
+ * Pass `signed` to prefix gains with "+", `compact` for axis labels.
+ */
+export const formatMoney = (value, { signed = false, compact = false, currency = DEFAULT_CURRENCY } = {}) => {
   if (value === null || value === undefined || Number.isNaN(value)) return '-'
-  const formatter = compact ? compactCurrency : currency
-  const text = formatter.format(Math.abs(value))
-  if (value < 0 && Math.abs(value) >= (compact ? 0.05 : 0.005)) return `-${text}`
+  const text = getFormatter(currency, compact).format(Math.abs(value))
+  // an amount that rounds to zero is shown without a sign
+  if (value < 0 && /[1-9]/.test(text)) return `-${text}`
   return signed && value > 0 ? `+${text}` : text
 }
 

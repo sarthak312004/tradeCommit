@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { DEFAULT_CURRENCY, isValidCurrency } from "../constants/currency.js";
 
 const journalSchema = new mongoose.Schema(
   {
@@ -10,6 +11,19 @@ const journalSchema = new mongoose.Schema(
     description: {
       type: String,
       trim: true,
+    },
+    // ISO 4217 code every amount in this journal is expressed in. Chosen when the
+    // journal is created and immutable afterwards, so existing P&L never changes meaning.
+    currency: {
+      type: String,
+      uppercase: true,
+      trim: true,
+      default: DEFAULT_CURRENCY,
+      immutable: true,
+      validate: {
+        validator: isValidCurrency,
+        message: "Unsupported currency code",
+      },
     },
     owner: {
       type: mongoose.Schema.Types.ObjectId,

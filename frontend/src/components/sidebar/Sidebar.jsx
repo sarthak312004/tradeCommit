@@ -1,6 +1,7 @@
 import { useContext, useEffect, useRef, useState } from "react"
 import { journalContext } from "../../context/Context"
 import JournalCard from "./JournalCard"
+import { CURRENCY_OPTIONS, DEFAULT_CURRENCY } from "../../utils/currencies"
 
 
 const EASE = "ease-[cubic-bezier(0.22,1,0.36,1)]"
@@ -54,6 +55,7 @@ function Sidebar({ isSidebarOpen, setIsSidebarOpen, journals }) {
 
   const [isCreateFormOpen, setIsCreateFormOpen] = useState(false)
   const [journalName, setJournalName] = useState("")
+  const [currency, setCurrency] = useState(DEFAULT_CURRENCY)
   const inputRef = useRef(null)
 
   const showForm = isSidebarOpen && isCreateFormOpen
@@ -85,13 +87,15 @@ function Sidebar({ isSidebarOpen, setIsSidebarOpen, journals }) {
     const trimmedName = journalName.trim()
     if (!trimmedName) return
 
-    createJournal(trimmedName)
+    createJournal(trimmedName, currency)
     setJournalName("")
+    setCurrency(DEFAULT_CURRENCY)
     setIsCreateFormOpen(false)
   }
 
   const handleCancelCreate = () => {
     setJournalName("")
+    setCurrency(DEFAULT_CURRENCY)
     setIsCreateFormOpen(false)
   }
 
@@ -190,6 +194,29 @@ function Sidebar({ isSidebarOpen, setIsSidebarOpen, journals }) {
                 autoComplete="off"
                 className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition placeholder:text-zinc-400 focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-sky-500"
               />
+              <div className="mt-2.5">
+                <label htmlFor="journal-currency" className="text-xs text-zinc-500 dark:text-zinc-400">
+                  Currency
+                </label>
+                <select
+                  id="journal-currency"
+                  value={currency}
+                  onChange={(event) => setCurrency(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Escape") handleCancelCreate()
+                  }}
+                  className="mt-1 w-full cursor-pointer rounded-lg border border-zinc-200 bg-white px-2.5 py-2 text-sm text-zinc-900 outline-none transition [color-scheme:light] focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:[color-scheme:dark] dark:focus:border-sky-500"
+                >
+                  {CURRENCY_OPTIONS.map((option) => (
+                    <option key={option.code} value={option.code}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1.5 text-[11px] text-zinc-400 dark:text-zinc-500">
+                  Used for all P&amp;L in this journal. Can&apos;t be changed later.
+                </p>
+              </div>
               <div className="mt-2.5 flex justify-end gap-2">
                 <button
                   type="button"

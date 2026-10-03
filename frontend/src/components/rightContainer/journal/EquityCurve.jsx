@@ -81,7 +81,8 @@ function useElementWidth() {
 
 /* ---------- component ---------- */
 
-function EquityCurve({ points }) {
+function EquityCurve({ points, currency }) {
+  const money = (value, options) => formatMoney(value, { currency, ...options })
   const gradientId = useId()
   const [containerRef, width] = useElementWidth()
   const [activeIndex, setActiveIndex] = useState(null)
@@ -119,7 +120,7 @@ function EquityCurve({ points }) {
   const activeX = activeIndex === null ? 0 : x(activeIndex)
   const flip = activeX > MARGIN.left + innerWidth * 0.62
   const finalValue = points[points.length - 1].value
-  const summary = `Equity curve across ${points.length - 1} closed trades, ending at ${formatMoney(finalValue)}`
+  const summary = `Equity curve across ${points.length - 1} closed trades, ending at ${money(finalValue)}`
 
   return (
     <div ref={containerRef} className="relative w-full text-sky-500 dark:text-sky-400" style={{ height: HEIGHT }}>
@@ -152,7 +153,7 @@ function EquityCurve({ points }) {
                 className={tick === 0 ? 'stroke-zinc-300 dark:stroke-white/20' : 'stroke-zinc-200/70 dark:stroke-white/[0.06]'}
               />
               <text x={MARGIN.left - 10} y={y(tick)} textAnchor="end" dominantBaseline="middle" className="fill-zinc-400 text-[11px] dark:fill-zinc-500" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                {formatMoney(tick, { compact: true })}
+                {money(tick, { compact: true })}
               </text>
             </g>
           ))}
@@ -190,12 +191,12 @@ function EquityCurve({ points }) {
           style={{ left: flip ? undefined : activeX + 12, right: flip ? width - activeX + 12 : undefined }}
         >
           <p className="text-zinc-500 dark:text-zinc-400">{active.trade ? formatDateKey(active.label, { withYear: true }) : 'Start'}</p>
-          <p className="mt-0.5 text-sm font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">{formatMoney(active.value)}</p>
+          <p className="mt-0.5 text-sm font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">{money(active.value)}</p>
           {active.trade && (
             <p className="mt-1 flex items-center justify-between gap-4 text-zinc-500 dark:text-zinc-400">
               <span>{active.trade.symbol}</span>
               <span className={`tabular-nums ${toneOf(active.pnl) === 'negative' ? 'text-rose-500 dark:text-rose-400' : toneOf(active.pnl) === 'positive' ? 'text-emerald-600 dark:text-emerald-400' : ''}`}>
-                {formatMoney(active.pnl, { signed: true })}
+                {money(active.pnl, { signed: true })}
               </span>
             </p>
           )}
