@@ -1,7 +1,9 @@
 # Deploying TradeCommit
 
-One service serves everything: the Express API **and** the built React app, on one domain.
-Stack: Render (host) + MongoDB Atlas (database) + Cloudinary (screenshots). All have free tiers.
+The React frontend is deployed to Vercel, and the Express API runs as a separate
+Render web service. Vercel proxies `/api/*` to Render, so browser requests and
+authentication cookies stay on the Vercel origin.
+Stack: Vercel + Render + MongoDB Atlas + Cloudinary.
 
 ## 1. Accounts / services
 1. **MongoDB Atlas** - create a free M0 cluster, a database user, and under *Network Access* allow `0.0.0.0/0`
@@ -20,13 +22,16 @@ Generate two different secrets (run twice):
     npm start                                  # open http://localhost:3000
 Keep `NODE_ENV=development` for this local check (secure cookies need HTTPS). The server defaults to port 3000 if `PORT` is not set.
 
-## 4. Deploy on Render
-Option A - Blueprint: *New + -> Blueprint*, pick the repo (uses `render.yaml`), then fill
-`MONGODB_CONNECTION_URL` and the three `CLOUDINARY_*` values. The service starts only after
-MongoDB connects; `/api/health` reports unhealthy until the database is ready.
+## 4. Deploy the backend on Render
+Create a Blueprint from the repository using `render.yaml`. It creates an API-only
+service named `tradecommit-api`, rooted at `backend`. Add the MongoDB and Cloudinary
+values in Render's dashboard; the Blueprint generates the access and refresh token
+secrets. The service starts only after MongoDB connects; `/api/health` reports unhealthy
+until the database is ready.
 
-Option B - manual *Web Service*:
-- Build command: `npm run build`
+Alternatively, create a manual Render Web Service with:
+- Root Directory: `backend`
+- Build command: `npm ci`
 - Start command: `npm start`
 - Health check path: `/api/health`
 - Environment variables:
@@ -39,21 +44,33 @@ Option B - manual *Web Service*:
 | `ACCESS_TOKEN_SECRET` / `REFRESH_TOKEN_SECRET` | the generated secrets (32+ chars) |
 | `ACCESS_TOKEN_EXPIRY` / `REFRESH_TOKEN_EXPIRY` | `1d` / `10d` |
 | `CLOUDINARY_CLOUD_NAME` / `_API_KEY` / `_API_SECRET` | from Cloudinary |
-| `CORS_ORIGIN` | leave **empty** (same origin) |
+| `CORS_ORIGIN` | leave empty; Vercel proxies requests to this service |
 
-Open the Render URL, register an account, add a trade with a screenshot.
+Wait for the service to be live and copy its URL, for example
+`https://tradecommit-api.onrender.com`.
 
-## 5. Docker instead (any VPS / Railway / Fly.io)
+## 5. Deploy the frontend on Vercel
+Create a Vercel project from the same repository:
+- Root Directory: `frontend`
+- Build command: `npm run build`
+- Output directory: `dist`
+
+Before deploying, edit `frontend/vercel.json` and replace
+`https://YOUR-RENDER-SERVICE.onrender.com` with the Render URL from the previous step.
+The config proxies `/api/*` to the backend and sends other routes to `index.html` for
+client-side navigation. Push that change, then deploy or redeploy the Vercel project.
+
+Verify the Vercel URL's `/api/health` responds with
+`{"status":"ok","db":true}`. Then test registration, login, refreshing while logged in,
+and adding a trade with a screenshot.
+
+## 6. Docker instead (any VPS / Railway / Fly.io)
     docker build -t tradecommit .
     docker run -p 3000:3000 -e NODE_ENV=production --env-file backend/.env tradecommit
 
-## 6. Custom domain
-Add it in the host's dashboard; HTTPS is issued automatically. Nothing in the app needs changing.
-
-## Split deployment (frontend and API on different domains)
-Not recommended, but if you do it: set `CORS_ORIGIN=https://your-frontend.com` on the API, and make the
-frontend proxy/rewrite `/api/*` to the API (the app calls relative `/api/v1/...` URLs). Cookies then
-automatically switch to `SameSite=None; Secure`.
+## 7. Custom domain
+Add the custom domain to Vercel. Keep the API rewrite pointed at the Render backend;
+the browser will still access both through the Vercel origin.
 
 ## Known follow-ups
 - **Rich text is stored and re-rendered as raw HTML.** Add server-side sanitising (e.g. `sanitize-html`

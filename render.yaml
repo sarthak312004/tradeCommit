@@ -1,10 +1,11 @@
 # Render Blueprint: New + -> Blueprint -> pick this repo. Fill the secrets in the dashboard.
 services:
   - type: web
-    name: tradecommit
+    name: tradecommit-api
     runtime: node
     plan: free
-    buildCommand: npm run build
+    rootDir: backend
+    buildCommand: npm ci
     startCommand: npm start
     healthCheckPath: /api/health
     envVars:
