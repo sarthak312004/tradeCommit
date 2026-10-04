@@ -1,7 +1,12 @@
 import { useContext, useEffect, useRef, useState } from "react"
-import { journalContext } from "../../context/Context"
-import { DEFAULT_CURRENCY } from "../../utils/currencies"
-import CurrencyPicker from "./CurrencyPicker"
+import { plannerContext } from "../../context/Context"
+import {
+  CUSTOM_TYPE,
+  DEFAULT_PLANNER_TYPE,
+  MAX_PLANNER_NAME,
+  MAX_PLANNER_TYPE,
+  PLANNER_TYPE_PRESETS,
+} from "../../utils/plannerTypes"
 import {
   createCancelButton,
   createFieldLabel,
@@ -12,10 +17,11 @@ import {
   createTextField,
 } from "./sidebarStyles"
 
-function JournalCreateForm({ open, onClose }) {
-  const { createJournal } = useContext(journalContext)
+function PlannerCreateForm({ open, onClose }) {
+  const { createPlanner } = useContext(plannerContext)
   const [name, setName] = useState("")
-  const [currency, setCurrency] = useState(DEFAULT_CURRENCY)
+  const [type, setType] = useState(DEFAULT_PLANNER_TYPE)
+  const [customType, setCustomType] = useState("")
   const [error, setError] = useState("")
   const [isSaving, setIsSaving] = useState(false)
   const inputRef = useRef(null)
@@ -28,25 +34,25 @@ function JournalCreateForm({ open, onClose }) {
 
   const reset = () => {
     setName("")
-    setCurrency(DEFAULT_CURRENCY)
+    setType(DEFAULT_PLANNER_TYPE)
+    setCustomType("")
     setError("")
     onClose()
   }
 
-  // Keep the form open (button shows "Creating…") until the server has answered,
-  // so the journal appears in the list at the same moment the form closes.
   const handleSubmit = async (event) => {
     event.preventDefault()
     const trimmedName = name.trim()
-    if (!trimmedName || isSaving) return
+    const plannerType = (type === CUSTOM_TYPE ? customType : type).trim()
+    if (!trimmedName || !plannerType || isSaving) return
 
     setIsSaving(true)
     setError("")
     try {
-      await createJournal(trimmedName, currency)
+      await createPlanner(trimmedName, plannerType)
       reset()
     } catch (submitError) {
-      setError(submitError.message || "Could not create the journal")
+      setError(submitError.message || "Could not create the planner")
     } finally {
       setIsSaving(false)
     }
@@ -54,19 +60,20 @@ function JournalCreateForm({ open, onClose }) {
 
   return (
     <form onSubmit={handleSubmit} className={createFormPanel}>
-      <p className={createFormTitle}>New journal</p>
+      <p className={createFormTitle}>New trade planner</p>
 
       <div className="space-y-3">
         <div>
-          <label htmlFor="journal-name" className={createFieldLabel}>Journal name</label>
+          <label htmlFor="planner-name" className={createFieldLabel}>Planner name</label>
           <input
             ref={inputRef}
-            id="journal-name"
+            id="planner-name"
             type="text"
             value={name}
-            onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => e.key === "Escape" && reset()}
-            placeholder="e.g. Swing trades"
+            onChange={(event) => setName(event.target.value)}
+            onKeyDown={(event) => event.key === "Escape" && reset()}
+            placeholder="e.g. NIFTY setups"
+            maxLength={MAX_PLANNER_NAME}
             autoComplete="off"
             readOnly={isSaving}
             className={createTextField}
@@ -74,11 +81,34 @@ function JournalCreateForm({ open, onClose }) {
         </div>
 
         <div>
-          <p className={createFieldLabel}>Base currency</p>
-          <CurrencyPicker value={currency} onChange={setCurrency} onEscape={reset} />
-          <p className="mt-1.5 text-[10px] leading-relaxed text-zinc-400 dark:text-zinc-500">
-            Used for this journal&apos;s P&amp;L and can&apos;t be changed later.
-          </p>
+          <label htmlFor="planner-type" className={createFieldLabel}>Planner type</label>
+          <select
+            id="planner-type"
+            value={type}
+            onChange={(event) => setType(event.target.value)}
+            disabled={isSaving}
+            className={createTextField}
+          >
+            {PLANNER_TYPE_PRESETS.map((preset) => (
+              <option key={preset} value={preset}>{preset}</option>
+            ))}
+            <option value={CUSTOM_TYPE}>{CUSTOM_TYPE}</option>
+          </select>
+          {type === CUSTOM_TYPE && (
+            <input
+              id="planner-custom-type"
+              type="text"
+              value={customType}
+              onChange={(event) => setCustomType(event.target.value)}
+              onKeyDown={(event) => event.key === "Escape" && reset()}
+              placeholder="e.g. Options"
+              maxLength={MAX_PLANNER_TYPE}
+              autoComplete="off"
+              readOnly={isSaving}
+              aria-label="Custom planner type"
+              className={`${createTextField} mt-2`}
+            />
+          )}
         </div>
       </div>
 
@@ -92,7 +122,11 @@ function JournalCreateForm({ open, onClose }) {
         <button type="button" onClick={reset} disabled={isSaving} className={createCancelButton}>
           Cancel
         </button>
-        <button type="submit" disabled={!name.trim() || isSaving} className={createSubmitButton}>
+        <button
+          type="submit"
+          disabled={!name.trim() || !(type === CUSTOM_TYPE ? customType.trim() : type) || isSaving}
+          className={createSubmitButton}
+        >
           {isSaving ? "Creating…" : "Create"}
         </button>
       </div>
@@ -100,4 +134,4 @@ function JournalCreateForm({ open, onClose }) {
   )
 }
 
-export default JournalCreateForm
+export default PlannerCreateForm
