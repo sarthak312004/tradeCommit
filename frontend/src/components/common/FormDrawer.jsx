@@ -98,7 +98,7 @@ function FormDrawer({ ref, ariaTitle, breadcrumb, onSubmit, onClose, footer, chi
           // no width easing while the user drags the edge, otherwise it feels laggy
           transition: isDragging ? slide : `${grow}, ${slide}`
         }}
-        className="relative flex h-full max-w-full flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-2xl dark:border-white/10 dark:bg-[#202020]"
+        className="relative flex h-full max-w-full flex-col overflow-hidden rounded-xl border border-zinc-300 bg-white shadow-2xl dark:border-white/[0.14] dark:bg-panel"
       >
         <div
           role="separator"
@@ -123,7 +123,7 @@ function FormDrawer({ ref, ariaTitle, breadcrumb, onSubmit, onClose, footer, chi
             >
               {expanded ? <MinimizeIcon className="h-[15px] w-[15px]" /> : <MaximizeIcon className="h-[15px] w-[15px]" />}
             </button>
-            <p className="truncate pl-1 text-xs text-zinc-400 dark:text-zinc-500">{breadcrumb}</p>
+            <p className="truncate pl-1 text-xs text-zinc-500 dark:text-zinc-400">{breadcrumb}</p>
           </div>
           <button type="button" onClick={requestClose} aria-label="Close" title="Close" className={iconButtonClass}>
             <CloseIcon className="h-4 w-4" />
@@ -137,7 +137,7 @@ function FormDrawer({ ref, ariaTitle, breadcrumb, onSubmit, onClose, footer, chi
           </div>
         </div>
 
-        <footer className="flex shrink-0 items-center justify-between gap-2 border-t border-zinc-200 px-6 py-3 dark:border-white/[0.08]">
+        <footer className="flex shrink-0 items-center justify-between gap-2 border-t border-zinc-300 px-6 py-3 dark:border-white/[0.12]">
           {footer}
         </footer>
       </form>

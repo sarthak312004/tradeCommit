@@ -63,7 +63,7 @@ function TradeJournal({ journal, isSidebarOpen, onAddTrade, onUpdateTrade, onDel
 
   if (!journal) {
     return (
-      <section className="rounded-lg border border-dashed border-zinc-400/60 bg-white/50 p-10 text-center dark:border-white/10 dark:bg-transparent">
+      <section className="rounded-lg border border-dashed border-zinc-400/60 bg-white/50 p-10 text-center dark:border-white/[0.14] dark:bg-transparent">
         <p className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Create or select a journal to view trades.</p>
       </section>
     )
@@ -80,11 +80,11 @@ function TradeJournal({ journal, isSidebarOpen, onAddTrade, onUpdateTrade, onDel
       <div className="mb-5 flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
         <div className="min-w-0">
           <h2 className="text-xl font-semibold tracking-[-0.05em]">{view === 'analysis' ? 'Analysis' : 'Recent trades'}</h2>
-          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{subtitle}</p>
+          <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">{subtitle}</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <div role="tablist" aria-label="Journal view" className="inline-flex h-8 items-center rounded-lg border border-zinc-300/80 bg-white p-0.5 shadow-sm dark:border-white/10 dark:bg-transparent dark:shadow-none">
+          <div role="tablist" aria-label="Journal view" className="inline-flex h-8 items-center rounded-lg border border-zinc-300 bg-white p-0.5 shadow-sm dark:border-white/[0.14] dark:bg-panel dark:shadow-none">
             {VIEWS.map((item) => (
               <button
                 key={item.id}
@@ -95,7 +95,7 @@ function TradeJournal({ journal, isSidebarOpen, onAddTrade, onUpdateTrade, onDel
                 className={`h-full cursor-pointer rounded-md px-3 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/40 ${
                   view === item.id
                     ? 'bg-zinc-900 text-white dark:bg-white/10 dark:text-zinc-100'
-                    : 'text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'
+                    : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-100'
                 }`}
               >
                 {item.label}
@@ -130,12 +130,12 @@ function TradeJournal({ journal, isSidebarOpen, onAddTrade, onUpdateTrade, onDel
       )}
 
       {journal.trades.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-zinc-400/60 bg-white/50 p-10 text-center dark:border-white/10 dark:bg-transparent">
+        <div className="rounded-lg border border-dashed border-zinc-400/60 bg-white/50 p-10 text-center dark:border-white/[0.14] dark:bg-transparent">
           <p className="text-sm font-medium text-zinc-600 dark:text-zinc-300">No trades in this journal yet.</p>
-          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Add your first trade to start tracking this journal.</p>
+          <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">Add your first trade to start tracking this journal.</p>
         </div>
       ) : visibleTrades.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-zinc-400/60 bg-white/50 p-10 text-center dark:border-white/10 dark:bg-transparent">
+        <div className="rounded-lg border border-dashed border-zinc-400/60 bg-white/50 p-10 text-center dark:border-white/[0.14] dark:bg-transparent">
           <p className="text-sm font-medium text-zinc-600 dark:text-zinc-300">No trades in {describeRangeInline(range)}.</p>
           <button
             type="button"

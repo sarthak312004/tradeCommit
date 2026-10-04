@@ -9,7 +9,7 @@ const sideChip = {
 function Metric({ label, value }) {
   return (
     <div className="min-w-0">
-      <p className="text-[11px] text-zinc-500 dark:text-zinc-500">{label}</p>
+      <p className="text-[11px] text-zinc-600 dark:text-zinc-400">{label}</p>
       <p className="mt-0.5 truncate text-[13px] font-medium tabular-nums text-zinc-700 dark:text-zinc-200">{value}</p>
     </div>
   )
@@ -51,7 +51,7 @@ function TradeCard({ trade, onSelect, onDelete }) {
       tabIndex="0"
       onClick={() => onSelect(trade)}
       onKeyDown={handleCardKeyDown}
-      className="group relative cursor-pointer rounded-lg border border-zinc-300/80 bg-white px-4 py-3.5 text-left shadow-card transition-[box-shadow,border-color,background-color] hover:border-zinc-400/70 hover:shadow-card-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400/40 dark:border-white/[0.08] dark:bg-[#202020] dark:shadow-none dark:hover:border-white/[0.16] dark:hover:bg-[#252525] dark:hover:shadow-none"
+      className="group relative cursor-pointer rounded-lg border border-zinc-300 bg-white px-4 py-3.5 text-left shadow-card transition-[box-shadow,border-color,background-color] hover:border-zinc-400/70 hover:shadow-card-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400/40 dark:border-white/[0.12] dark:bg-panel dark:shadow-none dark:hover:border-white/[0.16] dark:hover:bg-panel-hi dark:hover:shadow-none"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
@@ -64,7 +64,7 @@ function TradeCard({ trade, onSelect, onDelete }) {
       </div>
 
       <div className="mt-1 flex h-6 items-center justify-between">
-        <p className="flex items-center gap-1.5 text-xs text-zinc-400 dark:text-zinc-500">
+        <p className="flex items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400">
           <span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${isOpen ? 'bg-amber-400' : 'bg-zinc-300 dark:bg-zinc-600'}`} />
           {trade.status}
           <span aria-hidden="true">&middot;</span>
@@ -79,13 +79,13 @@ function TradeCard({ trade, onSelect, onDelete }) {
             event.stopPropagation()
             setIsDeleteConfirmationOpen(true)
           }}
-          className="-mr-1.5 flex h-6 w-6 items-center justify-center rounded text-zinc-400 opacity-0 transition-opacity hover:bg-rose-500/10 hover:text-rose-600 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/40 group-hover:opacity-100 dark:text-zinc-500 dark:hover:text-rose-400"
+          className="-mr-1.5 flex h-6 w-6 items-center justify-center rounded text-zinc-500 opacity-0 transition-opacity hover:bg-rose-500/10 hover:text-rose-600 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/40 group-hover:opacity-100 dark:text-zinc-400 dark:hover:text-rose-400"
         >
           <TrashIcon className="h-3.5 w-3.5" />
         </button>
       </div>
 
-      <div className="mt-3 grid grid-cols-3 gap-3 border-t border-zinc-200 pt-3 dark:border-white/[0.06]">
+      <div className="mt-3 grid grid-cols-3 gap-3 border-t border-zinc-300 pt-3 dark:border-white/[0.09]">
         <Metric label="Qty" value={trade.qty} />
         <Metric label="Entry" value={trade.entry || '-'} />
         <Metric label="Exit" value={trade.exit || '-'} />
@@ -112,7 +112,7 @@ function TradeCard({ trade, onSelect, onDelete }) {
               autoFocus
               disabled={isDeleting}
               onClick={() => setIsDeleteConfirmationOpen(false)}
-              className="rounded px-2 py-1 text-[11px] font-medium text-zinc-500 transition-colors hover:bg-black/[0.05] hover:text-zinc-800 disabled:cursor-default disabled:opacity-50 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-zinc-100"
+              className="rounded px-2 py-1 text-[11px] font-medium text-zinc-600 transition-colors hover:bg-black/[0.05] hover:text-zinc-800 disabled:cursor-default disabled:opacity-50 dark:text-zinc-300 dark:hover:bg-white/10 dark:hover:text-zinc-100"
             >
               Cancel
             </button>

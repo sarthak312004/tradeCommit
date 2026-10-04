@@ -5,7 +5,7 @@ import { addMonths, buildMonthGrid, formatMonthTitle, getWeekdayLabels, startOfM
 const MAX_VISIBLE_CHIPS = 3
 
 const navButton =
-  'flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/40 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-zinc-100'
+  'flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/40 dark:text-zinc-300 dark:hover:bg-white/10 dark:hover:text-zinc-100'
 
 function EntryChip({ entry, onOpen }) {
   return (
@@ -16,7 +16,7 @@ function EntryChip({ entry, onOpen }) {
         onOpen(entry)
       }}
       title={entry.title}
-      className="flex w-full cursor-pointer items-center gap-2 truncate rounded px-2 py-1 text-left text-[10px] leading-[14px] text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-800 focus:bg-zinc-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/40 dark:text-zinc-400 dark:hover:bg-white/[0.07] dark:hover:text-zinc-100 dark:focus:bg-white/[0.07]"
+      className="flex w-full cursor-pointer items-center gap-2 truncate rounded px-2 py-1 text-left text-[10px] leading-[14px] text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-800 focus:bg-zinc-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/40 dark:text-zinc-300 dark:hover:bg-white/[0.07] dark:hover:text-zinc-100 dark:focus:bg-white/[0.07]"
     >
       <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-zinc-300 dark:bg-zinc-600" />
       <span className="truncate">{entry.title}</span>
@@ -33,8 +33,8 @@ function DayCell({ day, entries, isToday, isExpanded, onToggleExpand, onCreate, 
       onClick={() => onCreate(day.key)}
       className={`group relative min-h-[72px] cursor-pointer p-[5px] transition-colors sm:min-h-[99px] ${
         day.inMonth
-          ? 'bg-white hover:bg-zinc-50 dark:bg-[#191919] dark:hover:bg-white/[0.03]'
-          : 'bg-zinc-100 hover:bg-zinc-50 dark:bg-white/[0.02] dark:hover:bg-white/[0.04]'
+          ? 'bg-white hover:bg-zinc-50 dark:bg-night dark:hover:bg-white/[0.03]'
+          : 'bg-zinc-100 hover:bg-zinc-50 dark:bg-night dark:hover:bg-white/[0.04]'
       }`}
     >
       <div className="flex items-center justify-between">
@@ -50,12 +50,12 @@ function DayCell({ day, entries, isToday, isExpanded, onToggleExpand, onCreate, 
               ? 'bg-sky-500 text-white'
               : day.inMonth
                 ? 'text-zinc-700 dark:text-zinc-300'
-                : 'text-zinc-400 dark:text-zinc-600'
+                : 'text-zinc-500 dark:text-zinc-500'
           }`}
         >
           {day.day}
         </button>
-        <span className="flex h-4 w-4 items-center justify-center rounded text-zinc-400 opacity-0 transition-opacity group-hover:opacity-100 dark:text-zinc-500" aria-hidden="true">
+        <span className="flex h-4 w-4 items-center justify-center rounded text-zinc-500 opacity-0 transition-opacity group-hover:opacity-100 dark:text-zinc-400" aria-hidden="true">
           <PlusIcon className="h-3 w-3" />
         </span>
       </div>
@@ -71,7 +71,7 @@ function DayCell({ day, entries, isToday, isExpanded, onToggleExpand, onCreate, 
               event.stopPropagation()
               onToggleExpand(day.key)
             }}
-            className="cursor-pointer px-2 text-[10px] font-medium text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200"
+            className="cursor-pointer px-2 text-[10px] font-medium text-zinc-600 hover:text-zinc-800 dark:text-zinc-300 dark:hover:text-zinc-200"
           >
             +{hiddenCount} more
           </button>
@@ -83,7 +83,7 @@ function DayCell({ day, entries, isToday, isExpanded, onToggleExpand, onCreate, 
               event.stopPropagation()
               onToggleExpand(day.key)
             }}
-            className="cursor-pointer px-2 text-[10px] font-medium text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200"
+            className="cursor-pointer px-2 text-[10px] font-medium text-zinc-600 hover:text-zinc-800 dark:text-zinc-300 dark:hover:text-zinc-200"
           >
             Show less
           </button>
@@ -134,7 +134,7 @@ function PlannerCalendar({ entries, onCreateForDate, onOpenEntry }) {
           <button
             type="button"
             onClick={() => goToMonth(startOfMonth(new Date()))}
-            className="h-7 cursor-pointer rounded-md border border-zinc-300/80 bg-white px-2.5 text-[11px] font-medium text-zinc-700 shadow-sm transition-colors hover:bg-zinc-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/40 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/10"
+            className="h-7 cursor-pointer rounded-md border border-zinc-300 bg-white px-2.5 text-[11px] font-medium text-zinc-700 shadow-sm transition-colors hover:bg-zinc-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/40 dark:border-white/[0.14] dark:text-zinc-300 dark:hover:bg-white/10"
           >
             Today
           </button>
@@ -144,10 +144,10 @@ function PlannerCalendar({ entries, onCreateForDate, onOpenEntry }) {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-zinc-300 shadow-card dark:border-white/10 dark:shadow-none">
+      <div className="overflow-hidden rounded-lg border border-zinc-300 shadow-card dark:border-white/[0.14] dark:shadow-none">
         <div className="grid grid-cols-7 gap-px bg-zinc-300 dark:bg-white/10">
           {weekdays.map((label) => (
-            <div key={label} className="bg-zinc-100 px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-zinc-600 dark:bg-[#202020] dark:text-zinc-400">
+            <div key={label} className="bg-zinc-100 px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-zinc-600 dark:bg-panel dark:text-zinc-300">
               {label}
             </div>
           ))}

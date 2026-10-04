@@ -2,15 +2,18 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* Light theme layers (the dark theme is untouched):
-   canvas  = the page behind everything (warm grey, so white surfaces stand out)
-   sidebar = one step darker than the canvas
-   cards   = pure white, lifted with a border and a soft shadow (shadow-card / shadow-card-hover) */
+/* Theme layers. Each step is clearly separated from the next, in both themes.
+   LIGHT  canvas (page) -> sidebar (one step darker) -> white cards/header, edged by a border + shadow
+   DARK   night (page) -> side (sidebar) -> panel (header, cards, drawers) -> panel-hi (hover, popovers) */
 @theme {
-  --color-canvas: #ebe9e4;
-  --color-sidebar: #e1dfd9;
-  --shadow-card: 0 1px 2px 0 rgb(28 25 23 / 0.07), 0 1px 3px 0 rgb(28 25 23 / 0.09);
-  --shadow-card-hover: 0 2px 4px -1px rgb(28 25 23 / 0.10), 0 8px 16px -6px rgb(28 25 23 / 0.18);
+  --color-canvas: #e4e2dc;
+  --color-sidebar: #d8d6cf;
+  --color-night: #111111;
+  --color-side: #181818;
+  --color-panel: #1e1e1e;
+  --color-panel-hi: #2a2a2a;
+  --shadow-card: 0 1px 2px 0 rgb(28 25 23 / 0.10), 0 2px 6px -1px rgb(28 25 23 / 0.12);
+  --shadow-card-hover: 0 2px 4px -1px rgb(28 25 23 / 0.12), 0 10px 20px -6px rgb(28 25 23 / 0.22);
 }
 
 :root {
@@ -18,7 +21,7 @@
   line-height: 1.5;
   font-weight: 400;
   color: #1d1d1f;
-  background: #ebe9e4;
+  background: #e4e2dc;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -30,20 +33,20 @@
 }
 
 html {
-  background: #ebe9e4;
+  background: #e4e2dc;
 }
 
 html.dark,
 html.dark body {
-  background: #191919;
-  color: #e6e6e4;
+  background: #111111;
+  color: #ececea;
 }
 
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background: #ebe9e4;
+  background: #e4e2dc;
 }
 
 #root {

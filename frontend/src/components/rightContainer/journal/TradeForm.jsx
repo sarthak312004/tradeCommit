@@ -78,13 +78,13 @@ function Icon({ name, size = 16 }) {
 }
 
 /* ---------- shared styles ---------- */
-const iconButtonClass = 'flex h-7 w-7 items-center justify-center rounded-md text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-500 dark:hover:bg-white/10 dark:hover:text-zinc-200'
+const iconButtonClass = 'flex h-7 w-7 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-zinc-200'
 
-const inputClass = 'h-8 w-full rounded-md bg-transparent px-2 text-sm text-zinc-800 outline-none transition-colors placeholder:text-zinc-400 hover:bg-zinc-100/80 focus:bg-zinc-100 focus:ring-1 focus:ring-zinc-300 dark:text-zinc-100 dark:placeholder:text-zinc-600 dark:hover:bg-white/[0.05] dark:focus:bg-white/[0.06] dark:focus:ring-white/15'
+const inputClass = 'h-8 w-full rounded-md bg-transparent px-2 text-sm text-zinc-800 outline-none transition-colors placeholder:text-zinc-500 hover:bg-zinc-100/80 focus:bg-zinc-100 focus:ring-1 focus:ring-zinc-300 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:hover:bg-white/[0.05] dark:focus:bg-white/[0.06] dark:focus:ring-white/15'
 const numberInputClass = `${inputClass} [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`
 const dateInputClass = `${inputClass} [color-scheme:light] dark:[color-scheme:dark]`
 
-const toolbarButtonClass = 'flex h-7 w-7 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-zinc-100'
+const toolbarButtonClass = 'flex h-7 w-7 items-center justify-center rounded-md text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-300 dark:hover:bg-white/10 dark:hover:text-zinc-100'
 
 const editorClass = [
   'min-h-[420px] py-4 text-[15px] leading-7 text-zinc-800 outline-none dark:text-zinc-200',
@@ -118,10 +118,10 @@ function PropertyRow({ icon, label, hint, htmlFor, error, children }) {
 
   return (
     <div className="flex items-start gap-2 py-0.5">
-      <Label {...labelProps} className="flex h-8 w-32 shrink-0 items-center gap-2 text-[13px] text-zinc-500 dark:text-zinc-400">
-        <span className="text-zinc-400 dark:text-zinc-500"><Icon name={icon} size={15} /></span>
+      <Label {...labelProps} className="flex h-8 w-32 shrink-0 items-center gap-2 text-[13px] text-zinc-600 dark:text-zinc-300">
+        <span className="text-zinc-500 dark:text-zinc-400"><Icon name={icon} size={15} /></span>
         <span className="truncate">{label}</span>
-        {hint && <span className="text-[11px] text-zinc-400/80 dark:text-zinc-600">{hint}</span>}
+        {hint && <span className="text-[11px] text-zinc-400/80 dark:text-zinc-500">{hint}</span>}
       </Label>
       <div className="min-w-0 flex-1">
         {children}
@@ -580,7 +580,7 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
           // no width easing while the user drags the edge, otherwise it feels laggy
           transition: isDragging ? slide : `${grow}, ${slide}`
         }}
-        className="relative flex h-full max-w-full flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-2xl dark:border-white/10 dark:bg-[#202020]"
+        className="relative flex h-full max-w-full flex-col overflow-hidden rounded-xl border border-zinc-300 bg-white shadow-2xl dark:border-white/[0.14] dark:bg-panel"
       >
         <h2 id="trade-form-title" className="sr-only">{initialTrade ? 'Review trade in' : 'Add to'} {journalName}</h2>
 
@@ -607,7 +607,7 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
             >
               <Icon name={expanded ? 'minimize' : 'maximize'} size={15} />
             </button>
-            <p className="truncate pl-1 text-xs text-zinc-400 dark:text-zinc-500">
+            <p className="truncate pl-1 text-xs text-zinc-500 dark:text-zinc-400">
               {journalName}
               <span className="mx-1.5 opacity-60">/</span>
               {initialTrade ? 'Trade review' : 'New trade'}
@@ -669,7 +669,7 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
                           className={`inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[13px] font-medium transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-zinc-400/50 ${
                             direction === value
                               ? tone
-                              : 'text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:text-zinc-500 dark:hover:bg-white/[0.06] dark:hover:text-zinc-300'
+                              : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-600 dark:text-zinc-400 dark:hover:bg-white/[0.06] dark:hover:text-zinc-300'
                           }`}
                         >
                           <Icon name={icon} size={14} />
@@ -714,7 +714,7 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
                   const name = `customFields.${index}.value`
                   return (
                     <div key={field.id} className="group/row flex items-start gap-2 py-0.5">
-                      <div className="flex h-8 w-32 shrink-0 items-center gap-2 text-zinc-400 dark:text-zinc-500">
+                      <div className="flex h-8 w-32 shrink-0 items-center gap-2 text-zinc-500 dark:text-zinc-400">
                         <Icon name={typeConfig.icon} size={15} />
                         <input
                           id={`cf-label-${field.key}`}
@@ -729,7 +729,7 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
                               event.currentTarget.blur()
                             }
                           }}
-                          className="h-8 min-w-0 flex-1 rounded-md bg-transparent px-1.5 text-[13px] text-zinc-500 outline-none transition-colors placeholder:text-zinc-400 hover:bg-zinc-100/80 focus:bg-zinc-100 focus:text-zinc-800 dark:text-zinc-400 dark:hover:bg-white/[0.05] dark:focus:bg-white/[0.06] dark:focus:text-zinc-100"
+                          className="h-8 min-w-0 flex-1 rounded-md bg-transparent px-1.5 text-[13px] text-zinc-600 outline-none transition-colors placeholder:text-zinc-500 hover:bg-zinc-100/80 focus:bg-zinc-100 focus:text-zinc-800 dark:text-zinc-300 dark:hover:bg-white/[0.05] dark:focus:bg-white/[0.06] dark:focus:text-zinc-100"
                         />
                       </div>
 
@@ -756,7 +756,7 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
                         onClick={() => removeCustomField(index)}
                         title="Remove field"
                         aria-label={`Remove ${field.label || typeConfig.label} field`}
-                        className="flex h-8 w-6 shrink-0 items-center justify-center rounded-md text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700 focus-visible:opacity-100 md:opacity-0 md:group-hover/row:opacity-100 dark:text-zinc-500 dark:hover:bg-white/10 dark:hover:text-zinc-200"
+                        className="flex h-8 w-6 shrink-0 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-700 focus-visible:opacity-100 md:opacity-0 md:group-hover/row:opacity-100 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-zinc-200"
                       >
                         <Icon name="x" size={14} />
                       </button>
@@ -772,15 +772,15 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
                   disabled={customFields.length >= MAX_CUSTOM_FIELDS}
                   aria-haspopup="menu"
                   aria-expanded={addMenuOpen}
-                  className="flex h-8 items-center gap-1.5 rounded-md px-2 text-[13px] text-zinc-400 transition-colors hover:bg-zinc-100/80 hover:text-zinc-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-zinc-500 dark:hover:bg-white/[0.05] dark:hover:text-zinc-200"
+                  className="flex h-8 items-center gap-1.5 rounded-md px-2 text-[13px] text-zinc-500 transition-colors hover:bg-zinc-100/80 hover:text-zinc-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-zinc-400 dark:hover:bg-white/[0.05] dark:hover:text-zinc-200"
                 >
                   <Icon name="plus" size={14} />
                   Add property
                 </button>
 
                 {addMenuOpen && (
-                  <div role="menu" className="absolute left-0 top-9 z-30 w-52 rounded-lg border border-zinc-200 bg-white p-1 shadow-lg dark:border-white/10 dark:bg-[#2a2a2a]">
-                    <p className="px-2 py-1 text-[11px] text-zinc-400 dark:text-zinc-500">Property type</p>
+                  <div role="menu" className="absolute left-0 top-9 z-30 w-52 rounded-lg border border-zinc-300 bg-white p-1 shadow-lg dark:border-white/[0.14] dark:bg-panel-hi">
+                    <p className="px-2 py-1 text-[11px] text-zinc-500 dark:text-zinc-400">Property type</p>
                     {Object.entries(FIELD_TYPES).map(([type, config]) => (
                       <button
                         key={type}
@@ -789,11 +789,11 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
                         onClick={() => addCustomField(type)}
                         className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-[13px] text-zinc-700 transition-colors hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-white/[0.07]"
                       >
-                        <span className="text-zinc-400 dark:text-zinc-500"><Icon name={config.icon} size={15} /></span>
+                        <span className="text-zinc-500 dark:text-zinc-400"><Icon name={config.icon} size={15} /></span>
                         {config.label}
                       </button>
                     ))}
-                    <p className="mt-1 border-t border-zinc-100 px-2 pb-1 pt-2 text-[11px] leading-snug text-zinc-400 dark:border-white/[0.06] dark:text-zinc-500">
+                    <p className="mt-1 border-t border-zinc-200 px-2 pb-1 pt-2 text-[11px] leading-snug text-zinc-500 dark:border-white/[0.09] dark:text-zinc-400">
                       Saved with this trade and added to your next one.
                     </p>
                   </div>
@@ -801,16 +801,16 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
               </div>
             </div>
 
-            <hr className="my-6 border-zinc-200 dark:border-white/[0.08]" />
+            <hr className="my-6 border-zinc-300 dark:border-white/[0.12]" />
 
             {/* analysis */}
             <section className="group">
               <div className="mb-2 flex items-baseline justify-between">
-                <span id="trade-analysis-label" className="text-[13px] font-medium text-zinc-500 dark:text-zinc-400">Trade analysis</span>
-                <span className="hidden text-[11px] text-zinc-400 sm:block dark:text-zinc-600">Tip: paste screenshots straight in with Ctrl/⌘ + V</span>
+                <span id="trade-analysis-label" className="text-[13px] font-medium text-zinc-600 dark:text-zinc-300">Trade analysis</span>
+                <span className="hidden text-[11px] text-zinc-500 sm:block dark:text-zinc-500">Tip: paste screenshots straight in with Ctrl/⌘ + V</span>
               </div>
 
-              <div className="sticky top-0 z-10 flex flex-wrap items-center gap-0.5 border-b border-zinc-200/80 bg-white py-1.5 opacity-70 transition-opacity focus-within:opacity-100 group-focus-within:opacity-100 hover:opacity-100 dark:border-white/[0.08] dark:bg-[#202020]">
+              <div className="sticky top-0 z-10 flex flex-wrap items-center gap-0.5 border-b border-zinc-300 bg-white py-1.5 opacity-70 transition-opacity focus-within:opacity-100 group-focus-within:opacity-100 hover:opacity-100 dark:border-white/[0.12] dark:bg-panel">
                 <ToolbarButton title="Bold" icon="bold" onClick={() => runEditorCommand('bold')} />
                 <ToolbarButton title="Italic" icon="italic" onClick={() => runEditorCommand('italic')} />
                 <select
@@ -818,7 +818,7 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
                   aria-label="Text style"
                   defaultValue="p"
                   onChange={(event) => runEditorCommand('formatBlock', event.target.value)}
-                  className="mx-0.5 h-7 cursor-pointer rounded-md bg-transparent px-1.5 text-xs text-zinc-500 outline-none transition-colors hover:bg-zinc-100 dark:text-zinc-400 dark:[color-scheme:dark] dark:hover:bg-white/10"
+                  className="mx-0.5 h-7 cursor-pointer rounded-md bg-transparent px-1.5 text-xs text-zinc-600 outline-none transition-colors hover:bg-zinc-100 dark:text-zinc-300 dark:[color-scheme:dark] dark:hover:bg-white/10"
                 >
                   <option value="p">Text</option>
                   <option value="h2">Headline</option>
@@ -834,7 +834,7 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
                   type="button"
                   onMouseDown={keepSelection}
                   onClick={() => imageInputRef.current?.click()}
-                  className="flex h-7 items-center gap-1.5 rounded-md px-2 text-xs text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-zinc-100"
+                  className="flex h-7 items-center gap-1.5 rounded-md px-2 text-xs text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-300 dark:hover:bg-white/10 dark:hover:text-zinc-100"
                 >
                   <Icon name="image" size={14} />
                   {pendingUploads > 0 ? `Uploading ${pendingUploads}...` : 'Add screenshot'}
@@ -895,9 +895,9 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
           </div>
         </div>
 
-        <footer className="flex shrink-0 items-center justify-end gap-2 border-t border-zinc-200 px-6 py-3 dark:border-white/[0.08]">
+        <footer className="flex shrink-0 items-center justify-end gap-2 border-t border-zinc-300 px-6 py-3 dark:border-white/[0.12]">
           {submitError && <p role="alert" className="mr-auto text-xs text-rose-500">{submitError}</p>}
-          <button type="button" onClick={requestClose} disabled={isSaving} className="h-9 rounded-md px-3 text-[13px] font-medium text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 disabled:opacity-50 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-zinc-100">Cancel</button>
+          <button type="button" onClick={requestClose} disabled={isSaving} className="h-9 rounded-md px-3 text-[13px] font-medium text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900 disabled:opacity-50 dark:text-zinc-300 dark:hover:bg-white/10 dark:hover:text-zinc-100">Cancel</button>
           <button type="submit" disabled={isSaving} className="inline-flex h-9 min-w-[116px] items-center justify-center gap-2 whitespace-nowrap rounded-md bg-zinc-900 px-3.5 text-[13px] font-medium text-white transition-colors hover:bg-zinc-700 disabled:cursor-wait disabled:opacity-70 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white">
             {isSaving && <span aria-hidden="true" className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/40 border-t-white dark:border-zinc-900/30 dark:border-t-zinc-900" />}
             {isSaving ? (pendingUploads > 0 ? 'Uploading images...' : 'Saving...') : initialTrade ? 'Save review' : 'Save trade'}

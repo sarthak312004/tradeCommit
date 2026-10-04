@@ -77,7 +77,7 @@ function Sidebar({ isSidebarOpen, setIsSidebarOpen }) {
       aria-label="Sidebar"
       className={`${
         isSidebarOpen ? "w-[260px]" : "w-[56px]"
-      } relative flex shrink-0 flex-col overflow-hidden border-r border-zinc-300/70 bg-sidebar transition-[width] duration-300 ${EASE} will-change-[width] motion-reduce:transition-none dark:border-white/[0.07] dark:bg-[#202020]`}
+      } relative flex shrink-0 flex-col overflow-hidden border-r border-zinc-300 bg-sidebar transition-[width] duration-300 ${EASE} will-change-[width] motion-reduce:transition-none dark:border-white/[0.10] dark:bg-side`}
     >
       {/* ------------------------------ Header ------------------------------ */}
       <div className="flex h-12 shrink-0 items-center">
@@ -132,7 +132,7 @@ function Sidebar({ isSidebarOpen, setIsSidebarOpen }) {
           ))}
         </SidebarSection>
 
-        <div className="mx-3 shrink-0 border-t border-zinc-300/70 dark:border-white/[0.07]" />
+        <div className="mx-3 shrink-0 border-t border-zinc-300 dark:border-white/[0.10]" />
 
         <SidebarSection
           title="Trade planner"
@@ -153,13 +153,13 @@ function Sidebar({ isSidebarOpen, setIsSidebarOpen }) {
       </div>
 
       {/* ------------------------------ Footer ------------------------------ */}
-      <div className="relative h-[84px] shrink-0 border-t border-zinc-300/70 dark:border-white/[0.07]">
+      <div className="relative h-[84px] shrink-0 border-t border-zinc-300 dark:border-white/[0.10]">
         {/* Expanded */}
         <div
           className={`absolute inset-y-0 left-0 flex w-[260px] flex-col justify-center gap-1 px-2 ${FADE_BASE} ${fade(isSidebarOpen)}`}
         >
           <div className="flex items-center justify-between pl-2">
-            <span className="text-xs text-zinc-500 dark:text-zinc-400">Theme</span>
+            <span className="text-xs text-zinc-600 dark:text-zinc-300">Theme</span>
             <ThemeSegmented theme={theme} setTheme={setTheme} />
           </div>
           <button
@@ -203,7 +203,7 @@ function Sidebar({ isSidebarOpen, setIsSidebarOpen }) {
               aria-modal="true"
               aria-labelledby="logout-title"
               aria-describedby="logout-desc"
-              className="w-full max-w-[340px] rounded-xl border border-zinc-200 bg-white p-5 shadow-[0_16px_48px_-12px_rgba(0,0,0,0.3)] dark:border-white/[0.09] dark:bg-[#2a2a2a]"
+              className="w-full max-w-[340px] rounded-xl border border-zinc-300 bg-white p-5 shadow-[0_16px_48px_-12px_rgba(0,0,0,0.3)] dark:border-white/[0.13] dark:bg-panel-hi"
             >
               <h2
                 id="logout-title"
@@ -213,7 +213,7 @@ function Sidebar({ isSidebarOpen, setIsSidebarOpen }) {
               </h2>
               <p
                 id="logout-desc"
-                className="mt-1.5 text-[13px] leading-snug text-zinc-500 dark:text-zinc-400"
+                className="mt-1.5 text-[13px] leading-snug text-zinc-600 dark:text-zinc-300"
               >
                 You&apos;ll need to sign in again to access your journals.
               </p>

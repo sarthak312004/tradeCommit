@@ -31,7 +31,7 @@ export function ThemeSegmented({ theme, setTheme }) {
             className={`flex h-6 w-8 cursor-pointer items-center justify-center rounded transition-colors ${focusRing} ${
               active
                 ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-700 dark:text-zinc-50"
-                : "text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-100"
+                : "text-zinc-600 hover:text-zinc-800 dark:text-zinc-300 dark:hover:text-zinc-100"
             }`}
           >
             <Icon className="h-3.5 w-3.5" />
@@ -55,7 +55,7 @@ export function ThemeCycleButton({ theme, setTheme }) {
       onClick={() => setTheme(next.value)}
       title={`Theme: ${current.label} (click for ${next.label})`}
       aria-label={`Theme: ${current.label}. Switch to ${next.label}`}
-      className={`flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-black/[0.05] hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-white/[0.07] dark:hover:text-zinc-100 ${focusRing}`}
+      className={`flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-zinc-600 transition-colors hover:bg-black/[0.05] hover:text-zinc-900 dark:text-zinc-300 dark:hover:bg-white/[0.07] dark:hover:text-zinc-100 ${focusRing}`}
     >
       <Icon className="h-4 w-4" />
     </button>

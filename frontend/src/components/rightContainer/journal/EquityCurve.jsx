@@ -150,9 +150,9 @@ function EquityCurve({ points, currency }) {
                 y1={y(tick)}
                 y2={y(tick)}
                 strokeDasharray={tick === 0 ? '3 4' : undefined}
-                className={tick === 0 ? 'stroke-zinc-300 dark:stroke-white/20' : 'stroke-zinc-200/70 dark:stroke-white/[0.06]'}
+                className={tick === 0 ? 'stroke-zinc-300 dark:stroke-white/20' : 'stroke-zinc-300 dark:stroke-white/[0.09]'}
               />
-              <text x={MARGIN.left - 10} y={y(tick)} textAnchor="end" dominantBaseline="middle" className="fill-zinc-400 text-[11px] dark:fill-zinc-500" style={{ fontVariantNumeric: 'tabular-nums' }}>
+              <text x={MARGIN.left - 10} y={y(tick)} textAnchor="end" dominantBaseline="middle" className="fill-zinc-500 text-[11px] dark:fill-zinc-400" style={{ fontVariantNumeric: 'tabular-nums' }}>
                 {money(tick, { compact: true })}
               </text>
             </g>
@@ -165,7 +165,7 @@ function EquityCurve({ points, currency }) {
               x={x(index)}
               y={HEIGHT - 6}
               textAnchor={index === points.length - 1 ? 'end' : index === 1 && points.length > 5 ? 'start' : 'middle'}
-              className="fill-zinc-400 text-[11px] dark:fill-zinc-500"
+              className="fill-zinc-500 text-[11px] dark:fill-zinc-400"
             >
               {text}
             </text>
@@ -179,7 +179,7 @@ function EquityCurve({ points, currency }) {
           {active && (
             <g pointerEvents="none">
               <line x1={activeX} x2={activeX} y1={MARGIN.top} y2={MARGIN.top + innerHeight} className="stroke-zinc-300 dark:stroke-white/20" />
-              <circle cx={activeX} cy={y(active.value)} r="4" fill="currentColor" className="stroke-white dark:stroke-[#111315]" strokeWidth="2" />
+              <circle cx={activeX} cy={y(active.value)} r="4" fill="currentColor" className="stroke-white dark:stroke-panel" strokeWidth="2" />
             </g>
           )}
         </svg>
@@ -187,13 +187,13 @@ function EquityCurve({ points, currency }) {
 
       {active && (
         <div
-          className="pointer-events-none absolute top-1 z-10 min-w-36 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs shadow-lg dark:border-white/10 dark:bg-[#1b1d20]"
+          className="pointer-events-none absolute top-1 z-10 min-w-36 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-xs shadow-lg dark:border-white/[0.14] dark:bg-panel-hi"
           style={{ left: flip ? undefined : activeX + 12, right: flip ? width - activeX + 12 : undefined }}
         >
-          <p className="text-zinc-500 dark:text-zinc-400">{active.trade ? formatDateKey(active.label, { withYear: true }) : 'Start'}</p>
+          <p className="text-zinc-600 dark:text-zinc-300">{active.trade ? formatDateKey(active.label, { withYear: true }) : 'Start'}</p>
           <p className="mt-0.5 text-sm font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">{money(active.value)}</p>
           {active.trade && (
-            <p className="mt-1 flex items-center justify-between gap-4 text-zinc-500 dark:text-zinc-400">
+            <p className="mt-1 flex items-center justify-between gap-4 text-zinc-600 dark:text-zinc-300">
               <span>{active.trade.symbol}</span>
               <span className={`tabular-nums ${toneOf(active.pnl) === 'negative' ? 'text-rose-500 dark:text-rose-400' : toneOf(active.pnl) === 'positive' ? 'text-emerald-600 dark:text-emerald-400' : ''}`}>
                 {money(active.pnl, { signed: true })}

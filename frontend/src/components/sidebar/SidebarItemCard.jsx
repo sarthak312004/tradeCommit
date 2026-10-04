@@ -28,11 +28,11 @@ const iconButton = `flex h-6 w-6 shrink-0 items-center justify-center rounded tr
 
 const iconTone = {
 	neutral:
-		"text-zinc-400 hover:bg-zinc-900/[0.06] hover:text-zinc-700 dark:text-zinc-500 dark:hover:bg-white/10 dark:hover:text-zinc-200",
+		"text-zinc-500 hover:bg-zinc-900/[0.06] hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-zinc-200",
 	confirm:
 		"text-zinc-600 hover:bg-zinc-900/[0.06] hover:text-zinc-900 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-zinc-600 dark:text-zinc-300 dark:hover:bg-white/10 dark:hover:text-zinc-50 dark:disabled:hover:text-zinc-300",
 	danger:
-		"text-zinc-400 hover:bg-rose-500/10 hover:text-rose-600 dark:text-zinc-500 dark:hover:text-rose-400",
+		"text-zinc-500 hover:bg-rose-500/10 hover:text-rose-600 dark:text-zinc-400 dark:hover:text-rose-400",
 }
 
 // ---- Component --------------------------------------------------------------
@@ -111,7 +111,7 @@ function SidebarItemCard({ id, label, noun, Icon, badge, isSelected, onSelect, o
 		<Icon
 			strokeWidth={1.5}
 			className={`h-[15px] w-[15px] shrink-0 transition-colors ${
-				isSelected ? "text-zinc-700 dark:text-zinc-300" : "text-zinc-500 dark:text-zinc-500"
+				isSelected ? "text-zinc-700 dark:text-zinc-300" : "text-zinc-600 dark:text-zinc-400"
 			}`}
 		/>
 	)
@@ -134,7 +134,7 @@ function SidebarItemCard({ id, label, noun, Icon, badge, isSelected, onSelect, o
 							onChange={(event) => setDraftName(event.target.value)}
 							onKeyDown={handleInputKeyDown}
 							placeholder="Untitled"
-							className="-ml-1 h-5 min-w-0 flex-1 rounded bg-white pl-1 pr-1.5 text-[13px] leading-5 text-zinc-900 shadow-sm outline-none ring-1 ring-zinc-900/10 transition-shadow placeholder:text-zinc-400 focus:ring-zinc-900/25 dark:bg-black/30 dark:text-zinc-50 dark:shadow-none dark:ring-white/[0.14] dark:focus:ring-white/30"
+							className="-ml-1 h-5 min-w-0 flex-1 rounded bg-white pl-1 pr-1.5 text-[13px] leading-5 text-zinc-900 shadow-sm outline-none ring-1 ring-zinc-900/10 transition-shadow placeholder:text-zinc-500 focus:ring-zinc-900/25 dark:bg-black/30 dark:text-zinc-50 dark:shadow-none dark:ring-white/[0.14] dark:focus:ring-white/30"
 						/>
 					</div>
 					<button
@@ -173,7 +173,7 @@ function SidebarItemCard({ id, label, noun, Icon, badge, isSelected, onSelect, o
 							{label}
 						</span>
 						{badge && (
-							<span className="shrink-0 rounded bg-black/[0.05] px-1.5 text-[10px] leading-4 text-zinc-500 dark:bg-white/[0.07] dark:text-zinc-400">
+							<span className="shrink-0 rounded bg-black/[0.05] px-1.5 text-[10px] leading-4 text-zinc-600 dark:bg-white/[0.07] dark:text-zinc-300">
 								{badge}
 							</span>
 						)}
@@ -217,12 +217,12 @@ function SidebarItemCard({ id, label, noun, Icon, badge, isSelected, onSelect, o
 								aria-busy={isDeleting}
 								aria-labelledby={`${dialogId}-title`}
 								aria-describedby={`${dialogId}-description`}
-								className="w-full max-w-[360px] rounded-xl border border-zinc-200 bg-white p-5 shadow-[0_16px_48px_-12px_rgba(0,0,0,0.3)] dark:border-white/[0.09] dark:bg-[#2a2a2a]"
+								className="w-full max-w-[360px] rounded-xl border border-zinc-300 bg-white p-5 shadow-[0_16px_48px_-12px_rgba(0,0,0,0.3)] dark:border-white/[0.13] dark:bg-panel-hi"
 							>
 								<h2 id={`${dialogId}-title`} className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
 									Delete this {noun}?
 								</h2>
-								<p id={`${dialogId}-description`} role={deleteError ? "alert" : isDeleting ? "status" : undefined} aria-live="polite" className="mt-1.5 break-words text-[13px] leading-snug text-zinc-500 dark:text-zinc-400">
+								<p id={`${dialogId}-description`} role={deleteError ? "alert" : isDeleting ? "status" : undefined} aria-live="polite" className="mt-1.5 break-words text-[13px] leading-snug text-zinc-600 dark:text-zinc-300">
 									{deleteError || (isDeleting ? `Deleting ${noun}...` : `“${label}” will be permanently deleted.`)}
 								</p>
 								<div className="mt-5 flex justify-end gap-2">

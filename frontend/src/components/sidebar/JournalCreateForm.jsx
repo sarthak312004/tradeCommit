@@ -77,7 +77,7 @@ function JournalCreateForm({ open, onClose, onReopen }) {
         <div>
           <p className={createFieldLabel}>Base currency</p>
           <CurrencyPicker value={currency} onChange={setCurrency} onEscape={reset} />
-          <p className="mt-1.5 text-[10px] leading-relaxed text-zinc-400 dark:text-zinc-500">
+          <p className="mt-1.5 text-[10px] leading-relaxed text-zinc-500 dark:text-zinc-400">
             Used for this journal&apos;s P&amp;L and can&apos;t be changed later.
           </p>
         </div>

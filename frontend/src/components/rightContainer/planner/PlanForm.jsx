@@ -80,7 +80,7 @@ function PlanForm({ plannerName, plannerType, initialEntry = null, initialDate, 
         )}
         {onDelete && isConfirmingDelete && (
           <>
-            <span role={isSaving ? 'status' : undefined} aria-live="polite" className="text-[13px] text-zinc-500 dark:text-zinc-400">
+            <span role={isSaving ? 'status' : undefined} aria-live="polite" className="text-[13px] text-zinc-600 dark:text-zinc-300">
               {isSaving ? 'Deleting plan...' : 'Delete this plan?'}
             </span>
             <button type="button" onClick={() => setIsConfirmingDelete(false)} disabled={isSaving} className={ghostFooterButton}>Keep</button>
@@ -139,7 +139,7 @@ function PlanForm({ plannerName, plannerType, initialEntry = null, initialDate, 
         </PropertyRow>
       </div>
 
-      <hr className="my-6 border-zinc-200 dark:border-white/[0.08]" />
+      <hr className="my-6 border-zinc-300 dark:border-white/[0.12]" />
 
       <RichTextEditor
         ref={editorRef}

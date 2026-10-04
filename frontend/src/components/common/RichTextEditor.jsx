@@ -14,7 +14,7 @@ const editorClass = [
 ].join(' ')
 
 const toolbarButtonClass =
-  'flex h-7 w-7 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-zinc-100'
+  'flex h-7 w-7 items-center justify-center rounded-md text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-300 dark:hover:bg-white/10 dark:hover:text-zinc-100'
 
 // keep the text selection inside the editor when a toolbar button is pressed
 const keepSelection = (event) => event.preventDefault()
@@ -293,11 +293,11 @@ function RichTextEditor({ ref, id, label, initialHtml = '', placeholder, onUploa
   return (
     <section className="group">
       <div className="mb-2 flex items-baseline justify-between">
-        <span id={`${id}-label`} className="text-[13px] font-medium text-zinc-500 dark:text-zinc-400">{label}</span>
-        <span className="hidden text-[11px] text-zinc-400 sm:block dark:text-zinc-600">Tip: paste screenshots straight in with Ctrl/⌘ + V</span>
+        <span id={`${id}-label`} className="text-[13px] font-medium text-zinc-600 dark:text-zinc-300">{label}</span>
+        <span className="hidden text-[11px] text-zinc-500 sm:block dark:text-zinc-500">Tip: paste screenshots straight in with Ctrl/⌘ + V</span>
       </div>
 
-      <div className="sticky top-0 z-10 flex flex-wrap items-center gap-0.5 border-b border-zinc-200/80 bg-white py-1.5 opacity-70 transition-opacity focus-within:opacity-100 group-focus-within:opacity-100 hover:opacity-100 dark:border-white/[0.08] dark:bg-[#202020]">
+      <div className="sticky top-0 z-10 flex flex-wrap items-center gap-0.5 border-b border-zinc-300 bg-white py-1.5 opacity-70 transition-opacity focus-within:opacity-100 group-focus-within:opacity-100 hover:opacity-100 dark:border-white/[0.12] dark:bg-panel">
         <ToolbarButton title="Bold" Icon={BoldIcon} onClick={() => runCommand('bold')} />
         <ToolbarButton title="Italic" Icon={ItalicIcon} onClick={() => runCommand('italic')} />
         <select
@@ -305,7 +305,7 @@ function RichTextEditor({ ref, id, label, initialHtml = '', placeholder, onUploa
           aria-label="Text style"
           defaultValue="p"
           onChange={(event) => runCommand('formatBlock', event.target.value)}
-          className="mx-0.5 h-7 cursor-pointer rounded-md bg-transparent px-1.5 text-xs text-zinc-500 outline-none transition-colors hover:bg-zinc-100 dark:text-zinc-400 dark:[color-scheme:dark] dark:hover:bg-white/10"
+          className="mx-0.5 h-7 cursor-pointer rounded-md bg-transparent px-1.5 text-xs text-zinc-600 outline-none transition-colors hover:bg-zinc-100 dark:text-zinc-300 dark:[color-scheme:dark] dark:hover:bg-white/10"
         >
           <option value="p">Text</option>
           <option value="h2">Headline</option>
@@ -320,7 +320,7 @@ function RichTextEditor({ ref, id, label, initialHtml = '', placeholder, onUploa
           type="button"
           onMouseDown={keepSelection}
           onClick={() => imageInputRef.current?.click()}
-          className="flex h-7 items-center gap-1.5 rounded-md px-2 text-xs text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 disabled:cursor-wait disabled:opacity-50 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-zinc-100"
+          className="flex h-7 items-center gap-1.5 rounded-md px-2 text-xs text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900 disabled:cursor-wait disabled:opacity-50 dark:text-zinc-300 dark:hover:bg-white/10 dark:hover:text-zinc-100"
         >
           <ImageIcon className="h-3.5 w-3.5" />
           {pendingUploads > 0 ? `Uploading ${pendingUploads}...` : 'Add screenshot'}

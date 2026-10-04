@@ -43,7 +43,7 @@ function Home() {
 
   return (
     <div>
-      <div className="min-h-screen bg-canvas text-zinc-900 transition-colors duration-200 dark:bg-[#191919] dark:text-zinc-100">
+      <div className="min-h-screen bg-canvas text-zinc-900 transition-colors duration-200 dark:bg-night dark:text-zinc-100">
         <div className="flex h-screen overflow-hidden">
           <Sidebar isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} />
 
