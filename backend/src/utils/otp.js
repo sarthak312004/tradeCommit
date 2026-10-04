@@ -6,6 +6,7 @@ export const OTP_LENGTH = 6;
 export const OTP_TTL_MS = 10 * 60 * 1000; // a code is valid for 10 minutes
 export const OTP_RESEND_COOLDOWN_MS = 60 * 1000; // at most one email per minute
 export const OTP_MAX_ATTEMPTS = 5; // wrong guesses before a new code is required
+export const SIGNUP_TOKEN_TTL_MS = 15 * 60 * 1000; // after the code is accepted, the user has 15 minutes to finish the form
 
 const secret = () => process.env.ACCESS_TOKEN_SECRET ?? process.env.ACCESS_TOKEN_SECRETE;
 
@@ -29,3 +30,10 @@ export const isOtpMatch = (otp, email, storedHash) => {
 
 export const canSendOtp = (record) =>
   !record?.sentAt || Date.now() - new Date(record.sentAt).getTime() >= OTP_RESEND_COOLDOWN_MS;
+
+export const retryAfterSeconds = (record) =>
+  Math.max(1, Math.ceil((OTP_RESEND_COOLDOWN_MS - (Date.now() - new Date(record.sentAt).getTime())) / 1000));
+
+// Proof that an email address passed the code check. Random, shown to the browser once, stored only as a hash.
+export const generateSignupToken = () => crypto.randomBytes(32).toString("hex");
+export const hashSignupToken = (token) => crypto.createHash("sha256").update(String(token)).digest("hex");

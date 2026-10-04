@@ -1,23 +1,23 @@
 import { useEffect, useRef, useState } from "react"
-import { authPost } from "../../services/authApi"
-import { SERIF, inputCls, labelCls, linkBtnCls, messageCls, submitCls } from "./authStyles"
+import { errorText } from "../../services/authApi"
+import { eyebrowCls, headingCls, inputCls, labelCls, linkBtnCls, messageCls, mutedCls, submitCls } from "./authStyles"
 
-const OTP_LENGTH = 6
-const RESEND_SECONDS = 60
+export const OTP_LENGTH = 6
 
 /**
- * "Enter the code we emailed you" step.
+ * "Enter the code we emailed you" step of the sign-up.
  *
- * @param {string}   email       address the code was sent to
- * @param {Function} onVerified  called after the server accepted the code (it has already set the login cookies)
- * @param {Function} onBack      go back to the sign-up / login form
- * @param {string}   [notice]    info shown above the form (e.g. "We sent a code to ...")
+ * @param {string}   email           address the code was sent to
+ * @param {number}   initialCooldown seconds until "Resend" unlocks
+ * @param {Function} onVerify        async (code) => void; throw to show an error
+ * @param {Function} onResend        async () => { sent: boolean, retryAfter: number }
+ * @param {Function} onChangeEmail   go back and type a different address
  */
-export default function OtpForm({ email, onVerified, onBack, notice }) {
+export default function OtpForm({ email, initialCooldown, onVerify, onResend, onChangeEmail }) {
   const [code, setCode] = useState("")
-  const [message, setMessage] = useState(notice ? { type: "ok", text: notice } : null)
+  const [message, setMessage] = useState(null)
   const [loading, setLoading] = useState(false)
-  const [cooldown, setCooldown] = useState(RESEND_SECONDS) // a code was just sent
+  const [cooldown, setCooldown] = useState(initialCooldown)
   const inputRef = useRef(null)
 
   useEffect(() => {
@@ -30,48 +30,59 @@ export default function OtpForm({ email, onVerified, onBack, notice }) {
     return () => clearTimeout(id)
   }, [cooldown])
 
-  const handleChange = (event) => {
-    setCode(event.target.value.replace(/\D/g, "").slice(0, OTP_LENGTH))
-  }
-
-  const handleSubmit = async (event) => {
-    event.preventDefault()
-    if (code.length !== OTP_LENGTH) {
+  const submit = async (value) => {
+    if (loading) return
+    if (value.length !== OTP_LENGTH) {
       return setMessage({ type: "error", text: `Enter the ${OTP_LENGTH}-digit code.` })
     }
-
     setLoading(true)
     setMessage(null)
     try {
-      await authPost("/verify-email", { email, otp: code })
-      onVerified()
+      await onVerify(value)
     } catch (error) {
-      setMessage({
-        type: "error",
-        text: error instanceof TypeError ? "Can't reach the server. Check your connection and try again." : error.message,
-      })
+      setMessage({ type: "error", text: errorText(error) })
+      setCode("")
       setLoading(false)
+      setTimeout(() => inputRef.current?.focus(), 0) // the field was disabled while checking
     }
+  }
+
+  const handleChange = (event) => {
+    const next = event.target.value.replace(/\D/g, "").slice(0, OTP_LENGTH)
+    setCode(next)
+    if (next.length === OTP_LENGTH) submit(next) // pasted or typed in full: no need to press the button
   }
 
   const handleResend = async () => {
     setMessage(null)
     try {
-      await authPost("/resend-otp", { email })
-      setCode("")
-      setCooldown(RESEND_SECONDS)
-      setMessage({ type: "ok", text: "A new code is on its way. Check your inbox and spam folder." })
-      inputRef.current?.focus()
+      const { sent, retryAfter } = await onResend()
+      setCooldown(retryAfter)
+      if (sent) {
+        setCode("")
+        setMessage({ type: "ok", text: "A new code is on its way. Check your inbox and spam folder." })
+        inputRef.current?.focus()
+      } else {
+        setMessage({ type: "ok", text: "A code was just sent. Give it a moment to arrive." })
+      }
     } catch (error) {
-      setMessage({ type: "error", text: error.message })
+      setMessage({ type: "error", text: errorText(error) })
     }
   }
 
   return (
-    <form onSubmit={handleSubmit} noValidate>
-      <h2 className={`${SERIF} mb-1.5 text-[28px] font-medium`}>Check your email</h2>
-      <p className="mb-6 text-[#8b97a8]">
-        We sent a {OTP_LENGTH}-digit code to <span className="text-[#e6eaf0]">{email}</span>. It expires in 10 minutes.
+    <form
+      onSubmit={(event) => {
+        event.preventDefault()
+        submit(code)
+      }}
+      noValidate
+    >
+      <p className={eyebrowCls}>Step 2 of 3 · Verify</p>
+      <h2 className={`${headingCls} mb-1.5`}>Check your email</h2>
+      <p className={`mb-6 ${mutedCls}`}>
+        We sent a {OTP_LENGTH}-digit code to{" "}
+        <span className="font-medium text-zinc-900 dark:text-zinc-100">{email}</span>. It expires in 10 minutes.
       </p>
 
       {message && (
@@ -90,17 +101,18 @@ export default function OtpForm({ email, onVerified, onBack, notice }) {
         autoComplete="one-time-code"
         pattern="[0-9]*"
         maxLength={OTP_LENGTH}
-        placeholder="••••••"
-        className={`${inputCls} text-center text-xl tracking-[0.5em] tabular-nums`}
+        placeholder="000000"
+        disabled={loading}
+        className={`${inputCls} h-12 text-center text-xl font-medium tracking-[0.5em] tabular-nums placeholder:tracking-[0.5em]`}
       />
 
-      <button type="submit" disabled={loading} className={submitCls}>
+      <button type="submit" disabled={loading} className={`${submitCls} mt-4`}>
         {loading ? "Verifying…" : "Verify email"}
       </button>
 
-      <div className="mt-5 flex items-center justify-between text-sm text-[#8b97a8]">
-        <button type="button" onClick={onBack} className={linkBtnCls}>
-          Back
+      <div className="mt-5 flex items-center justify-between">
+        <button type="button" onClick={onChangeEmail} className={linkBtnCls}>
+          Use a different email
         </button>
         <button type="button" onClick={handleResend} disabled={cooldown > 0} className={linkBtnCls}>
           {cooldown > 0 ? `Resend code in ${cooldown}s` : "Resend code"}

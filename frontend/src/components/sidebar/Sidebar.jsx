@@ -122,7 +122,7 @@ function Sidebar({ isSidebarOpen, setIsSidebarOpen }) {
           setIsSidebarOpen={setIsSidebarOpen}
           isFormOpen={openFormSection === "journals"}
           onFormOpenChange={(isOpen) => setOpenFormSection(isOpen ? "journals" : null)}
-          renderForm={({ open, close }) => <JournalCreateForm open={open} onClose={close} />}
+          renderForm={({ open, close, reopen }) => <JournalCreateForm open={open} onClose={close} onReopen={reopen} />}
           railItems={journalRailItems}
           isEmpty={journals.length === 0}
           emptyText="No journals yet."

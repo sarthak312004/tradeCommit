@@ -12,7 +12,7 @@ import { EASE, FADE_BASE, fade, ghostBtn } from "./sidebarStyles"
  * @param {string}    addLabel         tooltip / aria label of the "+" button
  * @param {boolean}   isSidebarOpen
  * @param {Function}  setIsSidebarOpen
- * @param {Function}  renderForm       ({ open, close }) => ReactNode, the create form
+ * @param {Function}  renderForm       ({ open, close, reopen }) => ReactNode, the create form
  * @param {Array}     railItems        [{ id, label, isSelected, onSelect }] shown when collapsed
  * @param {boolean}   isEmpty
  * @param {string}    emptyText
@@ -85,7 +85,7 @@ function SidebarSection({
           showForm ? "visible grid-rows-[1fr] opacity-100" : "invisible grid-rows-[0fr] opacity-0"
         }`}
       >
-        <div className="min-h-0 overflow-hidden">{renderForm({ open: showForm, close: closeForm })}</div>
+        <div className="min-h-0 overflow-hidden">{renderForm({ open: showForm, close: closeForm, reopen: () => onFormOpenChange(true) })}</div>
       </div>
 
       {/* List */}

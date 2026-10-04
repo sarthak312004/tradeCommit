@@ -5,6 +5,8 @@ import { DEFAULT_CURRENCY } from "../utils/currencies"
 import { fetchPrefetched } from "../utils/prefetch"
 
 const API_BASE = "/api/v1/journals"
+const TEMP_PREFIX = "pending-"
+const isPending = (id) => String(id).startsWith(TEMP_PREFIX)
 
 const extractImagesFromAnalysis = (analysis) => {
     if (typeof analysis !== "string") return []
@@ -135,22 +137,35 @@ function JournalContextProvider({children}){
         }
     }, [])
 
+    // Optimistic: the journal shows up in the sidebar the moment the form closes, under a temporary id,
+    // and is swapped for the saved one when the server answers. If the request fails it is removed again.
     const createJournal = async (name, currency = DEFAULT_CURRENCY) => {
         const trimmed = name.trim()
-        const response = await fetch(API_BASE, {
-            method: "POST",
-            credentials: "include",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name: trimmed, currency })
-        })
+        const tempId = `${TEMP_PREFIX}${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+        const placeholder = normalizeJournalForFrontend({ id: tempId, _id: tempId, name: trimmed, currency, trades: [] })
 
-        const created = normalizeJournalForFrontend(await readJson(response))
-        setJournals((current) => [...current, created])
-        setSelectedJournalId((currentId) => currentId ?? created.id)
-        return created
+        setJournals((current) => [...current, placeholder])
+
+        try {
+            const response = await fetch(API_BASE, {
+                method: "POST",
+                credentials: "include",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name: trimmed, currency })
+            })
+
+            const created = normalizeJournalForFrontend(await readJson(response))
+            setJournals((current) => current.map((journal) => journal.id === tempId ? created : journal))
+            setSelectedJournalId((currentId) => currentId ?? created.id)
+            return created
+        } catch (error) {
+            setJournals((current) => current.filter((journal) => journal.id !== tempId))
+            throw error
+        }
     }
 
     const updateJournal = async (id, name) => {
+        if (isPending(id)) return // still being saved; there is nothing on the server to rename yet
         const trimmed = name.trim()
         const response = await fetch(`${API_BASE}/${id}`, {
             method: "PATCH",
@@ -165,6 +180,7 @@ function JournalContextProvider({children}){
     }
 
     const deleteJournal = async (id) => {
+        if (isPending(id)) throw new Error("This journal is still being created. Try again in a moment.")
         const response = await fetch(`${API_BASE}/${id}`, {
             method: "DELETE",
             credentials: "include",
@@ -179,6 +195,7 @@ function JournalContextProvider({children}){
     }
 
     const selectJournal = (id) => {
+        if (isPending(id)) return // the real id (and its trades) only exist once the server has answered
         setSelectedJournalId(id)
     }
 

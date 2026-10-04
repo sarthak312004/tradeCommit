@@ -6,8 +6,8 @@ import {
   loginUser,
   logoutUser,
   registerUser,
-  resendVerificationOtp,
-  verifyEmail,
+  sendSignupOtp,
+  verifySignupOtp,
 } from "../controllers/user.controller.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 
@@ -15,9 +15,9 @@ const router = Router()
 
 router.get("/config", getAuthConfig)
 router.get("/check", verifyJWT, checkAuthStatus)
+router.post("/signup/send-otp", sendSignupOtp)
+router.post("/signup/verify-otp", verifySignupOtp)
 router.post("/register", registerUser)
-router.post("/verify-email", verifyEmail)
-router.post("/resend-otp", resendVerificationOtp)
 router.post("/login", loginUser)
 router.post("/google", googleLogin)
 router.post("/logout", verifyJWT, logoutUser)
