@@ -19,7 +19,7 @@ export const verifyJWT = asyncHandler(async (req, res, next) => {
     throw new ApiError(401, "Access token expired or invalid");
   }
 
-  const user = await User.findById(decoded._id);
+  const user = await User.findById(decoded._id).select("-password -refreshToken");
   if (!user) throw new ApiError(401, "Invalid access token");
 
   req.user = user;

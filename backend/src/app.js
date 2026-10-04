@@ -47,6 +47,12 @@ import { plannerRouter } from './routes/planner.routes.js'
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20 })
 app.use("/api/v1/auth/login", authLimiter)
 app.use("/api/v1/auth/register", authLimiter)
+app.use("/api/v1/auth/google", authLimiter)
+
+// code endpoints: the per-user attempt/cooldown limits are the real protection; this caps raw volume per IP
+const otpLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 30 })
+app.use("/api/v1/auth/verify-email", otpLimiter)
+app.use("/api/v1/auth/resend-otp", otpLimiter)
 
 app.use("/api/v1/auth", userRouter)
 app.use("/api/v1/journals", journalRouter)

@@ -1,38 +1,11 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
+import GoogleButton from "../components/auth/GoogleButton";
+import OtpForm from "../components/auth/OtpForm";
+import { SERIF, inputCls, labelCls, linkBtnCls, messageCls, submitCls } from "../components/auth/authStyles";
+import { authPost as post } from "../services/authApi";
 
-const API_BASE = "/api/v1/auth"; // proxy to your backend in dev, or use a full URL + CORS
 const REDIRECT_AFTER_LOGIN = "/";
-
-// Shared class strings
-const SERIF = "font-['Newsreader',Georgia,serif]";
-const inputCls =
-  "w-full rounded-lg border border-[#27313f] bg-[#0d1219] px-3 py-[11px] text-[15px] text-[#e6eaf0] placeholder:text-[#566274] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#e5b567]";
-const labelCls = "mb-1.5 block text-[13px] font-medium";
-const submitCls =
-  "mt-2 w-full cursor-pointer rounded-lg bg-[#e5b567] py-3 text-[15px] font-semibold text-[#1a1305] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#e5b567] disabled:cursor-wait disabled:opacity-60";
-const linkBtnCls =
-  "cursor-pointer text-sm font-medium text-[#e5b567] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#e5b567]";
-
-async function post(path, body) {
-  const res = await fetch(API_BASE + path, {
-    method: "POST",
-    credentials: "include", // lets the browser store your httpOnly auth cookies
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-
-  let data = null;
-  try {
-    data = await res.json();
-  } catch {
-    /* non-JSON response */
-  }
-  if (!res.ok) {
-    throw new Error(data?.message || `Something went wrong (${res.status}). Try again.`);
-  }
-  return data;
-}
 
 function PasswordField({ id, label, value, onChange, autoComplete, hint }) {
   const [visible, setVisible] = useState(false);
@@ -76,7 +49,9 @@ const emptyRegister = { fullname: "", username: "", email: "", password: "", con
 
 export default function AuthPage() {
   const navigate = useNavigate();
-  const [mode, setMode] = useState("login"); // "login" | "register"
+  const [mode, setMode] = useState("login"); // "login" | "register" | "verify"
+  const [pendingEmail, setPendingEmail] = useState(""); // address waiting for its code (verify step)
+  const [verifyNotice, setVerifyNotice] = useState("");
   const [login, setLogin] = useState(emptyLogin);
   const [reg, setReg] = useState(emptyRegister);
   const [message, setMessage] = useState(null); // { type: "error" | "ok", text }
@@ -104,6 +79,19 @@ export default function AuthPage() {
 
   const setLoginField = (k) => (e) => setLogin((s) => ({ ...s, [k]: e.target.value }));
   const setRegField = (k) => (e) => setReg((s) => ({ ...s, [k]: e.target.value }));
+
+  const finishLogin = () => {
+    window.dispatchEvent(new Event("auth-state-changed"));
+    navigate(REDIRECT_AFTER_LOGIN);
+  };
+
+  // login/register answer `needsVerification` instead of logging in when the email isn't confirmed yet
+  const goToVerify = (email, notice) => {
+    setPendingEmail(email);
+    setVerifyNotice(notice);
+    setMessage(null);
+    setMode("verify");
+  };
 
   const run = async (fn) => {
     setLoading(true);
@@ -135,9 +123,11 @@ export default function AuthPage() {
       : { username: identifier, password: login.password };
 
     run(async () => {
-      await post("/login", body);
-      window.dispatchEvent(new Event("auth-state-changed"));
-      navigate(REDIRECT_AFTER_LOGIN);
+      const { data } = await post("/login", body);
+      if (data?.needsVerification) {
+        return goToVerify(data.email, "Your email isn't verified yet. We sent you a new code.");
+      }
+      finishLogin();
     });
   };
 
@@ -155,16 +145,21 @@ export default function AuthPage() {
     }
 
     run(async () => {
-      await post("/register", {
+      const { data } = await post("/register", {
         fullname: fullname.trim(),
         username: username.trim(),
         email: email.trim(),
         password,
       });
-      window.dispatchEvent(new Event("auth-state-changed"));
-      navigate(REDIRECT_AFTER_LOGIN);
+      goToVerify(data?.email ?? email.trim().toLowerCase(), "");
     });
   };
+
+  const handleGoogleCredential = (credential) =>
+    run(async () => {
+      await post("/google", { credential });
+      finishLogin();
+    });
 
   const tabCls = (active) =>
     `-mb-px cursor-pointer border-b-2 pb-3 text-[15px] font-medium ${
@@ -207,6 +202,7 @@ export default function AuthPage() {
       {/* Right: forms */}
       <main className="flex items-center justify-center px-6 py-8">
         <div className="w-full max-w-[400px]">
+          {mode !== "verify" && (
           <div className="mb-7 flex gap-6 border-b border-[#27313f]" role="tablist" aria-label="Account">
             <button role="tab" aria-selected={mode === "login"} onClick={() => switchMode("login")} className={tabCls(mode === "login")}>
               Log in
@@ -215,21 +211,24 @@ export default function AuthPage() {
               Create account
             </button>
           </div>
+          )}
 
-          {message && (
-            <div
-              role="alert"
-              className={`mb-4 rounded-lg border px-3 py-2.5 text-sm ${
-                message.type === "error"
-                  ? "border-[#5a2c27] bg-[#2a1816] text-[#f1b8b1]"
-                  : "border-[#24503a] bg-[#12251c] text-[#a9dcc2]"
-              }`}
-            >
+          {message && mode !== "verify" && (
+            <div role="alert" className={messageCls(message.type)}>
               {message.text}
             </div>
           )}
 
-          {mode === "login" ? (
+          {mode !== "verify" && <GoogleButton onCredential={handleGoogleCredential} disabled={loading} />}
+
+          {mode === "verify" ? (
+            <OtpForm
+              email={pendingEmail}
+              notice={verifyNotice}
+              onVerified={finishLogin}
+              onBack={() => switchMode("login")}
+            />
+          ) : mode === "login" ? (
             <form onSubmit={handleLogin} noValidate>
               <h2 className={`${SERIF} mb-1.5 text-[28px] font-medium`}>Welcome back</h2>
               <p className="mb-6 text-[#8b97a8]">Log in to open your journal.</p>
