@@ -125,7 +125,8 @@ export default function AuthPage() {
     run(async () => {
       const { data } = await post("/login", body);
       if (data?.needsVerification) {
-        return goToVerify(data.email, "Your email isn't verified yet. We sent you a new code.");
+        goToVerify(data.email, "Your email isn't verified yet. We sent you a new code.");
+        return;
       }
       finishLogin();
     });
@@ -151,7 +152,11 @@ export default function AuthPage() {
         email: email.trim(),
         password,
       });
-      goToVerify(data?.email ?? email.trim().toLowerCase(), "");
+      if (data?.needsVerification) {
+        goToVerify(data.email, "");
+        return;
+      }
+      throw new Error("Registration did not request email verification.");
     });
   };
 

@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react"
 import { fetchAuthConfig } from "../../services/authApi"
 
 const GIS_SRC = "https://accounts.google.com/gsi/client"
-const MAX_WIDTH = 400 // Google caps the button width at 400px
+const MIN_WIDTH = 200
+const MAX_WIDTH = 400
 
 let gisScriptPromise = null
 const loadGoogleScript = () => {
@@ -30,6 +31,9 @@ const loadGoogleScript = () => {
  */
 export default function GoogleButton({ onCredential, disabled = false }) {
   const [clientId, setClientId] = useState(null)
+  const [buttonWidth, setButtonWidth] = useState(0)
+  const [scriptLoaded, setScriptLoaded] = useState(false)
+  const [scriptFailed, setScriptFailed] = useState(false)
   const holderRef = useRef(null)
   const onCredentialRef = useRef(onCredential)
 
@@ -39,19 +43,40 @@ export default function GoogleButton({ onCredential, disabled = false }) {
 
   useEffect(() => {
     let cancelled = false
-    fetchAuthConfig().then((config) => !cancelled && setClientId(config.googleClientId))
+    fetchAuthConfig()
+      .then((config) => {
+        if (!cancelled) setClientId(config.googleClientId)
+      })
+      .catch(() => {
+        if (!cancelled) setClientId(null)
+      })
     return () => {
       cancelled = true
     }
   }, [])
 
   useEffect(() => {
-    if (!clientId) return undefined
+    const holder = holderRef.current
+    if (!clientId || !holder) return undefined
+
+    const observer = new ResizeObserver(() => {
+      const width = holder.clientWidth
+      setButtonWidth((previous) => (previous === width ? previous : width))
+    })
+    observer.observe(holder)
+
+    return () => observer.disconnect()
+  }, [clientId])
+
+  useEffect(() => {
+    if (!clientId || buttonWidth === 0) return undefined
     let cancelled = false
 
     loadGoogleScript()
       .then(() => {
-        if (cancelled || !holderRef.current) return
+        const holder = holderRef.current
+        if (cancelled || !holder) return
+        holder.innerHTML = ""
         window.google.accounts.id.initialize({
           client_id: clientId,
           callback: (response) => response?.credential && onCredentialRef.current(response.credential),
@@ -63,27 +88,31 @@ export default function GoogleButton({ onCredential, disabled = false }) {
           text: "continue_with",
           shape: "rectangular",
           logo_alignment: "left",
-          width: Math.min(MAX_WIDTH, holderRef.current.clientWidth || MAX_WIDTH),
+          width: Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, buttonWidth)),
         })
+        setScriptLoaded(true)
       })
       .catch(() => {
-        /* script blocked or offline: email sign-in still works */
+        if (!cancelled) setScriptFailed(true)
       })
 
     return () => {
       cancelled = true
     }
-  }, [clientId])
+  }, [clientId, buttonWidth])
 
-  if (!clientId) return null
+  if (!clientId || scriptFailed) return null
 
   return (
     <>
       <div
-        ref={holderRef}
-        aria-label="Continue with Google"
-        className={`flex min-h-[44px] justify-center transition-opacity ${disabled ? "pointer-events-none opacity-50" : ""}`}
-      />
+        className={`relative h-[44px] w-full overflow-hidden rounded-lg ${disabled ? "pointer-events-none opacity-50" : ""}`}
+      >
+        <div ref={holderRef} aria-label="Continue with Google" className="h-full w-full" />
+        {!scriptLoaded && (
+          <div className="absolute inset-0 animate-pulse rounded-lg border border-[#27313f] bg-[#0d1219]" aria-hidden="true" />
+        )}
+      </div>
       <div className="my-5 flex items-center gap-3 text-xs text-[#566274]" aria-hidden="true">
         <span className="h-px flex-1 bg-[#27313f]" />
         or
