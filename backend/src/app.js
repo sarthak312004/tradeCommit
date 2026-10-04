@@ -53,6 +53,10 @@ app.use("/api/v1/auth/google", authLimiter)
 const otpLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 30 })
 app.use("/api/v1/auth/signup", otpLimiter)
 
+// Password change codes: per-user cooldown/attempt limits also apply; this caps raw volume per IP.
+const passwordLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20 })
+app.use("/api/v1/auth/password", passwordLimiter)
+
 app.use("/api/v1/auth", userRouter)
 app.use("/api/v1/journals", journalRouter)
 app.use("/api/v1/journals/:journalId/trades", tradeRouter)

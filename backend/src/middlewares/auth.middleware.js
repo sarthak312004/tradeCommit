@@ -22,6 +22,10 @@ export const verifyJWT = asyncHandler(async (req, res, next) => {
   const user = await User.findById(decoded._id).select("-password -refreshToken");
   if (!user) throw new ApiError(401, "Invalid access token");
 
+  if (user.passwordChangedAt && decoded.iat < Math.floor(user.passwordChangedAt.getTime() / 1000)) {
+    throw new ApiError(401, "Password was changed. Please log in again.");
+  }
+
   req.user = user;
   next();
 });

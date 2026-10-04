@@ -12,6 +12,19 @@ const otpSchema = new mongoose.Schema(
     },{ _id:false }
 )
 
+// Password change by an already logged-in user: code -> proof token -> new password.
+const passwordResetSchema = new mongoose.Schema(
+    {
+        hash:String,            // HMAC of the emailed code (cleared once accepted)
+        expiresAt:Date,         // when the code stops working
+        attempts:{ type:Number, default:0 },
+        sentAt:Date,
+        verifiedAt:Date,        // set when the right code was entered
+        tokenHash:String,       // sha256 of the one-time token handed to the browser at that moment
+        tokenExpiresAt:Date
+    },{ _id:false }
+)
+
 const userSchema = new mongoose.Schema(
     {
         username:{
@@ -51,6 +64,14 @@ const userSchema = new mongoose.Schema(
         emailOtp:{
             type:otpSchema,
             select:false
+        },
+        passwordReset:{
+            type:passwordResetSchema,
+            select:false
+        },
+        // sessions issued before this moment are rejected (see verifyJWT), so a password change logs out other devices
+        passwordChangedAt:{
+            type:Date
         },
         refreshToken:{
             type: String

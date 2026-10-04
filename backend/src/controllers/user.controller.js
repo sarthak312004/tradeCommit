@@ -43,7 +43,7 @@ const generateTokens = async (user) => {
 };
 
 /** Logs the user in: sets the auth cookies and returns the public user. */
-const sendSession = async (res, user, statusCode, message) => {
+export const sendSession = async (res, user, statusCode, message) => {
   const { accessToken, refreshToken } = await generateTokens(user);
   const publicUser = await User.findById(user._id).select("-password -refreshToken");
 

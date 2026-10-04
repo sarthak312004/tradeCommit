@@ -164,3 +164,53 @@ export const MinimizeIcon = (props) => (
 		<path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7" />
 	</Icon>
 )
+
+/* ---- icons added for the profile menu ------------------------------------ */
+
+export const UserIcon = (props) => (
+	<Icon {...props}>
+		<circle cx="12" cy="8" r="4" />
+		<path d="M4 21a8 8 0 0 1 16 0" />
+	</Icon>
+)
+
+export const AtSignIcon = (props) => (
+	<Icon {...props}>
+		<circle cx="12" cy="12" r="4" />
+		<path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8" />
+	</Icon>
+)
+
+export const MailIcon = (props) => (
+	<Icon {...props}>
+		<rect width="20" height="16" x="2" y="4" rx="2" />
+		<path d="m22 7-10 6L2 7" />
+	</Icon>
+)
+
+export const LockIcon = (props) => (
+	<Icon {...props}>
+		<rect width="18" height="11" x="3" y="11" rx="2" />
+		<path d="M7 11V7a5 5 0 0 1 10 0v4" />
+	</Icon>
+)
+
+export const EyeIcon = (props) => (
+	<Icon {...props}>
+		<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" />
+		<circle cx="12" cy="12" r="3" />
+	</Icon>
+)
+
+export const EyeOffIcon = (props) => (
+	<Icon {...props}>
+		<path d="M9.9 4.24A9.1 9.1 0 0 1 12 4c6.5 0 10 8 10 8a17 17 0 0 1-3.2 4.2M6.6 6.6A16.5 16.5 0 0 0 2 12s3.5 8 10 8a9.7 9.7 0 0 0 5.4-1.6" />
+		<path d="M14.1 14.1a3 3 0 1 1-4.2-4.2M2 2l20 20" />
+	</Icon>
+)
+
+export const ChevronDownIcon = (props) => (
+	<Icon {...props}>
+		<path d="m6 9 6 6 6-6" />
+	</Icon>
+)
