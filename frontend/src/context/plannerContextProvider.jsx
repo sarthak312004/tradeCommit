@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { plannerContext } from './Context'
-import { plannerApi } from '../services/plannerApi'
+import { plannerApi, normalizePlanner } from '../services/plannerApi'
+import { readJson } from '../utils/http'
+import { fetchPrefetched } from '../utils/prefetch'
 
 /** Holds the list of planners (the sidebar section). Plans inside a planner load via usePlanEntries. */
 function PlannerContextProvider({ children }) {
@@ -13,8 +15,10 @@ function PlannerContextProvider({ children }) {
     const loadPlanners = async () => {
       const loadId = ++latestLoad
       try {
-        const authResponse = await fetch('/api/v1/auth/check', { credentials: 'include' })
-        const rows = authResponse.ok ? await plannerApi.list() : []
+        // No separate auth pre-flight: a 401 just means "logged out". On first load this reuses the
+        // request index.html started before the bundle arrived.
+        const response = await fetchPrefetched('planners', '/api/v1/planners')
+        const rows = response.status === 401 ? [] : ((await readJson(response)) ?? []).map(normalizePlanner)
         if (loadId === latestLoad) setPlanners(rows)
       } catch {
         if (loadId === latestLoad) setPlanners([])

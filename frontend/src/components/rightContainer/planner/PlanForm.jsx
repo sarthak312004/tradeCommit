@@ -35,7 +35,7 @@ function PlanForm({ plannerName, plannerType, initialEntry = null, initialDate, 
   const [submitError, setSubmitError] = useState('')
 
   const date = watch('date')
-  const isBusy = isUploading || isSaving
+  const isBusy = isSaving // uploads run in the background; Save just waits for them
 
   const handleFormSubmit = async (values) => {
     setSubmitError('')

@@ -2,12 +2,23 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* Light theme layers (the dark theme is untouched):
+   canvas  = the page behind everything (warm grey, so white surfaces stand out)
+   sidebar = one step darker than the canvas
+   cards   = pure white, lifted with a border and a soft shadow (shadow-card / shadow-card-hover) */
+@theme {
+  --color-canvas: #ebe9e4;
+  --color-sidebar: #e1dfd9;
+  --shadow-card: 0 1px 2px 0 rgb(28 25 23 / 0.07), 0 1px 3px 0 rgb(28 25 23 / 0.09);
+  --shadow-card-hover: 0 2px 4px -1px rgb(28 25 23 / 0.10), 0 8px 16px -6px rgb(28 25 23 / 0.18);
+}
+
 :root {
   font-family: Inter, 'Segoe UI', sans-serif;
   line-height: 1.5;
   font-weight: 400;
   color: #1d1d1f;
-  background: #f6f5f3;
+  background: #ebe9e4;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -19,7 +30,7 @@
 }
 
 html {
-  background: #f6f5f3;
+  background: #ebe9e4;
 }
 
 html.dark,
@@ -32,7 +43,7 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background: #f6f5f3;
+  background: #ebe9e4;
 }
 
 #root {

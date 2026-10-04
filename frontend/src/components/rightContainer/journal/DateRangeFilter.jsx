@@ -53,7 +53,7 @@ function DateRangeFilter({ range, onChange }) {
         className={`flex h-8 cursor-pointer items-center gap-2 rounded-lg border px-2.5 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/40 ${
           active
             ? 'border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300'
-            : 'border-zinc-200 bg-white/60 text-zinc-600 hover:bg-white dark:border-white/10 dark:bg-transparent dark:text-zinc-300 dark:hover:bg-white/[0.06]'
+            : 'border-zinc-300/80 bg-white text-zinc-700 shadow-sm hover:bg-zinc-50 dark:border-white/10 dark:bg-transparent dark:text-zinc-300 dark:shadow-none dark:hover:bg-white/[0.06]'
         }`}
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

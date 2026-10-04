@@ -77,7 +77,7 @@ function Sidebar({ isSidebarOpen, setIsSidebarOpen }) {
       aria-label="Sidebar"
       className={`${
         isSidebarOpen ? "w-[260px]" : "w-[56px]"
-      } relative flex shrink-0 flex-col overflow-hidden border-r border-zinc-200/80 bg-[#f7f7f5] transition-[width] duration-300 ${EASE} will-change-[width] motion-reduce:transition-none dark:border-white/[0.07] dark:bg-[#202020]`}
+      } relative flex shrink-0 flex-col overflow-hidden border-r border-zinc-300/70 bg-sidebar transition-[width] duration-300 ${EASE} will-change-[width] motion-reduce:transition-none dark:border-white/[0.07] dark:bg-[#202020]`}
     >
       {/* ------------------------------ Header ------------------------------ */}
       <div className="flex h-12 shrink-0 items-center">
@@ -132,7 +132,7 @@ function Sidebar({ isSidebarOpen, setIsSidebarOpen }) {
           ))}
         </SidebarSection>
 
-        <div className="mx-3 shrink-0 border-t border-zinc-200/80 dark:border-white/[0.07]" />
+        <div className="mx-3 shrink-0 border-t border-zinc-300/70 dark:border-white/[0.07]" />
 
         <SidebarSection
           title="Trade planner"
@@ -153,7 +153,7 @@ function Sidebar({ isSidebarOpen, setIsSidebarOpen }) {
       </div>
 
       {/* ------------------------------ Footer ------------------------------ */}
-      <div className="relative h-[84px] shrink-0 border-t border-zinc-200/80 dark:border-white/[0.07]">
+      <div className="relative h-[84px] shrink-0 border-t border-zinc-300/70 dark:border-white/[0.07]">
         {/* Expanded */}
         <div
           className={`absolute inset-y-0 left-0 flex w-[260px] flex-col justify-center gap-1 px-2 ${FADE_BASE} ${fade(isSidebarOpen)}`}

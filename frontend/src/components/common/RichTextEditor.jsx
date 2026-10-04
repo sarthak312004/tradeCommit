@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { BoldIcon, CloseIcon, ImageIcon, ItalicIcon, ListIcon, ListOrderedIcon, MaximizeIcon, QuoteIcon } from '../../utils/Icons.jsx'
+import { isLocalPreview, preloadImage, prepareImage } from '../../utils/imageUpload'
 
 const editorClass = [
   'min-h-[420px] py-4 text-[15px] leading-7 text-zinc-800 outline-none dark:text-zinc-200',
@@ -46,7 +47,9 @@ function RichTextEditor({ ref, id, label, initialHtml = '', placeholder, onUploa
   const currentImageUrlsRef = useRef(new Set())
   const imageResizeRef = useRef(null)
   const emitChangeRef = useRef(null)
-  const [isUploading, setIsUploading] = useState(false)
+  const pendingUploadsRef = useRef(new Set()) // promises of in-flight screenshot uploads
+  const [pendingUploads, setPendingUploads] = useState(0)
+  const isUploading = pendingUploads > 0
   const [uploadError, setUploadError] = useState('')
   const [hoverImage, setHoverImage] = useState(null)
 
@@ -77,7 +80,7 @@ function RichTextEditor({ ref, id, label, initialHtml = '', placeholder, onUploa
     const imageUrls = [...(editor?.querySelectorAll('img') ?? [])].map((image) => image.src)
     const nextImageUrls = new Set(imageUrls)
     for (const imageUrl of currentImageUrlsRef.current) {
-      if (!nextImageUrls.has(imageUrl)) removedImagesRef.current.add(imageUrl)
+      if (!nextImageUrls.has(imageUrl) && !isLocalPreview(imageUrl)) removedImagesRef.current.add(imageUrl)
     }
     currentImageUrlsRef.current = nextImageUrls
     onChange?.(editor?.innerHTML ?? '')
@@ -144,8 +147,51 @@ function RichTextEditor({ ref, id, label, initialHtml = '', placeholder, onUploa
     }
   }
 
-  const insertImageFile = async (file) => {
-    const imageUrl = await onUploadImage(file)
+  // The screenshot appears in the editor immediately from a local preview; compressing and uploading
+  // happen in the background and the preview is swapped for the hosted URL when that finishes.
+  const replacePreview = (previewUrl, finalUrl) => {
+    const previews = [...(editorRef.current?.querySelectorAll('img') ?? [])].filter((image) => image.src === previewUrl)
+    if (!previews.length) {
+      // removed while it uploaded: queue the hosted copy for deletion
+      removedImagesRef.current.add(finalUrl)
+      return
+    }
+    previews.forEach((image) => { image.src = finalUrl })
+    emitChangeRef.current?.()
+  }
+
+  const removePreview = (previewUrl) => {
+    ;[...(editorRef.current?.querySelectorAll('img') ?? [])]
+      .filter((image) => image.src === previewUrl)
+      .forEach((image) => image.remove())
+    emitChangeRef.current?.()
+  }
+
+  const trackUpload = (file, previewUrl) => {
+    setPendingUploads((count) => count + 1)
+    const task = prepareImage(file)
+      .then((smallFile) => onUploadImage(smallFile))
+      .then(async (finalUrl) => {
+        await preloadImage(finalUrl) // swap only once the browser has it, so there's no flicker
+        replacePreview(previewUrl, finalUrl)
+      })
+      .catch((error) => {
+        removePreview(previewUrl)
+        setUploadError(error.message || 'Image upload failed. Please try again.')
+      })
+      .finally(() => {
+        URL.revokeObjectURL(previewUrl)
+        pendingUploadsRef.current.delete(task)
+        setPendingUploads((count) => count - 1)
+      })
+    pendingUploadsRef.current.add(task)
+  }
+
+  const uploadFiles = (files) => {
+    const imageFiles = files.filter((file) => file.type.startsWith('image/'))
+    if (!imageFiles.length) return
+
+    setUploadError('')
     editorRef.current?.focus()
     const selection = window.getSelection()
     const savedRange = selectionRef.current
@@ -153,31 +199,21 @@ function RichTextEditor({ ref, id, label, initialHtml = '', placeholder, onUploa
       selection?.removeAllRanges()
       selection?.addRange(savedRange)
     }
-    document.execCommand('insertImage', false, imageUrl)
-    document.execCommand('insertParagraph', false, null)
+
+    for (const file of imageFiles) {
+      const previewUrl = URL.createObjectURL(file)
+      document.execCommand('insertImage', false, previewUrl)
+      document.execCommand('insertParagraph', false, null)
+      trackUpload(file, previewUrl)
+    }
     emitChange()
     saveSelection()
   }
 
-  const uploadFiles = async (files) => {
-    const imageFiles = files.filter((file) => file.type.startsWith('image/'))
-    if (!imageFiles.length) return
-
-    setUploadError('')
-    setIsUploading(true)
-    try {
-      for (const file of imageFiles) await insertImageFile(file)
-    } catch (error) {
-      setUploadError(error.message || 'Image upload failed. Please try again.')
-    } finally {
-      setIsUploading(false)
-    }
-  }
-
-  const handleFileInput = async (event) => {
+  const handleFileInput = (event) => {
     const files = [...(event.target.files ?? [])]
     event.target.value = ''
-    await uploadFiles(files)
+    uploadFiles(files)
   }
 
   // screenshots are usually on the clipboard, so let Ctrl/Cmd+V work directly
@@ -221,7 +257,7 @@ function RichTextEditor({ ref, id, label, initialHtml = '', placeholder, onUploa
   const removeImage = (index) => {
     const image = editorRef.current?.querySelectorAll('img')[index]
     if (!image) return
-    removedImagesRef.current.add(image.src)
+    if (!isLocalPreview(image.src)) removedImagesRef.current.add(image.src)
     image.remove()
     setHoverImage(null)
     emitChange()
@@ -230,6 +266,9 @@ function RichTextEditor({ ref, id, label, initialHtml = '', placeholder, onUploa
   useImperativeHandle(ref, () => ({
     // Uploads any screenshots still embedded as data: URLs (e.g. from drag & drop) and returns the final content.
     async getContent() {
+      // screenshots usually finish while the user is still writing; wait for any that haven't
+      await Promise.all([...pendingUploadsRef.current])
+
       const editor = editorRef.current
       for (const image of [...(editor?.querySelectorAll('img') ?? [])]) {
         if (!image.src.startsWith('data:image/')) continue
@@ -237,7 +276,7 @@ function RichTextEditor({ ref, id, label, initialHtml = '', placeholder, onUploa
         const blob = await fetch(image.src).then((response) => response.blob())
         const extension = blob.type.split('/')[1]?.split('+')[0] || 'png'
         const file = new File([blob], `plan-image-${Date.now()}.${extension}`, { type: blob.type })
-        image.src = await onUploadImage(file)
+        image.src = await onUploadImage(await prepareImage(file))
       }
 
       const html = editor?.innerHTML ?? ''
@@ -246,7 +285,7 @@ function RichTextEditor({ ref, id, label, initialHtml = '', placeholder, onUploa
       return {
         html,
         images,
-        removedImages: [...removedImagesRef.current].filter((url) => !images.includes(url))
+        removedImages: [...removedImagesRef.current].filter((url) => !images.includes(url) && !isLocalPreview(url))
       }
     }
   }), [onUploadImage])
@@ -280,12 +319,11 @@ function RichTextEditor({ ref, id, label, initialHtml = '', placeholder, onUploa
         <button
           type="button"
           onMouseDown={keepSelection}
-          disabled={isUploading}
           onClick={() => imageInputRef.current?.click()}
           className="flex h-7 items-center gap-1.5 rounded-md px-2 text-xs text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 disabled:cursor-wait disabled:opacity-50 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-zinc-100"
         >
           <ImageIcon className="h-3.5 w-3.5" />
-          {isUploading ? 'Uploading...' : 'Add screenshot'}
+          {pendingUploads > 0 ? `Uploading ${pendingUploads}...` : 'Add screenshot'}
         </button>
         <input ref={imageInputRef} type="file" accept="image/*" multiple onChange={handleFileInput} className="hidden" />
       </div>

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useFieldArray, useForm } from 'react-hook-form'
 import { formatMoney, formatR, getTradePnl, getTradeR, toneOf } from '../../../utils/tradeAnalytics'
 import { DEFAULT_CURRENCY } from '../../../utils/currencies'
+import { isLocalPreview, preloadImage, prepareImage } from '../../../utils/imageUpload'
 
 const defaultValues = {
   date: new Date().toISOString().slice(0, 10),
@@ -144,13 +145,17 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
   const [expanded, setExpanded] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [visible, setVisible] = useState(false)
-  const [isUploadingImage, setIsUploadingImage] = useState(false)
+  const [pendingUploads, setPendingUploads] = useState(0) // screenshots still uploading in the background
+  const [isSaving, setIsSaving] = useState(false)
+  const [submitError, setSubmitError] = useState('')
   const [imageUploadError, setImageUploadError] = useState('')
   const [hoverImage, setHoverImage] = useState(null)
   const [addMenuOpen, setAddMenuOpen] = useState(false)
   const [reduceMotion] = useState(() => respectReducedMotion && typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)
   const editorRef = useRef(null)
   const removedImagesRef = useRef(new Set())
+  const pendingUploadsRef = useRef(new Set()) // promises of in-flight screenshot uploads
+  const isSavingRef = useRef(false) // blocks a second submit (e.g. Enter key) while saving
   const currentImageUrlsRef = useRef(new Set())
   const imageResizeRef = useRef(null)
   const syncFormFromEditorRef = useRef(null)
@@ -310,7 +315,7 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
     const imageUrls = [...(editor?.querySelectorAll('img') ?? [])].map((image) => image.src)
     const nextImageUrls = new Set(imageUrls)
     for (const imageUrl of currentImageUrlsRef.current) {
-      if (!nextImageUrls.has(imageUrl)) removedImagesRef.current.add(imageUrl)
+      if (!nextImageUrls.has(imageUrl) && !isLocalPreview(imageUrl)) removedImagesRef.current.add(imageUrl)
     }
     currentImageUrlsRef.current = nextImageUrls
     setValue('images', imageUrls, { shouldDirty: true })
@@ -363,8 +368,56 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
     }
   }, [])
 
-  const insertImageFile = async (file) => {
-    const imageUrl = await onUploadImage(file)
+  // The screenshot shows up in the editor immediately from a local preview; compressing and uploading
+  // it happens in the background and the preview is swapped for the hosted URL when that finishes.
+  const insertImagePreview = (previewUrl) => {
+    document.execCommand('insertImage', false, previewUrl)
+    document.execCommand('insertParagraph', false, null)
+  }
+
+  const replacePreview = (previewUrl, finalUrl) => {
+    const previews = [...(editorRef.current?.querySelectorAll('img') ?? [])].filter((image) => image.src === previewUrl)
+    if (!previews.length) {
+      // the screenshot was removed while it uploaded: queue the hosted copy for deletion
+      removedImagesRef.current.add(finalUrl)
+      return
+    }
+    previews.forEach((image) => { image.src = finalUrl })
+    syncFormFromEditorRef.current?.()
+  }
+
+  const removePreview = (previewUrl) => {
+    ;[...(editorRef.current?.querySelectorAll('img') ?? [])]
+      .filter((image) => image.src === previewUrl)
+      .forEach((image) => image.remove())
+    syncFormFromEditorRef.current?.()
+  }
+
+  const trackUpload = (file, previewUrl) => {
+    setPendingUploads((count) => count + 1)
+    const task = prepareImage(file)
+      .then((smallFile) => onUploadImage(smallFile))
+      .then(async (finalUrl) => {
+        await preloadImage(finalUrl) // swap only once the browser has it, so there's no flicker
+        replacePreview(previewUrl, finalUrl)
+      })
+      .catch((error) => {
+        removePreview(previewUrl)
+        setImageUploadError(error.message || 'Image upload failed. Please try again.')
+      })
+      .finally(() => {
+        URL.revokeObjectURL(previewUrl)
+        pendingUploadsRef.current.delete(task)
+        setPendingUploads((count) => count - 1)
+      })
+    pendingUploadsRef.current.add(task)
+  }
+
+  const addImageFiles = (files) => {
+    const imageFiles = files.filter((file) => file.type.startsWith('image/'))
+    if (!imageFiles.length) return
+
+    setImageUploadError('')
     editorRef.current?.focus()
     const selection = window.getSelection()
     const savedRange = editorSelectionRef.current
@@ -372,31 +425,20 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
       selection?.removeAllRanges()
       selection?.addRange(savedRange)
     }
-    document.execCommand('insertImage', false, imageUrl)
-    document.execCommand('insertParagraph', false, null)
+
+    for (const file of imageFiles) {
+      const previewUrl = URL.createObjectURL(file)
+      insertImagePreview(previewUrl)
+      trackUpload(file, previewUrl)
+    }
     syncFormFromEditor()
     saveEditorSelection()
   }
 
-  const uploadFiles = async (files) => {
-    const imageFiles = files.filter((file) => file.type.startsWith('image/'))
-    if (!imageFiles.length) return
-
-    setImageUploadError('')
-    setIsUploadingImage(true)
-    try {
-      for (const file of imageFiles) await insertImageFile(file)
-    } catch (error) {
-      setImageUploadError(error.message || 'Image upload failed. Please try again.')
-    } finally {
-      setIsUploadingImage(false)
-    }
-  }
-
-  const handleImageUpload = async (event) => {
+  const handleImageUpload = (event) => {
     const files = [...(event.target.files ?? [])]
     event.target.value = ''
-    await uploadFiles(files)
+    addImageFiles(files)
   }
 
   // screenshots are usually on the clipboard, so let Ctrl/Cmd+V work directly
@@ -405,7 +447,7 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
     if (!files.length) return
     event.preventDefault()
     saveEditorSelection()
-    uploadFiles(files)
+    addImageFiles(files)
   }
 
   /* ---------- hover a screenshot to reveal its remove button ---------- */
@@ -440,13 +482,16 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
   const removeImage = (index) => {
     const image = editorRef.current?.querySelectorAll('img')[index]
     if (!image) return
-    removedImagesRef.current.add(image.src)
+    if (!isLocalPreview(image.src)) removedImagesRef.current.add(image.src)
     image.remove()
     setHoverImage(null)
     syncFormFromEditor()
   }
 
   const handleFormSubmit = async (values) => {
+    if (isSavingRef.current) return
+    isSavingRef.current = true
+
     const normalizedQuantity = String(values.quantity ?? '').trim()
     const normalizedEntry = String(values.entry ?? '').trim()
     const normalizedExit = String(values.exit ?? '').trim()
@@ -454,18 +499,23 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
     const normalizedSymbol = String(values.symbol ?? '').trim().toUpperCase()
 
     setImageUploadError('')
-    setIsUploadingImage(true)
+    setSubmitError('')
+    setIsSaving(true)
     try {
+      // screenshots usually finish uploading while the user is still typing; wait for any that haven't
+      await Promise.all([...pendingUploadsRef.current])
+
       const editor = editorRef.current
       const embeddedImages = [...(editor?.querySelectorAll('img') ?? [])]
 
+      // images dropped in as data: URLs (not through the button/paste path) still need uploading
       for (const image of embeddedImages) {
         if (!image.src.startsWith('data:image/')) continue
 
         const blob = await fetch(image.src).then((response) => response.blob())
         const extension = blob.type.split('/')[1]?.split('+')[0] || 'png'
         const file = new File([blob], `trade-image-${Date.now()}.${extension}`, { type: blob.type })
-        image.src = await onUploadImage(file)
+        image.src = await onUploadImage(await prepareImage(file))
       }
 
       const analysis = editor?.innerHTML ?? values.analysis ?? ''
@@ -481,11 +531,12 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
         value: field.type === 'checkbox' ? Boolean(field.value) : field.value ?? ''
       }))
 
-      onSubmit({
+      // wait for the server: the drawer stays open on "Saving..." and only slides away once the trade is stored
+      await onSubmit({
         ...values,
         analysis,
         images,
-        removedImages: [...removedImagesRef.current].filter((url) => !images.includes(url)),
+        removedImages: [...removedImagesRef.current].filter((url) => !images.includes(url) && !isLocalPreview(url)),
         customFields: cleanCustomFields,
         symbol: normalizedSymbol,
         assetName: normalizedSymbol,
@@ -502,11 +553,11 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
         status: normalizedExit ? 'Closed' : 'Open',
         date: values.date || new Date().toISOString().slice(0, 10)
       })
-      reset(defaultValues)
+      requestClose() // button keeps showing "Saving..." during the slide-out
     } catch (error) {
-      setImageUploadError(error.message || 'Could not prepare images for saving. Please try again.')
-    } finally {
-      setIsUploadingImage(false)
+      setSubmitError(error.message || 'Could not save this trade. Please try again.')
+      isSavingRef.current = false
+      setIsSaving(false)
     }
   }
 
@@ -562,7 +613,7 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
               {initialTrade ? 'Trade review' : 'New trade'}
             </p>
           </div>
-          <button type="button" onClick={requestClose} aria-label="Close trade form" title="Close" className={iconButtonClass}>
+          <button type="button" onClick={requestClose} disabled={isSaving} aria-label="Close trade form" title="Close" className={iconButtonClass}>
             <Icon name="x" size={16} />
           </button>
         </div>
@@ -782,12 +833,11 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
                 <button
                   type="button"
                   onMouseDown={keepSelection}
-                  disabled={isUploadingImage}
                   onClick={() => imageInputRef.current?.click()}
-                  className="flex h-7 items-center gap-1.5 rounded-md px-2 text-xs text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 disabled:cursor-wait disabled:opacity-50 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-zinc-100"
+                  className="flex h-7 items-center gap-1.5 rounded-md px-2 text-xs text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-zinc-100"
                 >
                   <Icon name="image" size={14} />
-                  {isUploadingImage ? 'Uploading...' : 'Add screenshot'}
+                  {pendingUploads > 0 ? `Uploading ${pendingUploads}...` : 'Add screenshot'}
                 </button>
                 <input ref={imageInputRef} type="file" accept="image/*" multiple onChange={handleImageUpload} className="hidden" />
               </div>
@@ -846,8 +896,12 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
         </div>
 
         <footer className="flex shrink-0 items-center justify-end gap-2 border-t border-zinc-200 px-6 py-3 dark:border-white/[0.08]">
-          <button type="button" onClick={requestClose} className="h-9 rounded-md px-3 text-[13px] font-medium text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-zinc-100">Cancel</button>
-          <button type="submit" disabled={isUploadingImage} className="h-9 rounded-md bg-zinc-900 px-3.5 text-[13px] font-medium text-white transition-colors hover:bg-zinc-700 disabled:cursor-wait disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white">{isUploadingImage ? 'Uploading...' : initialTrade ? 'Save review' : 'Save trade'}</button>
+          {submitError && <p role="alert" className="mr-auto text-xs text-rose-500">{submitError}</p>}
+          <button type="button" onClick={requestClose} disabled={isSaving} className="h-9 rounded-md px-3 text-[13px] font-medium text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 disabled:opacity-50 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-zinc-100">Cancel</button>
+          <button type="submit" disabled={isSaving} className="inline-flex h-9 min-w-[116px] items-center justify-center gap-2 whitespace-nowrap rounded-md bg-zinc-900 px-3.5 text-[13px] font-medium text-white transition-colors hover:bg-zinc-700 disabled:cursor-wait disabled:opacity-70 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white">
+            {isSaving && <span aria-hidden="true" className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/40 border-t-white dark:border-zinc-900/30 dark:border-t-zinc-900" />}
+            {isSaving ? (pendingUploads > 0 ? 'Uploading images...' : 'Saving...') : initialTrade ? 'Save review' : 'Save trade'}
+          </button>
         </footer>
       </form>
     </div>

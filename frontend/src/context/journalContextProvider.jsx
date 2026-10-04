@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { journalContext } from "./Context"
 
 import { DEFAULT_CURRENCY } from "../utils/currencies"
+import { fetchPrefetched } from "../utils/prefetch"
 
 const API_BASE = "/api/v1/journals"
 
@@ -101,8 +102,10 @@ function JournalContextProvider({children}){
         const loadJournals = async () => {
             const loadId = ++latestLoad
             try {
-                const authResponse = await fetch("/api/v1/auth/check", { credentials: "include" })
-                if (!authResponse.ok) {
+                // No separate auth pre-flight: the journals request itself answers 401 when logged out.
+                // On first load this reuses the request index.html started before the bundle arrived.
+                const response = await fetchPrefetched("journals", API_BASE)
+                if (response.status === 401) {
                     if (loadId === latestLoad) {
                         setJournals([])
                         setSelectedJournalId(null)
@@ -110,7 +113,7 @@ function JournalContextProvider({children}){
                     return
                 }
 
-                const rows = await readJson(await fetch(API_BASE, { credentials: "include" }))
+                const rows = await readJson(response)
                 const nextJournals = (rows ?? []).map(normalizeJournalForFrontend)
                 if (loadId !== latestLoad) return
                 setJournals(nextJournals)

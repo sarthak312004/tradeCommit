@@ -10,9 +10,9 @@ import { CheckIcon, CloseIcon, PencilIcon, TrashIcon } from "../../utils/Icons.j
 const rowBase = "group relative flex w-full items-center rounded-md transition-colors"
 
 const rowStates = {
-	selected: "bg-black/[0.06] dark:bg-white/[0.08]",
-	editing: "bg-black/[0.04] dark:bg-white/[0.05]",
-	idle: "hover:bg-black/[0.04] dark:hover:bg-white/[0.05]",
+	selected: "bg-white shadow-card ring-1 ring-zinc-900/[0.06] dark:bg-white/[0.08] dark:shadow-none dark:ring-0",
+	editing: "bg-black/[0.06] dark:bg-white/[0.05]",
+	idle: "hover:bg-black/[0.06] dark:hover:bg-white/[0.05]",
 }
 
 const getRowClasses = ({ isEditing, isSelected }) => {
@@ -111,7 +111,7 @@ function SidebarItemCard({ id, label, noun, Icon, badge, isSelected, onSelect, o
 		<Icon
 			strokeWidth={1.5}
 			className={`h-[15px] w-[15px] shrink-0 transition-colors ${
-				isSelected ? "text-zinc-600 dark:text-zinc-300" : "text-zinc-400 dark:text-zinc-500"
+				isSelected ? "text-zinc-700 dark:text-zinc-300" : "text-zinc-500 dark:text-zinc-500"
 			}`}
 		/>
 	)

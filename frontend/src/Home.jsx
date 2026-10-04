@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import Sidebar from './components/sidebar/Sidebar'
 import { Navigate, Outlet } from 'react-router'
+import { fetchPrefetched } from './utils/prefetch'
 
 function Home() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
@@ -10,7 +11,7 @@ function Home() {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const res = await fetch('/api/v1/auth/check', { credentials: 'include' })
+        const res = await fetchPrefetched('auth', '/api/v1/auth/check')
         setIsAuthenticated(res.ok)
       } catch {
         setIsAuthenticated(false)
@@ -42,7 +43,7 @@ function Home() {
 
   return (
     <div>
-      <div className="min-h-screen bg-white text-zinc-900 transition-colors duration-200 dark:bg-[#191919] dark:text-zinc-100">
+      <div className="min-h-screen bg-canvas text-zinc-900 transition-colors duration-200 dark:bg-[#191919] dark:text-zinc-100">
         <div className="flex h-screen overflow-hidden">
           <Sidebar isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} />
 

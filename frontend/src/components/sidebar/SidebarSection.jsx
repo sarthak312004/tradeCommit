@@ -50,7 +50,7 @@ function SidebarSection({
         <div
           className={`absolute inset-y-0 left-0 flex w-[260px] items-center justify-between pl-4 pr-2 ${FADE_BASE} ${fade(isSidebarOpen)}`}
         >
-          <span className="text-[11px] font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+          <span className="text-[11px] font-medium uppercase tracking-wider text-zinc-600 dark:text-zinc-500">
             {title}
           </span>
           <button
@@ -92,7 +92,7 @@ function SidebarSection({
       {isSidebarOpen ? (
         <div className="subtle-scrollbar min-h-0 w-[260px] flex-1 overflow-y-auto overscroll-contain px-2 pb-2">
           {isEmpty ? (
-            <p className="px-2 py-3 text-[13px] text-zinc-400 dark:text-zinc-500">{emptyText}</p>
+            <p className="px-2 py-3 text-[13px] text-zinc-600 dark:text-zinc-500">{emptyText}</p>
           ) : (
             <div className="space-y-px">{children}</div>
           )}

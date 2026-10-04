@@ -1,11 +1,14 @@
-import { useMemo, useState } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import TradeCard from './TradeCard'
-import TradeForm from './TradeForm'
-import TradeAnalysis from './TradeAnalysis'
 import DateRangeFilter from './DateRangeFilter'
 import { ALL_TIME, describeRangeInline, isRangeActive } from '../../../utils/dateRange'
 import { filterTradesByDate } from '../../../utils/tradeAnalytics'
 import { DEFAULT_CURRENCY } from '../../../utils/currencies'
+
+// loaded on demand so the first paint ships less JavaScript
+const loadTradeForm = () => import('./TradeForm')
+const TradeForm = lazy(loadTradeForm)
+const TradeAnalysis = lazy(() => import('./TradeAnalysis'))
 
 const VIEWS = [
   { id: 'trades', label: 'Trades' },
@@ -17,6 +20,14 @@ function TradeJournal({ journal, isSidebarOpen, onAddTrade, onUpdateTrade, onDel
   const [editingTrade, setEditingTrade] = useState(null)
   const [view, setView] = useState('trades')
   const [range, setRange] = useState(ALL_TIME)
+
+  // fetch the form's code while the browser is idle so the drawer opens instantly on the first click
+  useEffect(() => {
+    const idle = window.requestIdleCallback ?? ((callback) => setTimeout(callback, 1500))
+    const cancel = window.cancelIdleCallback ?? clearTimeout
+    const handle = idle(loadTradeForm)
+    return () => cancel(handle)
+  }, [])
 
   const allTrades = journal?.trades
   const visibleTrades = useMemo(() => filterTradesByDate(allTrades ?? [], range), [allTrades, range])
@@ -42,19 +53,17 @@ function TradeJournal({ journal, isSidebarOpen, onAddTrade, onUpdateTrade, onDel
     setIsFormOpen(false)
   }
 
-  const handleSubmitTrade = (trade) => {
-    if (editingTrade) {
-      onUpdateTrade(journal.id, editingTrade.id, trade)
-    } else {
-      onAddTrade(journal.id, {...trade, id: Date.now()})
-    }
-
-    handleCloseForm()
-  }
+  // Returns the request's promise: TradeForm shows "Saving..." until it resolves, then closes itself.
+  // If the request fails the promise rejects and the form stays open with the error, so nothing is lost.
+  const handleSubmitTrade = (trade) => (
+    editingTrade
+      ? onUpdateTrade(journal.id, editingTrade.id, trade)
+      : onAddTrade(journal.id, { ...trade, id: Date.now() })
+  )
 
   if (!journal) {
     return (
-      <section className="rounded-lg border border-dashed border-zinc-300 p-10 text-center dark:border-white/10">
+      <section className="rounded-lg border border-dashed border-zinc-400/60 bg-white/50 p-10 text-center dark:border-white/10 dark:bg-transparent">
         <p className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Create or select a journal to view trades.</p>
       </section>
     )
@@ -75,7 +84,7 @@ function TradeJournal({ journal, isSidebarOpen, onAddTrade, onUpdateTrade, onDel
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <div role="tablist" aria-label="Journal view" className="inline-flex h-8 items-center rounded-lg border border-zinc-200 bg-white/60 p-0.5 dark:border-white/10 dark:bg-transparent">
+          <div role="tablist" aria-label="Journal view" className="inline-flex h-8 items-center rounded-lg border border-zinc-300/80 bg-white p-0.5 shadow-sm dark:border-white/10 dark:bg-transparent dark:shadow-none">
             {VIEWS.map((item) => (
               <button
                 key={item.id}
@@ -107,24 +116,26 @@ function TradeJournal({ journal, isSidebarOpen, onAddTrade, onUpdateTrade, onDel
       </div>
 
       {isFormOpen && (
-        <TradeForm
-          journalName={journal.name}
-          currency={currency}
-          templateFields={templateFields}
-          initialTrade={editingTrade}
-          onSubmit={handleSubmitTrade}
-          onClose={handleCloseForm}
-          onUploadImage={(file) => onUploadTradeImage(journal.id, file)}
-        />
+        <Suspense fallback={null}>
+          <TradeForm
+            journalName={journal.name}
+            currency={currency}
+            templateFields={templateFields}
+            initialTrade={editingTrade}
+            onSubmit={handleSubmitTrade}
+            onClose={handleCloseForm}
+            onUploadImage={(file) => onUploadTradeImage(journal.id, file)}
+          />
+        </Suspense>
       )}
 
       {journal.trades.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-zinc-300 p-10 text-center dark:border-white/10">
+        <div className="rounded-lg border border-dashed border-zinc-400/60 bg-white/50 p-10 text-center dark:border-white/10 dark:bg-transparent">
           <p className="text-sm font-medium text-zinc-600 dark:text-zinc-300">No trades in this journal yet.</p>
           <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Add your first trade to start tracking this journal.</p>
         </div>
       ) : visibleTrades.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-zinc-300 p-10 text-center dark:border-white/10">
+        <div className="rounded-lg border border-dashed border-zinc-400/60 bg-white/50 p-10 text-center dark:border-white/10 dark:bg-transparent">
           <p className="text-sm font-medium text-zinc-600 dark:text-zinc-300">No trades in {describeRangeInline(range)}.</p>
           <button
             type="button"
@@ -135,7 +146,9 @@ function TradeJournal({ journal, isSidebarOpen, onAddTrade, onUpdateTrade, onDel
           </button>
         </div>
       ) : view === 'analysis' ? (
-        <TradeAnalysis trades={visibleTrades} currency={currency} rangeLabel={isFiltered ? describeRangeInline(range) : null} />
+        <Suspense fallback={null}>
+          <TradeAnalysis trades={visibleTrades} currency={currency} rangeLabel={isFiltered ? describeRangeInline(range) : null} />
+        </Suspense>
       ) : (
         <div className={`grid gap-3 sm:grid-cols-2 ${isSidebarOpen ? 'xl:grid-cols-3' : 'lg:grid-cols-3 2xl:grid-cols-4'}`}>
           {visibleTrades.map((currentTrade) => (

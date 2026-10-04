@@ -15,6 +15,21 @@
         } catch (e) {}
       })();
     </script>
+    <script>
+      // Start the first API calls now, while the JS bundle is still downloading. The app picks these
+      // requests up instead of starting its own (see src/utils/prefetch.js). Same-origin, so cookies are sent.
+      (function () {
+        if (location.pathname.indexOf("/auth") === 0) return;
+        var get = function (url) {
+          return fetch(url, { credentials: "include" }).catch(function () { return null; });
+        };
+        window.__prefetch = {
+          auth: get("/api/v1/auth/check"),
+          journals: get("/api/v1/journals"),
+          planners: get("/api/v1/planners"),
+        };
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

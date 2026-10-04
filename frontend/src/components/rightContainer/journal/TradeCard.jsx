@@ -2,14 +2,14 @@ import { useState } from 'react'
 import { TrashIcon } from '../../../utils/Icons.jsx'
 
 const sideChip = {
-  long: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
-  short: 'bg-rose-500/10 text-rose-700 dark:text-rose-300'
+  long: 'bg-emerald-500/[0.14] text-emerald-800 dark:text-emerald-300',
+  short: 'bg-rose-500/[0.14] text-rose-800 dark:text-rose-300'
 }
 
 function Metric({ label, value }) {
   return (
     <div className="min-w-0">
-      <p className="text-[11px] text-zinc-400 dark:text-zinc-500">{label}</p>
+      <p className="text-[11px] text-zinc-500 dark:text-zinc-500">{label}</p>
       <p className="mt-0.5 truncate text-[13px] font-medium tabular-nums text-zinc-700 dark:text-zinc-200">{value}</p>
     </div>
   )
@@ -51,7 +51,7 @@ function TradeCard({ trade, onSelect, onDelete }) {
       tabIndex="0"
       onClick={() => onSelect(trade)}
       onKeyDown={handleCardKeyDown}
-      className="group relative cursor-pointer rounded-lg border border-zinc-200/80 bg-white px-4 py-3.5 text-left transition-colors hover:border-zinc-300 hover:bg-zinc-50/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400/40 dark:border-white/[0.08] dark:bg-[#202020] dark:hover:border-white/[0.16] dark:hover:bg-[#252525]"
+      className="group relative cursor-pointer rounded-lg border border-zinc-300/80 bg-white px-4 py-3.5 text-left shadow-card transition-[box-shadow,border-color,background-color] hover:border-zinc-400/70 hover:shadow-card-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400/40 dark:border-white/[0.08] dark:bg-[#202020] dark:shadow-none dark:hover:border-white/[0.16] dark:hover:bg-[#252525] dark:hover:shadow-none"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
@@ -85,7 +85,7 @@ function TradeCard({ trade, onSelect, onDelete }) {
         </button>
       </div>
 
-      <div className="mt-3 grid grid-cols-3 gap-3 border-t border-zinc-100 pt-3 dark:border-white/[0.06]">
+      <div className="mt-3 grid grid-cols-3 gap-3 border-t border-zinc-200 pt-3 dark:border-white/[0.06]">
         <Metric label="Qty" value={trade.qty} />
         <Metric label="Entry" value={trade.entry || '-'} />
         <Metric label="Exit" value={trade.exit || '-'} />

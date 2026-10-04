@@ -15,7 +15,7 @@ function Stat({ label, value, hint, tone = 'neutral' }) {
     <div className="min-w-0">
       <p className="text-xs text-zinc-500 dark:text-zinc-400">{label}</p>
       <p className={`mt-1.5 text-xl font-semibold tracking-tight tabular-nums ${toneClass[tone]}`}>{value}</p>
-      {hint && <p className="mt-1 text-[11px] leading-snug text-zinc-400 dark:text-zinc-500">{hint}</p>}
+      {hint && <p className="mt-1 text-[11px] leading-snug text-zinc-500 dark:text-zinc-500">{hint}</p>}
     </div>
   )
 }
@@ -29,7 +29,7 @@ function MetricList({ title, rows }) {
           <div key={label} className="flex items-baseline justify-between gap-4 py-2.5 text-sm">
             <dt className="text-zinc-600 dark:text-zinc-300">
               {label}
-              {note && <span className="ml-2 text-xs text-zinc-400 dark:text-zinc-500">{note}</span>}
+              {note && <span className="ml-2 text-xs text-zinc-500 dark:text-zinc-500">{note}</span>}
             </dt>
             <dd className={`font-medium tabular-nums ${toneClass[tone]}`}>{value}</dd>
           </div>
@@ -63,13 +63,13 @@ function TradeAnalysis({ trades, currency, rangeLabel }) {
   ]
 
   return (
-    <div className="rounded-2xl border border-zinc-200 bg-white/80 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/60">
+    <div className="rounded-2xl border border-zinc-300/80 bg-white shadow-card dark:border-zinc-800 dark:bg-zinc-900/60 dark:shadow-none">
       <div className="p-5 pb-3 sm:p-6 sm:pb-4">
         <p className="text-xs text-zinc-500 dark:text-zinc-400">Net P&amp;L</p>
         <p className={`mt-1 text-3xl font-semibold tracking-tight tabular-nums ${toneClass[toneOf(stats.netPnl)]}`}>
           {money(stats.netPnl, { signed: true })}
         </p>
-        <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">{plural(stats.closedTrades, 'closed trade')}{rangeLabel ? ` in ${rangeLabel}` : ''}</p>
+        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-500">{plural(stats.closedTrades, 'closed trade')}{rangeLabel ? ` in ${rangeLabel}` : ''}</p>
       </div>
 
       <div className="px-3 pb-4 sm:px-4">

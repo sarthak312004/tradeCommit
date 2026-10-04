@@ -60,7 +60,7 @@ function PlannerPage() {
         <TopBar label="Trade planner" title={isLoading ? 'Loading…' : 'Not found'} />
         <div className={pageBody}>
           {!isLoading && (
-            <section className="rounded-lg border border-dashed border-zinc-300 p-10 text-center dark:border-white/10">
+            <section className="rounded-lg border border-dashed border-zinc-400/60 bg-white/50 p-10 text-center dark:border-white/10 dark:bg-transparent">
               <p className="text-sm font-medium text-zinc-600 dark:text-zinc-300">This planner doesn&apos;t exist anymore.</p>
               <Link to="/" className="mt-2 inline-block text-xs font-medium text-sky-600 transition hover:text-sky-500 dark:text-sky-400">
                 Back to journals

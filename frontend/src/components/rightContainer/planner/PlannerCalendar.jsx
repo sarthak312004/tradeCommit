@@ -34,7 +34,7 @@ function DayCell({ day, entries, isToday, isExpanded, onToggleExpand, onCreate, 
       className={`group relative min-h-[72px] cursor-pointer p-[5px] transition-colors sm:min-h-[99px] ${
         day.inMonth
           ? 'bg-white hover:bg-zinc-50 dark:bg-[#191919] dark:hover:bg-white/[0.03]'
-          : 'bg-zinc-50/70 hover:bg-zinc-50 dark:bg-white/[0.02] dark:hover:bg-white/[0.04]'
+          : 'bg-zinc-100 hover:bg-zinc-50 dark:bg-white/[0.02] dark:hover:bg-white/[0.04]'
       }`}
     >
       <div className="flex items-center justify-between">
@@ -134,7 +134,7 @@ function PlannerCalendar({ entries, onCreateForDate, onOpenEntry }) {
           <button
             type="button"
             onClick={() => goToMonth(startOfMonth(new Date()))}
-            className="h-7 cursor-pointer rounded-md border border-zinc-200 px-2.5 text-[11px] font-medium text-zinc-600 transition-colors hover:bg-zinc-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/40 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/10"
+            className="h-7 cursor-pointer rounded-md border border-zinc-300/80 bg-white px-2.5 text-[11px] font-medium text-zinc-700 shadow-sm transition-colors hover:bg-zinc-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/40 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/10"
           >
             Today
           </button>
@@ -144,15 +144,15 @@ function PlannerCalendar({ entries, onCreateForDate, onOpenEntry }) {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-zinc-200 dark:border-white/10">
-        <div className="grid grid-cols-7 gap-px bg-zinc-200 dark:bg-white/10">
+      <div className="overflow-hidden rounded-lg border border-zinc-300 shadow-card dark:border-white/10 dark:shadow-none">
+        <div className="grid grid-cols-7 gap-px bg-zinc-300 dark:bg-white/10">
           {weekdays.map((label) => (
-            <div key={label} className="bg-zinc-50 px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-zinc-500 dark:bg-[#202020] dark:text-zinc-400">
+            <div key={label} className="bg-zinc-100 px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-zinc-600 dark:bg-[#202020] dark:text-zinc-400">
               {label}
             </div>
           ))}
         </div>
-        <div className="grid grid-cols-7 gap-px bg-zinc-200 dark:bg-white/10">
+        <div className="grid grid-cols-7 gap-px bg-zinc-300 dark:bg-white/10">
           {days.map((day) => (
             <DayCell
               key={day.key}

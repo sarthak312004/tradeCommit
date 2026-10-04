@@ -15,7 +15,7 @@ export function ThemeSegmented({ theme, setTheme }) {
     <div
       role="radiogroup"
       aria-label="Theme"
-      className="flex items-center gap-0.5 rounded-md bg-black/[0.045] p-0.5 dark:bg-white/[0.06]"
+      className="flex items-center gap-0.5 rounded-md bg-black/[0.08] p-0.5 dark:bg-white/[0.06]"
     >
       {OPTIONS.map(({ value, label, Icon }) => {
         const active = theme === value
