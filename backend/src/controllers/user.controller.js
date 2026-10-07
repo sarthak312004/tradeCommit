@@ -5,6 +5,7 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { isGoogleAuthConfigured, verifyGoogleCredential } from "../utils/googleAuth.js";
 import { sendOtpEmail } from "../utils/mailer.js";
+import { clearAuthCookies, setAuthCookies } from "../utils/authCookies.js";
 import {
   OTP_LENGTH,
   OTP_MAX_ATTEMPTS,
@@ -18,17 +19,6 @@ import {
   isOtpMatch,
   retryAfterSeconds,
 } from "../utils/otp.js";
-
-const isProd = process.env.NODE_ENV === "production";
-const isCrossSite = isProd && Boolean(
-  process.env.CORS_ORIGIN?.split(",").some((origin) => origin.trim())
-);
-
-const cookieOptions = {
-  httpOnly: true,
-  secure: isProd,
-  sameSite: isCrossSite ? "none" : "lax",
-};
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -47,10 +37,8 @@ export const sendSession = async (res, user, statusCode, message) => {
   const { accessToken, refreshToken } = await generateTokens(user);
   const publicUser = await User.findById(user._id).select("-password -refreshToken");
 
-  return res
+  return setAuthCookies(res, accessToken, refreshToken)
     .status(statusCode)
-    .cookie("accessToken", accessToken, cookieOptions)
-    .cookie("refreshToken", refreshToken, cookieOptions)
     .json(new ApiResponse(statusCode, { user: publicUser, accessToken, refreshToken }, message));
 };
 
@@ -279,9 +267,7 @@ export const checkAuthStatus = asyncHandler(async (req, res) => {
 export const logoutUser = asyncHandler(async (req, res) => {
   await User.findByIdAndUpdate(req.user._id, { $unset: { refreshToken: 1 } });
 
-  return res
+  return clearAuthCookies(res)
     .status(200)
-    .clearCookie("accessToken", cookieOptions)
-    .clearCookie("refreshToken", cookieOptions)
     .json(new ApiResponse(200, null, "User logged out"));
 });

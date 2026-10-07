@@ -14,6 +14,11 @@ const COPY = {
     intro: "Use this code to verify your email for TradeCommit:",
     footer: "If you didn't create an account, you can ignore this email.",
   },
+  login: {
+    subject: (otp) => `${otp} is your TradeCommit login code`,
+    intro: "Use this code to log in to TradeCommit:",
+    footer: "If you didn't try to log in, ignore this email. Your account stays safe unless someone else can read your inbox.",
+  },
   "password-reset": {
     subject: (otp) => `${otp} is your TradeCommit password reset code`,
     intro: "Use this code to confirm it's you and change your TradeCommit password:",
@@ -37,7 +42,7 @@ const buildOtpEmail = ({ name, otp, purpose }) => {
   };
 };
 
-// purpose: "signup" (default) or "password-reset" selects the wording of the email
+// purpose: "signup" (default), "login" or "password-reset" selects the wording of the email
 export const sendOtpEmail = async ({ to, name, otp, purpose = "signup" }) => {
   const apiKey = process.env.BREVO_API_KEY;
   const senderEmail = process.env.MAIL_FROM_EMAIL;

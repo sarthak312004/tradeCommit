@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react"
 import { useNavigate } from "react-router"
+import ForgotPasswordFlow from "../components/auth/ForgotPasswordFlow"
 import GoogleButton from "../components/auth/GoogleButton"
+import OtpLoginFlow from "../components/auth/OtpLoginFlow"
 import SignupFlow from "../components/auth/SignupFlow"
 import { Field, PasswordField } from "../components/auth/fields"
 import { SERIF, headingCls, linkBtnCls, messageCls, mutedCls, submitCls, tabCls } from "../components/auth/authStyles"
@@ -13,10 +15,11 @@ const REDIRECT_AFTER_LOGIN = "/"
 export default function AuthPage() {
   const navigate = useNavigate()
   const { theme, setTheme } = useTheme()
-  const [mode, setMode] = useState("login") // "login" | "register"
+  const [mode, setMode] = useState("login") // "login" | "register" | "forgot" | "otp"
   const [login, setLogin] = useState({ identifier: "", password: "" })
   const [message, setMessage] = useState(null) // { type: "error" | "ok", text } for the login form
   const [loading, setLoading] = useState(false)
+  const [showForgot, setShowForgot] = useState(false) // offered once a log-in attempt fails on credentials
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -66,7 +69,13 @@ export default function AuthPage() {
       : { username: identifier, password: login.password }
 
     run(async () => {
-      await authPost("/login", body)
+      setShowForgot(false)
+      try {
+        await authPost("/login", body)
+      } catch (error) {
+        if (error.status === 401) setShowForgot(true) // wrong email/username or password
+        throw error
+      }
       finishLogin()
     })
   }
@@ -137,7 +146,7 @@ export default function AuthPage() {
           <div className={`${SERIF} mb-8 text-xl font-medium md:hidden`}>Trade Commit</div>
 
           <div className="mb-8 flex gap-6 border-b border-zinc-300/70 dark:border-white/[0.08]" role="tablist" aria-label="Account">
-            <button type="button" role="tab" aria-selected={mode === "login"} onClick={() => switchMode("login")} className={tabCls(mode === "login")}>
+            <button type="button" role="tab" aria-selected={mode !== "register"} onClick={() => switchMode("login")} className={tabCls(mode !== "register")}>
               Log in
             </button>
             <button type="button" role="tab" aria-selected={mode === "register"} onClick={() => switchMode("register")} className={tabCls(mode === "register")}>
@@ -161,6 +170,12 @@ export default function AuthPage() {
 
               <Field id="l-id" label="Email or username" value={login.identifier} onChange={setLoginField("identifier")} autoComplete="username" autoFocus />
               <PasswordField id="l-pw" label="Password" value={login.password} onChange={setLoginField("password")} autoComplete="current-password" />
+              <div className="-mt-2 mb-4 flex items-center justify-between gap-3">
+                <button type="button" onClick={() => switchMode("otp")} className={linkBtnCls}>Log in with email code</button>
+                {showForgot && (
+                  <button type="button" onClick={() => switchMode("forgot")} className={linkBtnCls}>Forgot password?</button>
+                )}
+              </div>
 
               <button type="submit" disabled={loading} className={submitCls}>
                 {loading ? "Logging in…" : "Log in"}
@@ -170,6 +185,22 @@ export default function AuthPage() {
                 <button type="button" onClick={() => switchMode("register")} className={linkBtnCls}>Create an account</button>
               </p>
             </form>
+          )}
+
+          {mode === "forgot" && (
+            <ForgotPasswordFlow
+              initialEmail={login.identifier.includes("@") ? login.identifier.trim() : ""}
+              onComplete={finishLogin}
+              onBack={() => switchMode("login")}
+            />
+          )}
+
+          {mode === "otp" && (
+            <OtpLoginFlow
+              initialEmail={login.identifier.includes("@") ? login.identifier.trim() : ""}
+              onComplete={finishLogin}
+              onBack={() => switchMode("login")}
+            />
           )}
 
           {/* Stays mounted while hidden so a verified email isn't lost if the user peeks at the log-in tab */}

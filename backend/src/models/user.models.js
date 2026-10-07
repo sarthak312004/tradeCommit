@@ -69,6 +69,11 @@ const userSchema = new mongoose.Schema(
             type:passwordResetSchema,
             select:false
         },
+        // One-time email code used to log in without a password (see loginOtp.controller.js)
+        loginOtp:{
+            type:otpSchema,
+            select:false
+        },
         // sessions issued before this moment are rejected (see verifyJWT), so a password change logs out other devices
         passwordChangedAt:{
             type:Date

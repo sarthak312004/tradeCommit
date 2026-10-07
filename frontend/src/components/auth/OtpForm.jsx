@@ -12,8 +12,18 @@ export const OTP_LENGTH = 6
  * @param {Function} onVerify        async (code) => void; throw to show an error
  * @param {Function} onResend        async () => { sent: boolean, retryAfter: number }
  * @param {Function} onChangeEmail   go back and type a different address
+ * @param {string}   [eyebrow]       small label above the heading (defaults to the sign-up step label)
+ * @param {string}   [submitLabel]   text of the submit button
  */
-export default function OtpForm({ email, initialCooldown, onVerify, onResend, onChangeEmail }) {
+export default function OtpForm({
+  email,
+  initialCooldown,
+  onVerify,
+  onResend,
+  onChangeEmail,
+  eyebrow = "Step 2 of 3 · Verify",
+  submitLabel = "Verify email",
+}) {
   const [code, setCode] = useState("")
   const [message, setMessage] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -78,7 +88,7 @@ export default function OtpForm({ email, initialCooldown, onVerify, onResend, on
       }}
       noValidate
     >
-      <p className={eyebrowCls}>Step 2 of 3 · Verify</p>
+      <p className={eyebrowCls}>{eyebrow}</p>
       <h2 className={`${headingCls} mb-1.5`}>Check your email</h2>
       <p className={`mb-6 ${mutedCls}`}>
         We sent a {OTP_LENGTH}-digit code to{" "}
@@ -107,7 +117,7 @@ export default function OtpForm({ email, initialCooldown, onVerify, onResend, on
       />
 
       <button type="submit" disabled={loading} className={`${submitCls} mt-4`}>
-        {loading ? "Verifying…" : "Verify email"}
+        {loading ? "Verifying…" : submitLabel}
       </button>
 
       <div className="mt-5 flex items-center justify-between">
