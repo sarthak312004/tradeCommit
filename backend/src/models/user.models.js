@@ -75,6 +75,16 @@ const userSchema = new mongoose.Schema(
             select:false
         },
         // sessions issued before this moment are rejected (see verifyJWT), so a password change logs out other devices
+        // Existing accounts are considered onboarded; new email sign-ups explicitly set this false.
+        onboardingCompleted:{
+            type:Boolean,
+            default:true
+        },
+        onboardingTradingStyle:{
+            type:String,
+            enum:["intraday","swing","position","hybrid"],
+            default:null
+        },
         passwordChangedAt:{
             type:Date
         },

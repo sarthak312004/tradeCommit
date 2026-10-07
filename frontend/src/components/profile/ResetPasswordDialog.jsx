@@ -85,14 +85,14 @@ function ResetPasswordDialog({ email, hasPassword, onClose }) {
         role="dialog"
         aria-modal="true"
         aria-label={hasPassword ? 'Reset password' : 'Set password'}
-        className="relative w-full max-w-sm rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl dark:border-white/10 dark:bg-[#202020]"
+        className="relative w-full max-w-sm rounded-2xl border border-zinc-300 bg-white p-6 shadow-2xl dark:border-white/[0.14] dark:bg-panel"
       >
         <button
           type="button"
           onClick={onClose}
           disabled={isBusy}
           aria-label="Close"
-          className={`absolute right-3 top-3 flex h-7 w-7 cursor-pointer items-center justify-center rounded-md text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700 disabled:opacity-50 dark:hover:bg-white/10 dark:hover:text-zinc-200 ${focusRing}`}
+          className={`absolute right-3 top-3 flex h-7 w-7 cursor-pointer items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-700 disabled:opacity-50 dark:hover:bg-white/10 dark:hover:text-zinc-200 ${focusRing}`}
         >
           <CloseIcon className="h-4 w-4" />
         </button>

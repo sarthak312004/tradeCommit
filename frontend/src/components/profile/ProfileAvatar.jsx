@@ -3,7 +3,7 @@
 
 const hueFor = (seed = '') => [...seed].reduce((sum, char) => (sum * 31 + char.charCodeAt(0)) % 360, 7)
 
-const getInitials = (fullname = '', username = '') => {
+export const getInitials = (fullname = '', username = '') => {
   const words = fullname.trim().split(/\s+/).filter(Boolean)
   const letters = words.length > 1 ? words[0][0] + words[words.length - 1][0] : (words[0] ?? username).slice(0, 2)
   return letters.toUpperCase() || '?'

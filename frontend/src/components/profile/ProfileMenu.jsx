@@ -8,11 +8,11 @@ import { focusRing } from './profileStyles'
 function DetailRow({ Icon, label, value }) {
   return (
     <div className="flex items-center gap-3 px-1 py-1.5">
-      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-zinc-100 text-zinc-500 dark:bg-white/[0.06] dark:text-zinc-400">
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-zinc-100 text-zinc-600 dark:bg-white/[0.06] dark:text-zinc-300">
         <Icon className="h-3.5 w-3.5" />
       </span>
       <div className="min-w-0">
-        <p className="text-[10px] uppercase tracking-[0.14em] text-zinc-400 dark:text-zinc-500">{label}</p>
+        <p className="text-[10px] uppercase tracking-[0.14em] text-zinc-500 dark:text-zinc-400">{label}</p>
         <p className="truncate text-[13px] text-zinc-800 dark:text-zinc-100" title={value}>{value}</p>
       </div>
     </div>
@@ -67,14 +67,14 @@ function ProfileMenu() {
         <span className="rounded-full ring-2 ring-transparent transition group-hover:ring-zinc-200 dark:group-hover:ring-white/15">
           <ProfileAvatar profile={profile} />
         </span>
-        <ChevronDownIcon className={`h-3.5 w-3.5 text-zinc-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+        <ChevronDownIcon className={`h-3.5 w-3.5 text-zinc-500 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
       <div
         role="dialog"
         aria-label="Your profile"
         aria-hidden={!isOpen}
-        className={`absolute right-0 top-[calc(100%+8px)] z-40 w-72 origin-top-right rounded-xl border border-zinc-200 bg-white p-3 shadow-[0_12px_32px_-8px_rgba(0,0,0,0.2)] transition duration-150 ease-out motion-reduce:transition-none dark:border-white/10 dark:bg-[#252525] dark:shadow-black/50 ${
+        className={`absolute right-0 top-[calc(100%+8px)] z-40 w-72 origin-top-right rounded-xl border border-zinc-300 bg-white p-3 shadow-[0_12px_32px_-8px_rgba(0,0,0,0.2)] transition duration-150 ease-out motion-reduce:transition-none dark:border-white/[0.14] dark:bg-panel-hi dark:shadow-black/50 ${
           isOpen ? 'visible translate-y-0 scale-100 opacity-100' : 'pointer-events-none invisible -translate-y-1 scale-95 opacity-0'
         }`}
       >
@@ -84,11 +84,11 @@ function ProfileMenu() {
               <ProfileAvatar profile={profile} className="h-11 w-11 text-base" />
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-50">{profile.fullname}</p>
-                <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">@{profile.username}</p>
+                <p className="truncate text-xs text-zinc-600 dark:text-zinc-300">@{profile.username}</p>
               </div>
             </div>
 
-            <div className="border-t border-zinc-100 py-1.5 dark:border-white/[0.07]">
+            <div className="border-t border-zinc-200 py-1.5 dark:border-white/[0.10]">
               <DetailRow Icon={UserIcon} label="Full name" value={profile.fullname} />
               <DetailRow Icon={AtSignIcon} label="Username" value={profile.username} />
               <DetailRow Icon={MailIcon} label="Email" value={profile.email} />
@@ -98,7 +98,7 @@ function ProfileMenu() {
               type="button"
               onClick={openReset}
               tabIndex={isOpen ? 0 : -1}
-              className={`mt-1.5 flex h-9 w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-zinc-200 text-[13px] font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/[0.06] ${focusRing}`}
+              className={`mt-1.5 flex h-9 w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-zinc-300 text-[13px] font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-white/[0.14] dark:text-zinc-200 dark:hover:bg-white/[0.06] ${focusRing}`}
             >
               <LockIcon className="h-3.5 w-3.5" />
               {profile.hasPassword ? 'Reset password' : 'Set a password'}
@@ -112,7 +112,7 @@ function ProfileMenu() {
             </button>
           </div>
         ) : (
-          <p className="py-3 text-center text-xs text-zinc-400">Loading…</p>
+          <p className="py-3 text-center text-xs text-zinc-500">Loading…</p>
         )}
       </div>
 

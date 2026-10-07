@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
   getProfile,
+  completeOnboarding,
   resetPassword,
   sendPasswordResetOtp,
   verifyPasswordResetOtp,
@@ -44,6 +45,7 @@ router.post("/forgot-password/reset", resetForgottenPassword)
 
 // profile + password change (logged-in users only)
 router.get("/profile", verifyJWT, getProfile)
+router.post("/onboarding/complete", verifyJWT, completeOnboarding)
 router.post("/password/send-otp", verifyJWT, sendPasswordResetOtp)
 router.post("/password/verify-otp", verifyJWT, verifyPasswordResetOtp)
 router.post("/password/reset", verifyJWT, resetPassword)

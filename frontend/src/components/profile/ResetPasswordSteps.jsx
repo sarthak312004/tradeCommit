@@ -10,7 +10,7 @@ function StepHeader({ title, children }) {
   return (
     <>
       <h2 className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{title}</h2>
-      <p className="mt-1 text-[13px] leading-relaxed text-zinc-500 dark:text-zinc-400">{children}</p>
+      <p className="mt-1 text-[13px] leading-relaxed text-zinc-600 dark:text-zinc-300">{children}</p>
     </>
   )
 }
@@ -100,7 +100,7 @@ function PasswordInput({ id, label, value, onChange, autoFocus, autoComplete = '
           type="button"
           onClick={() => setVisible((shown) => !shown)}
           aria-label={visible ? 'Hide password' : 'Show password'}
-          className="absolute right-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 cursor-pointer items-center justify-center rounded-md text-zinc-400 transition-colors hover:text-zinc-700 dark:hover:text-zinc-200"
+          className="absolute right-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 cursor-pointer items-center justify-center rounded-md text-zinc-500 transition-colors hover:text-zinc-700 dark:hover:text-zinc-200"
         >
           {visible ? <EyeOffIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />}
         </button>
@@ -133,7 +133,7 @@ export function NewPasswordStep({ hasPassword, isBusy, error, onSubmit }) {
         <PasswordInput id="new-password" label="New password" value={password} onChange={setPassword} autoFocus />
         <PasswordInput id="confirm-password" label="Confirm new password" value={confirm} onChange={setConfirm} />
       </div>
-      <p className="mt-2 text-[11px] text-zinc-400 dark:text-zinc-500">At least {MIN_PASSWORD_LENGTH} characters.</p>
+      <p className="mt-2 text-[11px] text-zinc-500 dark:text-zinc-400">At least {MIN_PASSWORD_LENGTH} characters.</p>
       <ErrorText>{localError || error}</ErrorText>
 
       <button type="submit" disabled={isBusy || !password || !confirm} className={`${primaryButtonClass} mt-4`}>
@@ -153,7 +153,7 @@ export function DoneStep({ onClose }) {
         </svg>
       </span>
       <h2 className="mt-3 text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Password updated</h2>
-      <p className="mt-1 text-[13px] text-zinc-500 dark:text-zinc-400">Other devices have been signed out. This one stays logged in.</p>
+      <p className="mt-1 text-[13px] text-zinc-600 dark:text-zinc-300">Other devices have been signed out. This one stays logged in.</p>
       <button type="button" onClick={onClose} className={`${primaryButtonClass} mt-5`}>Done</button>
     </div>
   )

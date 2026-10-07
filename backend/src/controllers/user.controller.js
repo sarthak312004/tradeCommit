@@ -183,6 +183,7 @@ export const registerUser = asyncHandler(async (req, res) => {
       fullname: fullname.trim(),
       password,
       emailVerified: true,
+      onboardingCompleted: false,
     });
   } catch (error) {
     if (error?.code === 11000) {

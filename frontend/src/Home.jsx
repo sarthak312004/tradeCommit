@@ -2,17 +2,27 @@ import { useEffect, useState } from 'react'
 import Sidebar from './components/sidebar/Sidebar'
 import { Navigate, Outlet } from 'react-router'
 import { fetchPrefetched } from './utils/prefetch'
+import { getProfile } from './services/profileApi'
 
 function Home() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
   const [isCheckingAuth, setIsCheckingAuth] = useState(true)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [needsOnboarding, setNeedsOnboarding] = useState(false)
 
   useEffect(() => {
     const checkAuth = async () => {
       try {
         const res = await fetchPrefetched('auth', '/api/v1/auth/check')
         setIsAuthenticated(res.ok)
+        if (res.ok) {
+          try {
+            const profile = await getProfile()
+            setNeedsOnboarding(profile.onboardingCompleted === false)
+          } catch {
+            setNeedsOnboarding(false)
+          }
+        }
       } catch {
         setIsAuthenticated(false)
       } finally {
@@ -39,6 +49,10 @@ function Home() {
 
   if (!isAuthenticated) {
     return <Navigate to="/auth" replace />
+  }
+
+  if (needsOnboarding) {
+    return <Navigate to="/onboarding" replace />
   }
 
   return (

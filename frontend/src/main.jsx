@@ -7,12 +7,17 @@ import {createBrowserRouter, RouterProvider } from 'react-router'
 import MainJournal from './pages/MainJournal.jsx'
 import AuthPage from './pages/AuthPage.jsx'
 import LazyPlannerPage from './pages/LazyPlannerPage.jsx'
+import OnboardingPage from './pages/OnboardingPage.jsx'
 import { PlannerContextProvider } from './context/plannerContextProvider.jsx'
 
 const router = createBrowserRouter([
   {
     path:'/auth',
     element:<AuthPage/>
+  },
+  {
+    path:'/onboarding',
+    element:<OnboardingPage/>
   },
   {
     path:'/',

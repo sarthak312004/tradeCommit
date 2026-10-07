@@ -37,12 +37,31 @@ export const getProfile = asyncHandler(async (req, res) => {
         username: user.username,
         email: user.email,
         hasPassword: Boolean(user.password), // false for Google-only accounts: the dialog says "Set" instead of "Reset"
+        onboardingCompleted: user.onboardingCompleted !== false,
+        onboardingTradingStyle: user.onboardingTradingStyle ?? null,
         createdAt: user.createdAt,
       },
       "Profile fetched"
     )
   );
 });
+
+
+// POST /api/v1/auth/onboarding/complete
+export const completeOnboarding = asyncHandler(async (req, res) => {
+  const allowedStyles = new Set(["intraday", "swing", "position", "hybrid"])
+  const tradingStyle = typeof req.body?.tradingStyle === "string" ? req.body.tradingStyle : ""
+  if (!allowedStyles.has(tradingStyle)) throw new ApiError(400, "Choose a valid trading style")
+
+  const user = await User.findByIdAndUpdate(
+    req.user._id,
+    { $set: { onboardingCompleted: true, onboardingTradingStyle: tradingStyle } },
+    { new: true }
+  )
+  if (!user) throw new ApiError(404, "User not found")
+
+  return res.status(200).json(new ApiResponse(200, { onboardingCompleted: true, tradingStyle }, "Onboarding completed"))
+})
 
 // ---- Changing the password is three steps, all for the logged-in user, and the code only ever goes to their own email --------
 //   1. POST /auth/password/send-otp    {}                           -> emails a 6-digit code
