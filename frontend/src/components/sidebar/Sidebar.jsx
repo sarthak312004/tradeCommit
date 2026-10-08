@@ -11,7 +11,7 @@ import SidebarSection from "./SidebarSection"
 import { ThemeCycleButton, ThemeSegmented } from "./ThemeToggle"
 import { useFeedbackPrompt } from "../../hooks/useFeedbackPrompt"
 import { useTheme } from "../../hooks/useTheme"
-import { ChevronsLeftIcon, LogoutIcon, MessageSquareIcon } from "../../utils/Icons.jsx"
+import { CalendarIcon, ChevronsLeftIcon, FileIcon, LogoutIcon, MessageSquareIcon } from "../../utils/Icons.jsx"
 import { EASE, FADE_BASE, fade, ghostBtn } from "./sidebarStyles"
 
 function Sidebar({ isSidebarOpen, setIsSidebarOpen }) {
@@ -130,6 +130,7 @@ function Sidebar({ isSidebarOpen, setIsSidebarOpen }) {
           isFormOpen={openFormSection === "journals"}
           onFormOpenChange={(isOpen) => setOpenFormSection(isOpen ? "journals" : null)}
           renderForm={({ open, close, reopen }) => <JournalCreateForm open={open} onClose={close} onReopen={reopen} />}
+          railIcon={FileIcon}
           railItems={journalRailItems}
           isEmpty={journals.length === 0}
           emptyText="No journals yet."
@@ -149,6 +150,7 @@ function Sidebar({ isSidebarOpen, setIsSidebarOpen }) {
           isFormOpen={openFormSection === "planners"}
           onFormOpenChange={(isOpen) => setOpenFormSection(isOpen ? "planners" : null)}
           renderForm={({ open, close }) => <PlannerCreateForm open={open} onClose={close} />}
+          railIcon={CalendarIcon}
           railItems={plannerRailItems}
           isEmpty={planners.length === 0}
           emptyText="No planners yet."

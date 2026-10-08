@@ -1,5 +1,5 @@
 import { PlusIcon } from "../../utils/Icons.jsx"
-import { EASE, FADE_BASE, fade, ghostBtn } from "./sidebarStyles"
+import { EASE, FADE_BASE, fade, focusRing, ghostBtn } from "./sidebarStyles"
 
 /**
  * One labelled sidebar section: header with a "+" button, an animated create form,
@@ -13,6 +13,7 @@ import { EASE, FADE_BASE, fade, ghostBtn } from "./sidebarStyles"
  * @param {boolean}   isSidebarOpen
  * @param {Function}  setIsSidebarOpen
  * @param {Function}  renderForm       ({ open, close, reopen }) => ReactNode, the create form
+ * @param {Function} railIcon         icon component that labels this section in the collapsed rail
  * @param {Array}     railItems        [{ id, label, isSelected, onSelect }] shown when collapsed
  * @param {boolean}   isEmpty
  * @param {string}    emptyText
@@ -26,6 +27,7 @@ function SidebarSection({
   isFormOpen,
   onFormOpenChange,
   renderForm,
+  railIcon: RailIcon,
   railItems,
   isEmpty,
   emptyText,
@@ -44,7 +46,7 @@ function SidebarSection({
   }
 
   return (
-    <section aria-label={title} className="flex min-h-[88px] min-w-0 shrink flex-col">
+    <section aria-label={title} className={`flex min-w-0 shrink flex-col ${isSidebarOpen ? "min-h-[88px]" : "min-h-0"}`}>
       {/* Header: label + add */}
       <div className="relative h-8 shrink-0">
         <div
@@ -67,15 +69,15 @@ function SidebarSection({
         <div
           className={`absolute inset-y-0 left-0 flex w-[56px] items-center justify-center ${FADE_BASE} ${fade(!isSidebarOpen)}`}
         >
-          <button
-            type="button"
-            onClick={handleAddClick}
-            title={addLabel}
-            aria-label={addLabel}
-            className={`flex h-8 w-8 items-center justify-center rounded-md ${ghostBtn}`}
+          {/* collapsed: an icon names the section; the "+" sits at the end of its items below */}
+          <span
+            title={title}
+            role="img"
+            aria-label={title}
+            className="flex h-8 w-8 items-center justify-center text-zinc-500 dark:text-zinc-400"
           >
-            <PlusIcon className="h-4 w-4" />
-          </button>
+            <RailIcon className="h-4 w-4" />
+          </span>
         </div>
       </div>
 
@@ -98,7 +100,7 @@ function SidebarSection({
           )}
         </div>
       ) : (
-        <div className="flex min-h-0 w-[56px] flex-1 flex-col items-center gap-1 overflow-y-auto overscroll-contain py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="flex min-h-0 w-[56px] flex-1 flex-col items-center gap-1 overflow-y-auto overscroll-contain pb-2 pt-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {railItems.map((item) => (
             <button
               key={item.id}
@@ -116,6 +118,15 @@ function SidebarSection({
               {item.label.slice(0, 2).toUpperCase()}
             </button>
           ))}
+          <button
+            type="button"
+            onClick={handleAddClick}
+            title={addLabel}
+            aria-label={addLabel}
+            className={`flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md border border-dashed border-zinc-400/70 text-zinc-500 transition-colors hover:border-zinc-500 hover:bg-black/[0.05] hover:text-zinc-900 dark:border-white/[0.18] dark:text-zinc-400 dark:hover:bg-white/[0.07] dark:hover:text-zinc-100 ${focusRing}`}
+          >
+            <PlusIcon className="h-3.5 w-3.5" />
+          </button>
         </div>
       )}
     </section>

@@ -3,8 +3,7 @@ import { errorText } from '../../services/authApi'
 import { submitFeedback } from '../../services/feedbackApi'
 import { dialogTextareaClass } from '../profile/profileStyles'
 import { ErrorText, ProgressBars, StepHeading, StepNav, stepEnter } from './formParts'
-import StarRating from './StarRating'
-import { RATING_WORDS } from './ratingWords'
+import StarRating, { RATING_WORDS } from './StarRating'
 
 export const MAX_MESSAGE_LENGTH = 1000
 

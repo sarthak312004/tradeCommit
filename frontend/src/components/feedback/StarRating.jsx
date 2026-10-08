@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { StarIcon } from '../../utils/Icons.jsx'
 import { focusRing } from '../profile/profileStyles'
-import { RATING_WORDS } from './ratingWords'
+
+export const RATING_WORDS = ['Poor', 'Fair', 'Good', 'Great', 'Excellent']
 
 const SIZES = {
   xl: { button: 'h-12 w-12', icon: 'h-8 w-8', gap: 'gap-1.5' },
