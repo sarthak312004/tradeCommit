@@ -88,6 +88,11 @@ const userSchema = new mongoose.Schema(
         passwordChangedAt:{
             type:Date
         },
+        // true once the automatic "how are we doing?" popup was answered or dismissed, so it only ever shows once
+        feedbackPromptHandled:{
+            type:Boolean,
+            default:false
+        },
         refreshToken:{
             type: String
         }

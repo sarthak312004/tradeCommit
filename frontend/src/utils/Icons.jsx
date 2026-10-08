@@ -214,3 +214,17 @@ export const ChevronDownIcon = (props) => (
 		<path d="m6 9 6 6 6-6" />
 	</Icon>
 )
+
+/* ---- icons added for the feedback form ---------------------------------- */
+
+export const StarIcon = (props) => (
+	<Icon {...props}>
+		<path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9Z" />
+	</Icon>
+)
+
+export const MessageSquareIcon = (props) => (
+	<Icon {...props}>
+		<path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z" />
+	</Icon>
+)

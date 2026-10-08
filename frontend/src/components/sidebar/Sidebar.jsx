@@ -6,10 +6,12 @@ import JournalCard from "./JournalCard"
 import JournalCreateForm from "./JournalCreateForm"
 import PlannerCard from "./PlannerCard"
 import PlannerCreateForm from "./PlannerCreateForm"
+import FeedbackDialog from "../feedback/FeedbackDialog"
 import SidebarSection from "./SidebarSection"
 import { ThemeCycleButton, ThemeSegmented } from "./ThemeToggle"
+import { useFeedbackPrompt } from "../../hooks/useFeedbackPrompt"
 import { useTheme } from "../../hooks/useTheme"
-import { ChevronsLeftIcon, LogoutIcon } from "../../utils/Icons.jsx"
+import { ChevronsLeftIcon, LogoutIcon, MessageSquareIcon } from "../../utils/Icons.jsx"
 import { EASE, FADE_BASE, fade, ghostBtn } from "./sidebarStyles"
 
 function Sidebar({ isSidebarOpen, setIsSidebarOpen }) {
@@ -25,6 +27,11 @@ function Sidebar({ isSidebarOpen, setIsSidebarOpen }) {
 
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false)
+  const [isFeedbackOpen, setIsFeedbackOpen] = useState(false)
+
+  // pops the feedback dialog up by itself once, after the user's first 10 trades
+  const tradeCount = journals.reduce((total, journal) => total + (journal.trades?.length ?? 0), 0)
+  const { isPromptOpen, closePrompt } = useFeedbackPrompt(tradeCount)
   const [openFormSection, setOpenFormSection] = useState(null)
 
   useEffect(() => {
@@ -153,7 +160,7 @@ function Sidebar({ isSidebarOpen, setIsSidebarOpen }) {
       </div>
 
       {/* ------------------------------ Footer ------------------------------ */}
-      <div className="relative h-[84px] shrink-0 border-t border-zinc-300 dark:border-white/[0.10]">
+      <div className="relative h-[116px] shrink-0 border-t border-zinc-300 dark:border-white/[0.10]">
         {/* Expanded */}
         <div
           className={`absolute inset-y-0 left-0 flex w-[260px] flex-col justify-center gap-1 px-2 ${FADE_BASE} ${fade(isSidebarOpen)}`}
@@ -162,6 +169,14 @@ function Sidebar({ isSidebarOpen, setIsSidebarOpen }) {
             <span className="text-xs text-zinc-600 dark:text-zinc-300">Theme</span>
             <ThemeSegmented theme={theme} setTheme={setTheme} />
           </div>
+          <button
+            type="button"
+            onClick={() => setIsFeedbackOpen(true)}
+            className={`flex h-8 w-full items-center gap-2 rounded-md px-2 text-[13px] ${ghostBtn}`}
+          >
+            <MessageSquareIcon className="h-4 w-4" />
+            Feedback &amp; bugs
+          </button>
           <button
             type="button"
             onClick={() => setIsLogoutConfirmOpen(true)}
@@ -179,6 +194,15 @@ function Sidebar({ isSidebarOpen, setIsSidebarOpen }) {
           <ThemeCycleButton theme={theme} setTheme={setTheme} />
           <button
             type="button"
+            onClick={() => setIsFeedbackOpen(true)}
+            title="Feedback & bugs"
+            aria-label="Feedback and bug reports"
+            className={`flex h-8 w-8 items-center justify-center rounded-md ${ghostBtn}`}
+          >
+            <MessageSquareIcon className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
             onClick={() => setIsLogoutConfirmOpen(true)}
             title="Log out"
             aria-label="Log out"
@@ -188,6 +212,15 @@ function Sidebar({ isSidebarOpen, setIsSidebarOpen }) {
           </button>
         </div>
       </div>
+      {(isFeedbackOpen || isPromptOpen) && (
+        <FeedbackDialog
+          isAutoPrompt={isPromptOpen && !isFeedbackOpen}
+          onClose={() => {
+            setIsFeedbackOpen(false)
+            if (isPromptOpen) closePrompt()
+          }}
+        />
+      )}
       {isLogoutConfirmOpen &&
         createPortal(
           <div

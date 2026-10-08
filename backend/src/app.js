@@ -43,6 +43,7 @@ import { userRouter } from './routes/user.routes.js'
 import { journalRouter } from './routes/journal.routes.js'
 import { tradeRouter } from './routes/trade.routes.js'
 import { plannerRouter } from './routes/planner.routes.js'
+import { feedbackRouter } from './routes/feedback.routes.js'
 
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20 })
 app.use("/api/v1/auth/login", authLimiter)
@@ -58,10 +59,15 @@ const passwordLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20 })
 app.use("/api/v1/auth/password", passwordLimiter)
 app.use("/api/v1/auth/forgot-password", passwordLimiter)
 
+// Feedback and bug reports: a few submissions an hour per IP is plenty (status checks are not counted).
+const feedbackLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 10 })
+app.use("/api/v1/feedback", (req, res, next) => (req.method === "POST" ? feedbackLimiter(req, res, next) : next()))
+
 app.use("/api/v1/auth", userRouter)
 app.use("/api/v1/journals", journalRouter)
 app.use("/api/v1/journals/:journalId/trades", tradeRouter)
 app.use("/api/v1/planners", plannerRouter)
+app.use("/api/v1/feedback", feedbackRouter)
 
 app.use("/api", (req, res) => {
     res.status(404).json({ statusCode: 404, success: false, message: "Route not found", errors: [] })
