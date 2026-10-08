@@ -228,3 +228,31 @@ export const MessageSquareIcon = (props) => (
 		<path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z" />
 	</Icon>
 )
+
+export const HashIcon = (props) => (
+	<Icon {...props}>
+		<path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18" />
+	</Icon>
+)
+
+export const TextIcon = (props) => (
+	<Icon {...props}>
+		<path d="M4 7V4h16v3M9 20h6M12 4v16" />
+	</Icon>
+)
+
+export const CheckSquareIcon = (props) => (
+	<Icon {...props}>
+		<path d="m9 11 3 3L22 4" />
+		<path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+	</Icon>
+)
+
+export const SlidersIcon = (props) => (
+	<Icon {...props}>
+		<path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1" />
+		<circle cx="15" cy="6" r="2" />
+		<circle cx="9" cy="12" r="2" />
+		<circle cx="17" cy="18" r="2" />
+	</Icon>
+)

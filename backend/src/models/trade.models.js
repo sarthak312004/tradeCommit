@@ -1,15 +1,5 @@
 import mongoose from "mongoose";
-
-// user-defined extra properties (name + type + value) stored on each trade
-const customFieldSchema = new mongoose.Schema(
-  {
-    key: { type: String, required: true },
-    label: { type: String, required: true, trim: true, maxlength: 40 },
-    type: { type: String, enum: ["text", "number", "date", "checkbox"], required: true },
-    value: { type: mongoose.Schema.Types.Mixed, default: null },
-  },
-  { _id: false }
-);
+import { customFieldSchema } from "./customField.schema.js";
 
 const tradeSchema = new mongoose.Schema(
   {

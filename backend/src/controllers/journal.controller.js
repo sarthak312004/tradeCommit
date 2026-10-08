@@ -1,10 +1,11 @@
-import { Journal } from "../models/journal.models.js";
+import { Journal, MAX_STRATEGY_LENGTH } from "../models/journal.models.js";
 import { Trade } from "../models/trade.models.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { deleteImagesFromCloudinary } from "../utils/cloudinary.js";
 import { DEFAULT_CURRENCY, isValidCurrency, normalizeCurrency } from "../constants/currency.js";
+import { parseCustomFields } from "../utils/customFields.js";
 
 const imageUrlsFromHtml = (html = "") =>
   [...html.matchAll(/<img[^>]+src=["']([^"']+)["']/gi)].map((match) => match[1].trim()).filter(Boolean);
@@ -39,6 +40,33 @@ const serializeTrade = (trade) => {
   };
 };
 
+const serializeContext = (context) => ({
+  strategy: context?.strategy ?? "",
+  attributes: Array.isArray(context?.attributes)
+    ? context.attributes.map(({ key, label, type, value }) => ({ key, label, type, value }))
+    : [],
+});
+
+// validates the journal context sent from the header editor
+const parseJournalContext = (raw) => {
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new ApiError(400, "Journal context must be an object");
+  }
+
+  const strategy = raw.strategy ?? "";
+  if (typeof strategy !== "string") throw new ApiError(400, "Strategy must be text");
+  if (strategy.trim().length > MAX_STRATEGY_LENGTH) {
+    throw new ApiError(400, `Strategy can be up to ${MAX_STRATEGY_LENGTH} characters`);
+  }
+
+  const attributes = parseCustomFields(raw.attributes);
+  if (new Set(attributes.map((attribute) => attribute.key)).size !== attributes.length) {
+    throw new ApiError(400, "Each default property needs its own key");
+  }
+
+  return { strategy: strategy.trim(), attributes };
+};
+
 const serializeJournal = (journal) => ({
   id: String(journal._id),
   _id: journal._id,
@@ -46,6 +74,7 @@ const serializeJournal = (journal) => ({
   journalName: journal.journalName,
   description: journal.description ?? "",
   currency: journal.currency ?? DEFAULT_CURRENCY,
+  context: serializeContext(journal.context),
   createdAt: journal.createdAt ? new Date(journal.createdAt).toISOString() : new Date().toISOString(),
   updatedAt: journal.updatedAt ? new Date(journal.updatedAt).toISOString() : new Date().toISOString(),
   updated: "Just now",
@@ -99,16 +128,31 @@ export const createJournal = asyncHandler(async (req, res) => {
 
 export const updateJournal = asyncHandler(async (req, res) => {
   const { journalId } = req.params;
-  const { journalName, name } = req.body ?? {};
-  const trimmedName = (journalName ?? name)?.trim();
+  const { journalName, name, context } = req.body ?? {};
+  const rawName = journalName ?? name;
+  const update = {};
 
-  if (!trimmedName) {
-    throw new ApiError(400, "Journal name is required");
+  if (rawName !== undefined) {
+    const trimmedName = typeof rawName === "string" ? rawName.trim() : "";
+    if (!trimmedName) {
+      throw new ApiError(400, "Journal name is required");
+    }
+    update.journalName = trimmedName;
+  }
+
+  if (context !== undefined) {
+    const parsed = parseJournalContext(context);
+    update["context.strategy"] = parsed.strategy;
+    update["context.attributes"] = parsed.attributes;
+  }
+
+  if (Object.keys(update).length === 0) {
+    throw new ApiError(400, "Nothing to update");
   }
 
   const journal = await Journal.findOneAndUpdate(
     { _id: journalId, owner: req.user._id },
-    { journalName: trimmedName },
+    update,
     { new: true }
   ).populate({
     path: "trades",

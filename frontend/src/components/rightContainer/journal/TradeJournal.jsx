@@ -4,22 +4,26 @@ import DateRangeFilter from './DateRangeFilter'
 import { ALL_TIME, describeRangeInline, isRangeActive } from '../../../utils/dateRange'
 import { filterTradesByDate } from '../../../utils/tradeAnalytics'
 import { DEFAULT_CURRENCY } from '../../../utils/currencies'
+import { buildTemplateFields, hasJournalContext } from '../../../utils/customFields'
+import { SlidersIcon } from '../../../utils/Icons.jsx'
 
 // loaded on demand so the first paint ships less JavaScript
 const loadTradeForm = () => import('./TradeForm')
 const TradeForm = lazy(loadTradeForm)
 const TradeAnalysis = lazy(() => import('./TradeAnalysis'))
+const JournalContextDialog = lazy(() => import('./JournalContextDialog'))
 
 const VIEWS = [
   { id: 'trades', label: 'Trades' },
   { id: 'analysis', label: 'Analysis' }
 ]
 
-function TradeJournal({ journal, isSidebarOpen, onAddTrade, onUpdateTrade, onDeleteTrade, onUploadTradeImage }) {
+function TradeJournal({ journal, isSidebarOpen, onAddTrade, onUpdateTrade, onDeleteTrade, onUploadTradeImage, onSaveContext }) {
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [editingTrade, setEditingTrade] = useState(null)
   const [view, setView] = useState('trades')
   const [range, setRange] = useState(ALL_TIME)
+  const [isContextOpen, setIsContextOpen] = useState(false)
 
   // fetch the form's code while the browser is idle so the drawer opens instantly on the first click
   useEffect(() => {
@@ -32,11 +36,9 @@ function TradeJournal({ journal, isSidebarOpen, onAddTrade, onUpdateTrade, onDel
   const allTrades = journal?.trades
   const visibleTrades = useMemo(() => filterTradesByDate(allTrades ?? [], range), [allTrades, range])
 
-  // new trades start with the custom fields of the most recent trade in this journal
-  const templateFields = useMemo(() => {
-    const latest = [...(allTrades ?? [])].sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')))[0]
-    return (latest?.customFields ?? []).map(({ key, label, type }) => ({ key, label, type }))
-  }, [allTrades])
+  // new trades start with the journal's default properties, plus any extras from the most recent trade
+  const journalContext = journal?.context
+  const templateFields = useMemo(() => buildTemplateFields(journalContext, allTrades ?? []), [journalContext, allTrades])
 
   const handleOpenNewTrade = () => {
     setEditingTrade(null)
@@ -107,6 +109,17 @@ function TradeJournal({ journal, isSidebarOpen, onAddTrade, onUpdateTrade, onDel
 
           <button
             type="button"
+            onClick={() => setIsContextOpen(true)}
+            title="Strategy and default trade properties"
+            className="flex h-8 cursor-pointer items-center gap-2 rounded-lg border border-zinc-300 bg-white px-2.5 text-xs font-medium text-zinc-700 shadow-sm transition-colors hover:bg-zinc-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/40 dark:border-white/[0.14] dark:bg-panel dark:text-zinc-200 dark:shadow-none dark:hover:bg-white/[0.06]"
+          >
+            <SlidersIcon className="h-3.5 w-3.5" />
+            Context
+            {hasJournalContext(journalContext) && <span aria-label="Context added" className="h-1.5 w-1.5 rounded-full bg-sky-500" />}
+          </button>
+
+          <button
+            type="button"
             onClick={isFormOpen ? handleCloseForm : handleOpenNewTrade}
             className="h-8 cursor-pointer rounded-lg bg-sky-500 px-3 text-xs font-semibold text-white transition hover:bg-sky-600"
           >
@@ -114,6 +127,17 @@ function TradeJournal({ journal, isSidebarOpen, onAddTrade, onUpdateTrade, onDel
           </button>
         </div>
       </div>
+
+      {isContextOpen && (
+        <Suspense fallback={null}>
+          <JournalContextDialog
+            journalName={journal.name}
+            context={journalContext}
+            onSave={(context) => onSaveContext(journal.id, context)}
+            onClose={() => setIsContextOpen(false)}
+          />
+        </Suspense>
+      )}
 
       {isFormOpen && (
         <Suspense fallback={null}>

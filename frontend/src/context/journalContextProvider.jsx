@@ -49,6 +49,13 @@ const normalizeTradeForBackend = (trade) => {
     }
 }
 
+const normalizeContext = (context) => ({
+    strategy: context?.strategy ?? "",
+    attributes: Array.isArray(context?.attributes)
+        ? context.attributes.map(({ key, label, type, value }) => ({ key, label, type, value }))
+        : [],
+})
+
 const normalizeJournalForFrontend = (journal) => ({
     id: journal.id ?? journal._id,
     _id: journal._id,
@@ -56,6 +63,7 @@ const normalizeJournalForFrontend = (journal) => ({
     journalName: journal.journalName ?? journal.name ?? "Untitled journal",
     description: journal.description ?? "",
     currency: journal.currency ?? DEFAULT_CURRENCY,
+    context: normalizeContext(journal.context),
     createdAt: journal.createdAt ?? new Date().toISOString(),
     updatedAt: journal.updatedAt ?? new Date().toISOString(),
     updated: "Just now",
@@ -177,6 +185,22 @@ function JournalContextProvider({children}){
         const updated = normalizeJournalForFrontend(await readJson(response))
         setJournals((current) => current.map((journal) => journal.id === id ? updated : journal))
         return updated
+    }
+
+    // Saves the journal's strategy description and default trade properties (see JournalContextDialog).
+    const updateJournalContext = async (id, context) => {
+        if (isPending(id)) throw new Error("This journal is still being created. Try again in a moment.")
+        const response = await fetch(`${API_BASE}/${id}`, {
+            method: "PATCH",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ context })
+        })
+
+        const saved = normalizeJournalForFrontend(await readJson(response))
+        // only the context changes here; keep the trades already in memory
+        setJournals((current) => current.map((journal) => journal.id === id ? { ...journal, context: saved.context } : journal))
+        return saved.context
     }
 
     const deleteJournal = async (id) => {
@@ -311,6 +335,7 @@ function JournalContextProvider({children}){
             selectedJournal,
             createJournal,
             updateJournal,
+            updateJournalContext,
             deleteJournal,
             selectJournal,
             uploadTradeImage,

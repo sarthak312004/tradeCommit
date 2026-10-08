@@ -1,5 +1,19 @@
 import mongoose from "mongoose";
 import { DEFAULT_CURRENCY, isValidCurrency } from "../constants/currency.js";
+import { customFieldSchema } from "./customField.schema.js";
+
+export const MAX_STRATEGY_LENGTH = 2000;
+
+// Background about how this journal is traded. Edited from the journal header and read by
+// the trade form (default properties) and, later, by AI features (strategy + attributes).
+const journalContextSchema = new mongoose.Schema(
+  {
+    strategy: { type: String, trim: true, maxlength: MAX_STRATEGY_LENGTH, default: "" },
+    // properties added to every new trade form in this journal; `value` is the default
+    attributes: { type: [customFieldSchema], default: [] },
+  },
+  { _id: false }
+);
 
 const journalSchema = new mongoose.Schema(
   {
@@ -24,6 +38,10 @@ const journalSchema = new mongoose.Schema(
         validator: isValidCurrency,
         message: "Unsupported currency code",
       },
+    },
+    context: {
+      type: journalContextSchema,
+      default: () => ({}),
     },
     owner: {
       type: mongoose.Schema.Types.ObjectId,

@@ -3,6 +3,7 @@ import { useFieldArray, useForm } from 'react-hook-form'
 import { formatMoney, formatR, getTradePnl, getTradeR, toneOf } from '../../../utils/tradeAnalytics'
 import { DEFAULT_CURRENCY } from '../../../utils/currencies'
 import { isLocalPreview, preloadImage, prepareImage } from '../../../utils/imageUpload'
+import { FIELD_TYPES, MAX_CUSTOM_FIELDS, makeFieldKey, toFormField } from '../../../utils/customFields'
 
 const defaultValues = {
   date: new Date().toISOString().slice(0, 10),
@@ -50,24 +51,6 @@ const iconPaths = {
   checkSquare: (<><path d="m9 11 3 3L22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></>),
   plus: <path d="M12 5v14M5 12h14" />
 }
-
-/* ---------- user-defined fields ---------- */
-const MAX_CUSTOM_FIELDS = 20
-const FIELD_TYPES = {
-  text: { label: 'Text', icon: 'text', empty: '' },
-  number: { label: 'Number', icon: 'hash', empty: '' },
-  date: { label: 'Date', icon: 'calendar', empty: '' },
-  checkbox: { label: 'Checkbox', icon: 'checkSquare', empty: false }
-}
-
-const toFormField = (field) => ({
-  key: field.key,
-  label: field.label ?? '',
-  type: FIELD_TYPES[field.type] ? field.type : 'text',
-  value: field.value ?? (FIELD_TYPES[field.type] ?? FIELD_TYPES.text).empty
-})
-
-const makeFieldKey = () => (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `f-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`)
 
 function Icon({ name, size = 16 }) {
   return (
