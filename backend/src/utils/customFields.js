@@ -3,6 +3,38 @@ import { CUSTOM_FIELD_TYPES } from "../models/customField.schema.js";
 
 export const MAX_CUSTOM_FIELDS = 20;
 
+// Applies the journal's default properties to one existing trade's custom fields:
+//  - a default the trade doesn't have yet is added with the default value
+//  - a property the trade already has (same key, or same name and type) keeps the trade's own value;
+//    only its name is brought in line with the context if it was renamed
+//  - properties that are not in the context are never removed, so no trade data is lost
+// Returns { fields, changed } where `changed` says whether the trade needs saving.
+export const applyContextToFields = (tradeFields, contextAttributes) => {
+  const fields = (tradeFields ?? []).map(({ key, label, type, value }) => ({ key, label, type, value }));
+  let changed = false;
+
+  for (const attribute of contextAttributes) {
+    const sameKey = fields.find((field) => field.key === attribute.key);
+    if (sameKey) {
+      if (sameKey.label !== attribute.label) {
+        sameKey.label = attribute.label;
+        changed = true;
+      }
+      continue;
+    }
+
+    const sameName = fields.some(
+      (field) => field.type === attribute.type && field.label.trim().toLowerCase() === attribute.label.toLowerCase()
+    );
+    if (sameName || fields.length >= MAX_CUSTOM_FIELDS) continue;
+
+    fields.push({ key: attribute.key, label: attribute.label, type: attribute.type, value: attribute.value });
+    changed = true;
+  }
+
+  return { fields, changed };
+};
+
 // validates and normalises user-defined fields so only clean name/type/value triples are stored
 export const parseCustomFields = (raw) => {
   if (raw === undefined || raw === null) return [];

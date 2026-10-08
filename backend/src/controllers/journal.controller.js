@@ -5,7 +5,7 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { deleteImagesFromCloudinary } from "../utils/cloudinary.js";
 import { DEFAULT_CURRENCY, isValidCurrency, normalizeCurrency } from "../constants/currency.js";
-import { parseCustomFields } from "../utils/customFields.js";
+import { applyContextToFields, parseCustomFields } from "../utils/customFields.js";
 
 const imageUrlsFromHtml = (html = "") =>
   [...html.matchAll(/<img[^>]+src=["']([^"']+)["']/gi)].map((match) => match[1].trim()).filter(Boolean);
@@ -128,7 +128,12 @@ export const createJournal = asyncHandler(async (req, res) => {
 
 export const updateJournal = asyncHandler(async (req, res) => {
   const { journalId } = req.params;
-  const { journalName, name, context } = req.body ?? {};
+  const { journalName, name, context, applyToExistingTrades } = req.body ?? {};
+  // true (default) = also update trades logged before; false = only trades created from now on
+  if (applyToExistingTrades !== undefined && typeof applyToExistingTrades !== "boolean") {
+    throw new ApiError(400, "applyToExistingTrades must be true or false");
+  }
+  const applyToExisting = applyToExistingTrades !== false;
   const rawName = journalName ?? name;
   const update = {};
 
@@ -154,14 +159,29 @@ export const updateJournal = asyncHandler(async (req, res) => {
     { _id: journalId, owner: req.user._id },
     update,
     { new: true }
-  ).populate({
-    path: "trades",
-    options: { sort: { date: -1 } },
-  });
+  );
 
   if (!journal) {
     throw new ApiError(404, "Journal not found");
   }
+
+  // unless the user chose "new trades only", the context also applies to trades logged before it was written
+  if (context !== undefined && applyToExisting) {
+    const trades = await Trade.find({ journal: journal._id, owner: req.user._id }).select("customFields");
+    const operations = [];
+    for (const trade of trades) {
+      const { fields, changed } = applyContextToFields(trade.customFields, journal.context.attributes);
+      if (changed) {
+        operations.push({ updateOne: { filter: { _id: trade._id }, update: { $set: { customFields: fields } } } });
+      }
+    }
+    if (operations.length) await Trade.bulkWrite(operations);
+  }
+
+  await journal.populate({
+    path: "trades",
+    options: { sort: { date: -1 } },
+  });
 
   return res
     .status(200)

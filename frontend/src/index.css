@@ -32,6 +32,28 @@
   box-sizing: border-box;
 }
 
+/* Tailwind v4 resets buttons to the default arrow cursor; give every clickable control the pointer.
+   In the base layer on purpose, so utilities such as disabled:cursor-not-allowed still override it. */
+@layer base {
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']),
+  [role='tab'],
+  [role='menuitem'],
+  summary,
+  select:not(:disabled),
+  input[type='checkbox']:not(:disabled),
+  input[type='radio']:not(:disabled),
+  input[type='file']:not(:disabled),
+  input[type='submit']:not(:disabled),
+  label[for] {
+    cursor: pointer;
+  }
+
+  button:disabled {
+    cursor: default;
+  }
+}
+
 html {
   background: #dfddd6;
 }

@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
-import { BoldIcon, CloseIcon, ImageIcon, ItalicIcon, ListIcon, ListOrderedIcon, MaximizeIcon, QuoteIcon } from '../../utils/Icons.jsx'
+import { BoldIcon, CloseIcon, ImageIcon, ItalicIcon, ListIcon, ListOrderedIcon, MaximizeIcon, MicIcon, QuoteIcon } from '../../utils/Icons.jsx'
 import { isLocalPreview, preloadImage, prepareImage } from '../../utils/imageUpload'
+import { clearInterim, getCleanHtml, insertDictatedText, parseDictation, showInterimText } from '../../utils/dictation'
+import { SHORTCUT_LABEL, useDictationShortcut, useVoiceDictation } from '../../hooks/useVoiceDictation'
+import VoiceLevel from '../rightContainer/journal/VoiceLevel'
 
 const editorClass = [
   'min-h-[420px] py-4 text-[15px] leading-7 text-zinc-800 outline-none dark:text-zinc-200',
@@ -28,7 +31,8 @@ function ToolbarButton({ title, Icon, onClick }) {
 }
 
 /**
- * Rich text editor with screenshot support (toolbar, paste-to-upload, hover-to-remove).
+ * Rich text editor with screenshot support (toolbar, paste-to-upload, hover-to-remove) and voice dictation
+ * (mic button or Ctrl/⌘ + Shift + Space; words appear grey while heard, then become real text at the caret).
  * Uncontrolled: content is seeded from `initialHtml` and read back with `ref.current.getContent()`.
  *
  * @param {string}   id
@@ -83,7 +87,7 @@ function RichTextEditor({ ref, id, label, initialHtml = '', placeholder, onUploa
       if (!nextImageUrls.has(imageUrl) && !isLocalPreview(imageUrl)) removedImagesRef.current.add(imageUrl)
     }
     currentImageUrlsRef.current = nextImageUrls
-    onChange?.(editor?.innerHTML ?? '')
+    onChange?.(getCleanHtml(editor))
   }, [onChange])
 
   useEffect(() => {
@@ -146,6 +150,41 @@ function RichTextEditor({ ref, id, label, initialHtml = '', placeholder, onUploa
       selectionRef.current = selection.getRangeAt(0).cloneRange()
     }
   }
+
+  /* ---------- voice dictation ---------- */
+  const dictationRef = useRef(null)
+  const dictationUndoRef = useRef([]) // one undo() per inserted phrase, for "scratch that"
+
+  const handleDictatedText = (text) => {
+    const editor = editorRef.current
+    clearInterim(editor)
+    const tokens = parseDictation(text)
+
+    const inserted = insertDictatedText(editor, selectionRef.current, tokens)
+    if (inserted) {
+      selectionRef.current = inserted.range
+      dictationUndoRef.current.push(inserted.undo)
+      if (dictationUndoRef.current.length > 30) dictationUndoRef.current.shift()
+      emitChange()
+    }
+
+    for (const token of tokens) {
+      if (token.command === 'undo') {
+        const undo = dictationUndoRef.current.pop()
+        if (undo) {
+          selectionRef.current = undo()
+          emitChange()
+        }
+      } else if (token.command === 'stop') {
+        dictationRef.current?.stop()
+      }
+    }
+  }
+  const handleInterimText = (text) => showInterimText(editorRef.current, selectionRef.current, text)
+
+  const dictation = useVoiceDictation({ onFinalText: handleDictatedText, onInterim: handleInterimText })
+  dictationRef.current = dictation
+  useDictationShortcut(dictation.toggle, { enabled: dictation.isSupported })
 
   // The screenshot appears in the editor immediately from a local preview; compressing and uploading
   // happen in the background and the preview is swapped for the hosted URL when that finishes.
@@ -266,6 +305,8 @@ function RichTextEditor({ ref, id, label, initialHtml = '', placeholder, onUploa
   useImperativeHandle(ref, () => ({
     // Uploads any screenshots still embedded as data: URLs (e.g. from drag & drop) and returns the final content.
     async getContent() {
+      await dictationRef.current?.stopAndFlush() // don't lose the last spoken phrase
+
       // screenshots usually finish while the user is still writing; wait for any that haven't
       await Promise.all([...pendingUploadsRef.current])
 
@@ -279,7 +320,7 @@ function RichTextEditor({ ref, id, label, initialHtml = '', placeholder, onUploa
         image.src = await onUploadImage(await prepareImage(file))
       }
 
-      const html = editor?.innerHTML ?? ''
+      const html = getCleanHtml(editor)
       const images = [...(editor?.querySelectorAll('img') ?? [])].map((image) => image.src)
       currentImageUrlsRef.current = new Set(images)
       return {
@@ -320,13 +361,47 @@ function RichTextEditor({ ref, id, label, initialHtml = '', placeholder, onUploa
           type="button"
           onMouseDown={keepSelection}
           onClick={() => imageInputRef.current?.click()}
-          className="flex h-7 items-center gap-1.5 rounded-md px-2 text-xs text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900 disabled:cursor-wait disabled:opacity-50 dark:text-zinc-300 dark:hover:bg-white/10 dark:hover:text-zinc-100"
+          className="flex h-7 items-center gap-1.5 rounded-md px-2 text-xs text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-300 dark:hover:bg-white/10 dark:hover:text-zinc-100"
         >
           <ImageIcon className="h-3.5 w-3.5" />
           {pendingUploads > 0 ? `Uploading ${pendingUploads}...` : 'Add screenshot'}
         </button>
         <input ref={imageInputRef} type="file" accept="image/*" multiple onChange={handleFileInput} className="hidden" />
+        <button
+          type="button"
+          onMouseDown={keepSelection}
+          onClick={dictation.toggle}
+          disabled={!dictation.isSupported}
+          aria-pressed={dictation.isListening}
+          title={dictation.isSupported ? `${dictation.isListening ? 'Stop dictation' : 'Dictate'} (${SHORTCUT_LABEL})` : "Voice input isn't supported in this browser. Try Chrome, Edge or Safari."}
+          className={`flex h-7 items-center gap-1.5 rounded-md px-2 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+            dictation.isListening
+              ? 'bg-rose-500/10 text-rose-600 hover:bg-rose-500/15 dark:text-rose-400'
+              : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-300 dark:hover:bg-white/10 dark:hover:text-zinc-100'
+          }`}
+        >
+          <MicIcon className="h-3.5 w-3.5" />
+          {dictation.isListening ? 'Stop' : 'Dictate'}
+          <kbd className="hidden rounded border border-current/20 px-1 text-[10px] font-normal opacity-60 md:inline">{SHORTCUT_LABEL}</kbd>
+        </button>
       </div>
+
+      {(dictation.isListening || dictation.error || dictation.notice) && (
+        <div aria-live="polite" className="flex min-h-8 items-center gap-2 border-b border-zinc-200 px-1 py-1.5 text-xs dark:border-white/[0.08]">
+          {dictation.error ? (
+            <span role="alert" className="text-rose-500">{dictation.error}</span>
+          ) : dictation.isListening ? (
+            <>
+              <VoiceLevel levelRef={dictation.levelRef} active />
+              <span className="truncate text-zinc-500 dark:text-zinc-400">
+                Listening… say &quot;full stop&quot;, &quot;new line&quot;, &quot;bullet point&quot;, &quot;scratch that&quot; or &quot;stop listening&quot;
+              </span>
+            </>
+          ) : (
+            <span className="text-zinc-500 dark:text-zinc-400">{dictation.notice}</span>
+          )}
+        </div>
+      )}
 
       <div className="relative" onMouseMove={handleMouseMove} onMouseLeave={() => setHoverImage(null)}>
         <div

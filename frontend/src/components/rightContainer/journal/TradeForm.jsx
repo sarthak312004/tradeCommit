@@ -956,7 +956,7 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
         <footer className="flex shrink-0 items-center justify-end gap-2 border-t border-zinc-300 px-6 py-3 dark:border-white/[0.12]">
           {submitError && <p role="alert" className="mr-auto text-xs text-rose-500">{submitError}</p>}
           <button type="button" onClick={requestClose} disabled={isSaving} className="h-9 rounded-md px-3 text-[13px] font-medium text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900 disabled:opacity-50 dark:text-zinc-300 dark:hover:bg-white/10 dark:hover:text-zinc-100">Cancel</button>
-          <button type="submit" disabled={isSaving} className="inline-flex h-9 min-w-[116px] items-center justify-center gap-2 whitespace-nowrap rounded-md bg-zinc-900 px-3.5 text-[13px] font-medium text-white transition-colors hover:bg-zinc-700 disabled:cursor-wait disabled:opacity-70 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white">
+          <button type="submit" disabled={isSaving} className="inline-flex h-9 min-w-[116px] items-center justify-center gap-2 whitespace-nowrap rounded-md bg-zinc-900 px-3.5 text-[13px] font-medium text-white transition-colors hover:bg-zinc-700 disabled:cursor-default disabled:opacity-70 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white">
             {isSaving && <span aria-hidden="true" className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/40 border-t-white dark:border-zinc-900/30 dark:border-t-zinc-900" />}
             {isSaving ? (pendingUploads > 0 ? 'Uploading images...' : 'Saving...') : initialTrade ? 'Save review' : 'Save trade'}
           </button>

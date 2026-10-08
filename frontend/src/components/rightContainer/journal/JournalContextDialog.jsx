@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { CalendarIcon, CheckSquareIcon, CloseIcon, HashIcon, PlusIcon, TextIcon } from '../../../utils/Icons.jsx'
 import { FIELD_TYPES, MAX_CUSTOM_FIELDS, MAX_STRATEGY_LENGTH, makeFieldKey, toFormField } from '../../../utils/customFields'
@@ -10,6 +10,10 @@ const numberInputClass = `${inputClass} [appearance:textfield] [&::-webkit-inner
 // primary footer button look, minus its disabled:cursor-wait (that is what showed the loading cursor)
 const saveButtonClass =
   'h-9 cursor-pointer rounded-md bg-zinc-900 px-3.5 text-[13px] font-medium text-white transition-colors hover:bg-zinc-700 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white'
+const SCOPE_OPTIONS = [
+  { value: 'all', label: 'All trades', hint: 'Add these properties to trades you already logged too. Values they already have are kept.' },
+  { value: 'future', label: 'New trades only', hint: 'Existing trades stay exactly as they are.' }
+]
 const labelInputClass =
   'h-8 min-w-0 flex-1 rounded-md bg-transparent px-1.5 text-[13px] text-zinc-600 outline-none transition-colors placeholder:text-zinc-500 hover:bg-zinc-100/80 focus:bg-zinc-100 focus:text-zinc-800 dark:text-zinc-300 dark:hover:bg-white/[0.05] dark:focus:bg-white/[0.06] dark:focus:text-zinc-100'
 
@@ -84,7 +88,9 @@ function AttributeRow({ field, autoFocus, onChange, onRemove }) {
 
 /**
  * Modal for the journal's context: a free-text strategy description plus default properties
- * that every new trade form in this journal starts with. `onSave(context)` returns a promise.
+ * that every new trade form in this journal starts with.
+ * `onSave(context, { applyToExisting })` returns a promise; `applyToExisting` says whether the default
+ * properties are also added to trades that were logged before.
  * Rendered in a portal because the page header uses backdrop-blur, which would trap `fixed` children.
  */
 function JournalContextDialog({ journalName, context, onSave, onClose }) {
@@ -94,6 +100,14 @@ function JournalContextDialog({ journalName, context, onSave, onClose }) {
   const [focusKey, setFocusKey] = useState(null)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState('')
+  const [scope, setScope] = useState('all') // 'all' = also update existing trades, 'future' = new trades only
+  const dialogRef = useRef(null)
+
+  // Take focus off the "Context" button that opened this dialog. Otherwise it stays focused underneath, and
+  // pressing Esc turns the browser's keyboard-focus ring on for it, so it keeps glowing after the dialog closes.
+  useEffect(() => {
+    dialogRef.current?.focus({ preventScroll: true })
+  }, [])
 
   const savedPayload = useMemo(() => JSON.stringify(toPayload(context?.strategy ?? '', (context?.attributes ?? []).map(toFormField))), [context])
   const isDirty = JSON.stringify(toPayload(strategy, attributes)) !== savedPayload
@@ -127,7 +141,7 @@ function JournalContextDialog({ journalName, context, onSave, onClose }) {
     setIsSaving(true)
     setError('')
     try {
-      await onSave(toPayload(strategy, attributes))
+      await onSave(toPayload(strategy, attributes), { applyToExisting: scope === 'all' })
       onClose()
     } catch (saveError) {
       setError(saveError instanceof TypeError ? "Can't reach the server. Check your connection and try again." : saveError.message || 'Could not save the context')
@@ -141,11 +155,13 @@ function JournalContextDialog({ journalName, context, onSave, onClose }) {
       onMouseDown={(event) => event.target === event.currentTarget && !isSaving && onClose()}
     >
       <form
+        ref={dialogRef}
+        tabIndex={-1}
         onSubmit={handleSubmit}
         role="dialog"
         aria-modal="true"
         aria-label="Journal context"
-        className="flex max-h-[90vh] w-full max-w-xl flex-col rounded-2xl border border-zinc-300 bg-white shadow-2xl dark:border-white/[0.14] dark:bg-panel"
+        className="flex max-h-[90vh] outline-none w-full max-w-xl flex-col rounded-2xl border border-zinc-300 bg-white shadow-2xl dark:border-white/[0.14] dark:bg-panel"
       >
         <div className="flex items-start justify-between gap-3 px-6 pb-2 pt-5">
           <div className="min-w-0">
@@ -218,6 +234,35 @@ function JournalContextDialog({ journalName, context, onSave, onClose }) {
                 )
               })}
             </div>
+
+            <fieldset className="mt-4 rounded-lg border border-zinc-300 p-3 dark:border-white/[0.14]">
+              <legend className="px-1 text-[13px] font-medium text-zinc-700 dark:text-zinc-200">Apply changes to</legend>
+              <div role="radiogroup" className="grid gap-2 sm:grid-cols-2">
+                {SCOPE_OPTIONS.map((option) => (
+                  <label
+                    key={option.value}
+                    className={`flex cursor-pointer items-start gap-2 rounded-md border p-2.5 transition-colors ${
+                      scope === option.value
+                        ? 'border-zinc-900 bg-zinc-100 dark:border-zinc-200 dark:bg-white/[0.07]'
+                        : 'border-zinc-300 hover:bg-zinc-50 dark:border-white/[0.14] dark:hover:bg-white/[0.04]'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="context-scope"
+                      value={option.value}
+                      checked={scope === option.value}
+                      onChange={() => setScope(option.value)}
+                      className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-zinc-800 dark:accent-zinc-200"
+                    />
+                    <span className="min-w-0">
+                      <span className="block text-[13px] font-medium text-zinc-800 dark:text-zinc-100">{option.label}</span>
+                      <span className="mt-0.5 block text-xs leading-snug text-zinc-500 dark:text-zinc-400">{option.hint}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
           </section>
         </div>
 

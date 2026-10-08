@@ -188,18 +188,24 @@ function JournalContextProvider({children}){
     }
 
     // Saves the journal's strategy description and default trade properties (see JournalContextDialog).
-    const updateJournalContext = async (id, context) => {
+    const updateJournalContext = async (id, context, { applyToExisting = true } = {}) => {
         if (isPending(id)) throw new Error("This journal is still being created. Try again in a moment.")
         const response = await fetch(`${API_BASE}/${id}`, {
             method: "PATCH",
             credentials: "include",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ context })
+            body: JSON.stringify({ context, applyToExistingTrades: applyToExisting })
         })
 
         const saved = normalizeJournalForFrontend(await readJson(response))
-        // only the context changes here; keep the trades already in memory
-        setJournals((current) => current.map((journal) => journal.id === id ? { ...journal, context: saved.context } : journal))
+        // When asked to, the server also applies the context to trades logged earlier, so take their refreshed
+        // properties. Everything else on a trade stays as it is in memory (including trades still being saved).
+        const savedFields = new Map(applyToExisting ? (saved.trades ?? []).map((trade) => [String(trade.id), trade.customFields]) : [])
+        setJournals((current) => current.map((journal) => journal.id === id ? {
+            ...journal,
+            context: saved.context,
+            trades: journal.trades.map((trade) => savedFields.has(String(trade.id)) ? { ...trade, customFields: savedFields.get(String(trade.id)) } : trade)
+        } : journal))
         return saved.context
     }
 

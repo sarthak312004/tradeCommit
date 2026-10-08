@@ -133,7 +133,7 @@ function TradeJournal({ journal, isSidebarOpen, onAddTrade, onUpdateTrade, onDel
           <JournalContextDialog
             journalName={journal.name}
             context={journalContext}
-            onSave={(context) => onSaveContext(journal.id, context)}
+            onSave={(context, options) => onSaveContext(journal.id, context, options)}
             onClose={() => setIsContextOpen(false)}
           />
         </Suspense>
