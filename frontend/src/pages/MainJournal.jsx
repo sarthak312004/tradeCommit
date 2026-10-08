@@ -5,7 +5,7 @@ import TopBar from '../components/rightContainer/TopBar.jsx'
 import TradeJournal from '../components/rightContainer/journal/TradeJournal.jsx'
 
 function MainJournal() {
-  const { selectedJournal, addTrade, updateTrade, deleteTrade, uploadTradeImage, updateJournalContext } = useContext(journalContext)
+  const { selectedJournal, addTrade, updateTrade, deleteTrade, uploadTradeImage, updateJournalContext, retryTradeSave, discardTradeSave } = useContext(journalContext)
   const { isSidebarOpen } = useOutletContext()
 
   return (
@@ -21,6 +21,8 @@ function MainJournal() {
           onDeleteTrade={deleteTrade}
           onUploadTradeImage={uploadTradeImage}
           onSaveContext={updateJournalContext}
+          onRetryTrade={retryTradeSave}
+          onDiscardTrade={discardTradeSave}
         />
       </div>
     </>

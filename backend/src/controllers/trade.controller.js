@@ -125,7 +125,7 @@ export const getTradesByJournal = asyncHandler(async (req, res) => {
     throw new ApiError(404, "Journal not found");
   }
 
-  const trades = await Trade.find({ journal: journal._id, owner: req.user._id }).sort({ date: -1 });
+  const trades = await Trade.find({ journal: journal._id, owner: req.user._id }).sort({ date: -1, createdAt: -1 });
 
   return res
     .status(200)

@@ -65,6 +65,13 @@ export const filterTradesByDate = (trades, { from = '', to = '' } = {}) => {
   })
 }
 
+// Newest first: by trade date, then by when it was logged (two trades on the same day show the latest on top).
+export const sortTradesNewestFirst = (trades) =>
+  [...trades].sort((a, b) => {
+    const byDate = String(toDateKey(b.date) ?? '').localeCompare(String(toDateKey(a.date) ?? ''))
+    return byDate || String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? ''))
+  })
+
 /* --------------------------- analytics -------------------------- */
 
 const sum = (values) => values.reduce((total, value) => total + value, 0)

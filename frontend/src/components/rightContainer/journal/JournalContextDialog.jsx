@@ -14,6 +14,24 @@ const SCOPE_OPTIONS = [
   { value: 'all', label: 'All trades', hint: 'Add these properties to trades you already logged too. Values they already have are kept.' },
   { value: 'future', label: 'New trades only', hint: 'Existing trades stay exactly as they are.' }
 ]
+// The "Apply changes to" choice is remembered per journal (in this browser), so reopening the dialog starts from
+// what you picked last time. It can be changed again at any time.
+const scopeKey = (journalId) => `tradecommit:context-scope:${journalId}`
+const readScope = (journalId) => {
+  try {
+    const saved = window.localStorage.getItem(scopeKey(journalId))
+    return SCOPE_OPTIONS.some((option) => option.value === saved) ? saved : 'all'
+  } catch {
+    return 'all'
+  }
+}
+const rememberScope = (journalId, scope) => {
+  try {
+    window.localStorage.setItem(scopeKey(journalId), scope)
+  } catch {
+    // storage unavailable (private mode): the choice just isn't remembered
+  }
+}
 const labelInputClass =
   'h-8 min-w-0 flex-1 rounded-md bg-transparent px-1.5 text-[13px] text-zinc-600 outline-none transition-colors placeholder:text-zinc-500 hover:bg-zinc-100/80 focus:bg-zinc-100 focus:text-zinc-800 dark:text-zinc-300 dark:hover:bg-white/[0.05] dark:focus:bg-white/[0.06] dark:focus:text-zinc-100'
 
@@ -93,14 +111,14 @@ function AttributeRow({ field, autoFocus, onChange, onRemove }) {
  * properties are also added to trades that were logged before.
  * Rendered in a portal because the page header uses backdrop-blur, which would trap `fixed` children.
  */
-function JournalContextDialog({ journalName, context, onSave, onClose }) {
+function JournalContextDialog({ journalId, journalName, context, onSave, onClose }) {
   const [strategy, setStrategy] = useState(context?.strategy ?? '')
   const [attributes, setAttributes] = useState(() => (context?.attributes ?? []).map(toFormField))
   const [typeMenuOpen, setTypeMenuOpen] = useState(false)
   const [focusKey, setFocusKey] = useState(null)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState('')
-  const [scope, setScope] = useState('all') // 'all' = also update existing trades, 'future' = new trades only
+  const [scope, setScope] = useState(() => readScope(journalId)) // 'all' = also update existing trades, 'future' = new trades only
   const dialogRef = useRef(null)
 
   // Take focus off the "Context" button that opened this dialog. Otherwise it stays focused underneath, and
@@ -142,6 +160,7 @@ function JournalContextDialog({ journalName, context, onSave, onClose }) {
     setError('')
     try {
       await onSave(toPayload(strategy, attributes), { applyToExisting: scope === 'all' })
+      rememberScope(journalId, scope)
       onClose()
     } catch (saveError) {
       setError(saveError instanceof TypeError ? "Can't reach the server. Check your connection and try again." : saveError.message || 'Could not save the context')

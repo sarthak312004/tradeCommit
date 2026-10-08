@@ -86,7 +86,7 @@ export const getAllJournals = asyncHandler(async (req, res) => {
     .sort({ updatedAt: -1 })
     .populate({
       path: "trades",
-      options: { sort: { date: -1 } },
+      options: { sort: { date: -1, createdAt: -1 } },
     });
 
   return res
@@ -118,7 +118,7 @@ export const createJournal = asyncHandler(async (req, res) => {
 
   const populatedJournal = await Journal.findById(journal._id).populate({
     path: "trades",
-    options: { sort: { date: -1 } },
+    options: { sort: { date: -1, createdAt: -1 } },
   });
 
   return res
@@ -180,7 +180,7 @@ export const updateJournal = asyncHandler(async (req, res) => {
 
   await journal.populate({
     path: "trades",
-    options: { sort: { date: -1 } },
+    options: { sort: { date: -1, createdAt: -1 } },
   });
 
   return res

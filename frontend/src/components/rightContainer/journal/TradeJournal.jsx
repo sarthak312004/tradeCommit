@@ -2,7 +2,7 @@ import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import TradeCard from './TradeCard'
 import DateRangeFilter from './DateRangeFilter'
 import { ALL_TIME, describeRangeInline, isRangeActive } from '../../../utils/dateRange'
-import { filterTradesByDate } from '../../../utils/tradeAnalytics'
+import { filterTradesByDate, sortTradesNewestFirst } from '../../../utils/tradeAnalytics'
 import { DEFAULT_CURRENCY } from '../../../utils/currencies'
 import { buildTemplateFields, hasJournalContext } from '../../../utils/customFields'
 import { SlidersIcon } from '../../../utils/Icons.jsx'
@@ -18,7 +18,7 @@ const VIEWS = [
   { id: 'analysis', label: 'Analysis' }
 ]
 
-function TradeJournal({ journal, isSidebarOpen, onAddTrade, onUpdateTrade, onDeleteTrade, onUploadTradeImage, onSaveContext }) {
+function TradeJournal({ journal, isSidebarOpen, onAddTrade, onUpdateTrade, onDeleteTrade, onUploadTradeImage, onSaveContext, onRetryTrade, onDiscardTrade }) {
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [editingTrade, setEditingTrade] = useState(null)
   const [view, setView] = useState('trades')
@@ -34,7 +34,8 @@ function TradeJournal({ journal, isSidebarOpen, onAddTrade, onUpdateTrade, onDel
   }, [])
 
   const allTrades = journal?.trades
-  const visibleTrades = useMemo(() => filterTradesByDate(allTrades ?? [], range), [allTrades, range])
+  // newest first, so a trade you just logged is the first card
+  const visibleTrades = useMemo(() => sortTradesNewestFirst(filterTradesByDate(allTrades ?? [], range)), [allTrades, range])
 
   // new trades start with the journal's default properties, plus any extras from the most recent trade
   const journalContext = journal?.context
@@ -46,6 +47,7 @@ function TradeJournal({ journal, isSidebarOpen, onAddTrade, onUpdateTrade, onDel
   }
 
   const handleOpenEditTrade = (trade) => {
+    if (trade.syncState) return // still saving, or failed: use the card's Retry / Discard instead
     setEditingTrade(trade)
     setIsFormOpen(true)
   }
@@ -55,12 +57,12 @@ function TradeJournal({ journal, isSidebarOpen, onAddTrade, onUpdateTrade, onDel
     setIsFormOpen(false)
   }
 
-  // Returns the request's promise: TradeForm shows "Saving..." until it resolves, then closes itself.
-  // If the request fails the promise rejects and the form stays open with the error, so nothing is lost.
-  const handleSubmitTrade = (trade) => (
+  // The form closes right away. The card shows up (or updates) immediately and the save finishes in the
+  // background; if it fails, the card offers Retry / Discard. `options.prepare` finishes screenshot uploads.
+  const handleSubmitTrade = (trade, options) => (
     editingTrade
-      ? onUpdateTrade(journal.id, editingTrade.id, trade)
-      : onAddTrade(journal.id, { ...trade, id: Date.now() })
+      ? onUpdateTrade(journal.id, editingTrade.id, trade, options)
+      : onAddTrade(journal.id, trade, options)
   )
 
   if (!journal) {
@@ -131,6 +133,7 @@ function TradeJournal({ journal, isSidebarOpen, onAddTrade, onUpdateTrade, onDel
       {isContextOpen && (
         <Suspense fallback={null}>
           <JournalContextDialog
+            journalId={journal.id}
             journalName={journal.name}
             context={journalContext}
             onSave={(context, options) => onSaveContext(journal.id, context, options)}
@@ -181,6 +184,8 @@ function TradeJournal({ journal, isSidebarOpen, onAddTrade, onUpdateTrade, onDel
               trade={currentTrade}
               onSelect={handleOpenEditTrade}
               onDelete={(tradeId) => onDeleteTrade(journal.id, tradeId)}
+              onRetry={onRetryTrade}
+              onDiscard={onDiscardTrade}
             />
           ))}
         </div>

@@ -2,10 +2,12 @@ import { useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import FormDrawer from '../../common/FormDrawer'
 import PropertyRow from '../../common/PropertyRow'
+import ShortcutHint from '../../common/ShortcutHint'
 import RichTextEditor from '../../common/RichTextEditor'
 import { dateInputClass, ghostFooterButton, primaryFooterButton } from '../../common/formStyles'
 import { CalendarIcon } from '../../../utils/Icons.jsx'
 import { formatLongDate, todayKey } from '../../../utils/calendar'
+import { MOD_LABEL } from '../../../hooks/useFormShortcuts'
 
 const MAX_TITLE = 120
 
@@ -94,8 +96,9 @@ function PlanForm({ plannerName, plannerType, initialEntry = null, initialDate, 
       </div>
 
       <div className="flex items-center gap-2">
+        <ShortcutHint className="mr-2 hidden md:block" />
         <button type="button" onClick={() => drawerRef.current?.close()} className={ghostFooterButton}>Cancel</button>
-        <button type="submit" disabled={isBusy} className={primaryFooterButton}>
+        <button type="submit" disabled={isBusy} title={`Save (${MOD_LABEL}+Enter)`} className={primaryFooterButton}>
           {isBusy ? (isUploading ? 'Uploading...' : 'Saving...') : initialEntry ? 'Save plan' : 'Create plan'}
         </button>
       </div>
@@ -110,6 +113,8 @@ function PlanForm({ plannerName, plannerType, initialEntry = null, initialDate, 
       onSubmit={handleSubmit(handleFormSubmit)}
       onClose={onClose}
       footer={footer}
+      canClose={!isBusy}
+      canSubmit={!isBusy}
     >
       {/* header = plan title */}
       <input

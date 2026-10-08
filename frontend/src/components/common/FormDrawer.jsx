@@ -1,6 +1,7 @@
 import { useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { CloseIcon, MaximizeIcon, MinimizeIcon } from '../../utils/Icons.jsx'
 import { iconButtonClass } from './formStyles'
+import { useFormShortcuts } from '../../hooks/useFormShortcuts'
 
 /* ---------- motion + layout constants (identical to TradeForm) ---------- */
 const EASE = 'cubic-bezier(0.32, 0.72, 0.0, 1)'
@@ -16,14 +17,18 @@ const EXPANDED_WIDTH = 1400 // clamped by max-w-full on small screens
  * play the slide-out animation; `onClose` fires once it has finished.
  *
  * `ref.current.close()` plays the slide-out animation before `onClose` fires.
+ *
+ * Esc closes the drawer and Ctrl/Cmd + Enter submits it. Pass `canClose={false}` / `canSubmit={false}`
+ * to switch those off while a request is running.
  */
-function FormDrawer({ ref, ariaTitle, breadcrumb, onSubmit, onClose, footer, children }) {
+function FormDrawer({ ref, ariaTitle, breadcrumb, onSubmit, onClose, footer, children, canClose = true, canSubmit = true }) {
   const [drawerWidth, setDrawerWidth] = useState(DEFAULT_WIDTH)
   const [expanded, setExpanded] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [visible, setVisible] = useState(false)
   const isResizingRef = useRef(false)
   const closeTimerRef = useRef(null)
+  const formRef = useRef(null)
 
   // slide-in on mount (two frames so the browser paints the starting position first)
   useEffect(() => {
@@ -78,7 +83,14 @@ function FormDrawer({ ref, ariaTitle, breadcrumb, onSubmit, onClose, footer, chi
     }, DURATION)
   }
 
+  // Take focus off whatever opened the drawer (a trade card, a calendar day) so Esc doesn't leave its focus ring lit.
+  useEffect(() => {
+    const form = formRef.current
+    if (form && !form.contains(document.activeElement)) form.focus({ preventScroll: true })
+  }, [])
+
   useImperativeHandle(ref, () => ({ close: requestClose }))
+  useFormShortcuts({ formRef, onEscape: requestClose, canClose, canSubmit })
 
   const slide = `transform ${DURATION}ms ${EASE}`
   const grow = `width ${DURATION}ms ${EASE}`
@@ -91,6 +103,8 @@ function FormDrawer({ ref, ariaTitle, breadcrumb, onSubmit, onClose, footer, chi
       aria-label={ariaTitle}
     >
       <form
+        ref={formRef}
+        tabIndex={-1}
         onSubmit={onSubmit}
         style={{
           width: `${expanded ? EXPANDED_WIDTH : drawerWidth}px`,
@@ -98,7 +112,7 @@ function FormDrawer({ ref, ariaTitle, breadcrumb, onSubmit, onClose, footer, chi
           // no width easing while the user drags the edge, otherwise it feels laggy
           transition: isDragging ? slide : `${grow}, ${slide}`
         }}
-        className="relative flex h-full max-w-full flex-col overflow-hidden rounded-xl border border-zinc-300 bg-white shadow-2xl dark:border-white/[0.14] dark:bg-panel"
+        className="relative flex h-full max-w-full flex-col overflow-hidden rounded-xl border border-zinc-300 bg-white shadow-2xl outline-none dark:border-white/[0.14] dark:bg-panel"
       >
         <div
           role="separator"

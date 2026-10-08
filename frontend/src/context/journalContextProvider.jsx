@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { journalContext } from "./Context"
 
 import { DEFAULT_CURRENCY } from "../utils/currencies"
@@ -56,6 +56,32 @@ const normalizeContext = (context) => ({
         : [],
 })
 
+const normalizeTradeForFrontend = (trade) => ({
+    id: trade.id ?? trade._id,
+    symbol: trade.symbol ?? trade.assetName ?? "",
+    assetName: trade.assetName ?? trade.symbol ?? "",
+    date: trade.date ?? "",
+    quantity: Number(trade.quantity ?? trade.qty ?? 0),
+    qty: Number(trade.quantity ?? trade.qty ?? 0),
+    direction: trade.direction ?? trade.side ?? "Long",
+    side: trade.side ?? trade.direction ?? "Long",
+    entry: trade.entry ?? trade.entryPrice ?? "",
+    entryPrice: trade.entryPrice ?? trade.entry ?? "",
+    exit: trade.exit ?? trade.exitPrice ?? "",
+    exitPrice: trade.exitPrice ?? trade.exit ?? "",
+    stopLoss: trade.stopLoss ?? "",
+    analysis: trade.analysis ?? "",
+    images: Array.isArray(trade.images) ? trade.images : [],
+    customFields: Array.isArray(trade.customFields) ? trade.customFields : [],
+    status: trade.status ?? ((trade.exit == null || trade.exit === "") ? "Open" : "Closed"),
+    pnl: trade.pnl ?? "$0",
+    createdAt: trade.createdAt ?? new Date().toISOString(),
+    updatedAt: trade.updatedAt ?? new Date().toISOString(),
+})
+
+const saveErrorText = (error, fallback) =>
+    error instanceof TypeError ? "Can't reach the server. Check your connection and retry." : error?.message || fallback
+
 const normalizeJournalForFrontend = (journal) => ({
     id: journal.id ?? journal._id,
     _id: journal._id,
@@ -67,28 +93,7 @@ const normalizeJournalForFrontend = (journal) => ({
     createdAt: journal.createdAt ?? new Date().toISOString(),
     updatedAt: journal.updatedAt ?? new Date().toISOString(),
     updated: "Just now",
-    trades: (journal.trades ?? []).map((trade) => ({
-        id: trade.id ?? trade._id,
-        symbol: trade.symbol ?? trade.assetName ?? "",
-        assetName: trade.assetName ?? trade.symbol ?? "",
-        date: trade.date ?? "",
-        quantity: Number(trade.quantity ?? trade.qty ?? 0),
-        qty: Number(trade.quantity ?? trade.qty ?? 0),
-        direction: trade.direction ?? trade.side ?? "Long",
-        side: trade.side ?? trade.direction ?? "Long",
-        entry: trade.entry ?? trade.entryPrice ?? "",
-        entryPrice: trade.entryPrice ?? trade.entry ?? "",
-        exit: trade.exit ?? trade.exitPrice ?? "",
-        exitPrice: trade.exitPrice ?? trade.exit ?? "",
-        stopLoss: trade.stopLoss ?? "",
-        analysis: trade.analysis ?? "",
-        images: Array.isArray(trade.images) ? trade.images : [],
-        customFields: Array.isArray(trade.customFields) ? trade.customFields : [],
-        status: trade.status ?? ((trade.exit == null || trade.exit === "") ? "Open" : "Closed"),
-        pnl: trade.pnl ?? "$0",
-        createdAt: trade.createdAt ?? new Date().toISOString(),
-        updatedAt: trade.updatedAt ?? new Date().toISOString(),
-    }))
+    trades: (journal.trades ?? []).map(normalizeTradeForFrontend),
 })
 
 const readJson = async (response) => {
@@ -105,6 +110,8 @@ const readJson = async (response) => {
 function JournalContextProvider({children}){
     const [journals, setJournals] = useState([])
     const [selectedJournalId, setSelectedJournalId] = useState(null)
+    // retry / discard handlers of trades whose save is running or failed, by trade id
+    const tradeSyncRef = useRef(new Map())
 
     useEffect(() => {
         let latestLoad = 0
@@ -144,6 +151,14 @@ function JournalContextProvider({children}){
             window.removeEventListener("auth-state-changed", loadJournals)
         }
     }, [])
+
+    const hasUnsavedTrades = journals.some((journal) => journal.trades.some((trade) => trade.syncState))
+    useEffect(() => {
+        if (!hasUnsavedTrades) return undefined
+        const warn = (event) => event.preventDefault()
+        window.addEventListener("beforeunload", warn)
+        return () => window.removeEventListener("beforeunload", warn)
+    }, [hasUnsavedTrades])
 
     // Optimistic: the journal shows up in the sidebar the moment the form closes, under a temporary id,
     // and is swapped for the saved one when the server answers. If the request fails it is removed again.
@@ -243,83 +258,105 @@ function JournalContextProvider({children}){
         return uploadedImage.url
     }
 
-    const addTrade = async (journalId, trade) => {
-        const response = await fetch(`${API_BASE}/${journalId}/trades`, {
-            method: "POST",
-            credentials: "include",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(normalizeTradeForBackend(trade))
-        })
-
-        const created = await readJson(response)
-        const normalizedTrade = {
-            ...created,
-            id: created.id ?? created._id,
-            symbol: created.symbol ?? created.assetName ?? "",
-            assetName: created.assetName ?? created.symbol ?? "",
-            quantity: Number(created.quantity ?? created.qty ?? 0),
-            qty: Number(created.quantity ?? created.qty ?? 0),
-            direction: created.direction ?? created.side ?? "Long",
-            side: created.side ?? created.direction ?? "Long",
-            entry: created.entry ?? created.entryPrice ?? "",
-            entryPrice: created.entryPrice ?? created.entry ?? "",
-            exit: created.exit ?? created.exitPrice ?? "",
-            exitPrice: created.exitPrice ?? created.exit ?? "",
-            stopLoss: created.stopLoss ?? "",
-            analysis: created.analysis ?? "",
-            images: Array.isArray(created.images) ? created.images : [],
-            customFields: Array.isArray(created.customFields) ? created.customFields : [],
-            status: created.status ?? ((created.exit == null || created.exit === "") ? "Open" : "Closed"),
-            pnl: created.pnl ?? "$0",
-        }
-
+    const patchTrade = (journalId, tradeId, change) => {
         setJournals((current) => current.map((journal) => (
-            journal.id === journalId
-                ? { ...journal, trades: [...journal.trades, normalizedTrade], updated: "Just now" }
-                : journal
+            journal.id !== journalId ? journal : {
+                ...journal,
+                updated: "Just now",
+                trades: journal.trades.map((trade) => trade.id !== tradeId ? trade : (typeof change === "function" ? change(trade) : { ...trade, ...change })),
+            }
         )))
-        return normalizedTrade
     }
 
-    const updateTrade = async (journalId, tradeId, updatedTrade) => {
-        const response = await fetch(`${API_BASE}/${journalId}/trades/${tradeId}`, {
-            method: "PATCH",
-            credentials: "include",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(normalizeTradeForBackend(updatedTrade))
-        })
+    // Optimistic: the card appears at the top the moment the form closes, marked "Saving...". `prepare` (from the
+    // form) finishes any screenshot uploads in the background, then the trade is sent. When the server answers,
+    // the card is swapped for the saved trade in place. If anything fails the card stays, marked with Retry / Discard.
+    const addTrade = (journalId, trade, { prepare } = {}) => {
+        const tempId = `${TEMP_PREFIX}trade-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+        const placeholder = {
+            ...normalizeTradeForFrontend({ ...trade, id: tempId, createdAt: new Date().toISOString() }),
+            syncState: "saving",
+            syncError: "",
+        }
+        setJournals((current) => current.map((journal) => (
+            journal.id === journalId ? { ...journal, trades: [placeholder, ...journal.trades], updated: "Just now" } : journal
+        )))
 
-        const updated = await readJson(response)
-        const normalizedTrade = {
-            ...updated,
-            id: updated.id ?? updated._id,
-            symbol: updated.symbol ?? updated.assetName ?? "",
-            assetName: updated.assetName ?? updated.symbol ?? "",
-            quantity: Number(updated.quantity ?? updated.qty ?? 0),
-            qty: Number(updated.quantity ?? updated.qty ?? 0),
-            direction: updated.direction ?? updated.side ?? "Long",
-            side: updated.side ?? updated.direction ?? "Long",
-            entry: updated.entry ?? updated.entryPrice ?? "",
-            entryPrice: updated.entryPrice ?? updated.entry ?? "",
-            exit: updated.exit ?? updated.exitPrice ?? "",
-            exitPrice: updated.exitPrice ?? updated.exit ?? "",
-            stopLoss: updated.stopLoss ?? "",
-            analysis: updated.analysis ?? "",
-            images: Array.isArray(updated.images) ? updated.images : [],
-            customFields: Array.isArray(updated.customFields) ? updated.customFields : [],
-            status: updated.status ?? ((updated.exit == null || updated.exit === "") ? "Open" : "Closed"),
-            pnl: updated.pnl ?? "$0",
+        const save = async () => {
+            patchTrade(journalId, tempId, { syncState: "saving", syncError: "" })
+            try {
+                const ready = prepare ? await prepare() : trade
+                const response = await fetch(`${API_BASE}/${journalId}/trades`, {
+                    method: "POST",
+                    credentials: "include",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(normalizeTradeForBackend(ready))
+                })
+                const created = normalizeTradeForFrontend(await readJson(response))
+                tradeSyncRef.current.delete(tempId)
+                patchTrade(journalId, tempId, () => created)
+                return created
+            } catch (error) {
+                patchTrade(journalId, tempId, { syncState: "failed", syncError: saveErrorText(error, "Could not save this trade.") })
+                return null
+            }
         }
 
-        setJournals((current) => current.map((journal) => (
-            journal.id === journalId
-                ? { ...journal, trades: journal.trades.map((trade) => trade.id === tradeId ? normalizedTrade : trade), updated: "Just now" }
-                : journal
-        )))
-        return normalizedTrade
+        tradeSyncRef.current.set(tempId, {
+            retry: save,
+            discard: () => setJournals((current) => current.map((journal) => (
+                journal.id === journalId ? { ...journal, trades: journal.trades.filter((item) => item.id !== tempId) } : journal
+            ))),
+        })
+        return save()
+    }
+
+    // Same idea for edits: the card shows the new values straight away; if saving fails it offers Retry,
+    // or "Undo changes" to go back to the version that was last saved.
+    const updateTrade = (journalId, tradeId, updatedTrade, { prepare } = {}) => {
+        const previous = journals.find((journal) => journal.id === journalId)?.trades.find((trade) => trade.id === tradeId)
+        patchTrade(journalId, tradeId, {
+            ...normalizeTradeForFrontend({ ...updatedTrade, id: tradeId, createdAt: previous?.createdAt }),
+            syncState: "saving",
+            syncError: "",
+        })
+
+        const save = async () => {
+            patchTrade(journalId, tradeId, { syncState: "saving", syncError: "" })
+            try {
+                const ready = prepare ? await prepare() : updatedTrade
+                const response = await fetch(`${API_BASE}/${journalId}/trades/${tradeId}`, {
+                    method: "PATCH",
+                    credentials: "include",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(normalizeTradeForBackend(ready))
+                })
+                const saved = normalizeTradeForFrontend(await readJson(response))
+                tradeSyncRef.current.delete(tradeId)
+                patchTrade(journalId, tradeId, () => saved)
+                return saved
+            } catch (error) {
+                patchTrade(journalId, tradeId, { syncState: "failed", syncError: saveErrorText(error, "Could not save your changes.") })
+                return null
+            }
+        }
+
+        tradeSyncRef.current.set(tradeId, {
+            retry: save,
+            discard: () => previous && patchTrade(journalId, tradeId, () => previous),
+        })
+        return save()
+    }
+
+    const retryTradeSave = (tradeId) => tradeSyncRef.current.get(tradeId)?.retry()
+
+    const discardTradeSave = (tradeId) => {
+        tradeSyncRef.current.get(tradeId)?.discard()
+        tradeSyncRef.current.delete(tradeId)
     }
 
     const deleteTrade = async (journalId, tradeId) => {
+        if (isPending(tradeId)) return discardTradeSave(tradeId) // never reached the server, so just drop the card
         const response = await fetch(`${API_BASE}/${journalId}/trades/${tradeId}`, {
             method: "DELETE",
             credentials: "include",
@@ -347,6 +384,8 @@ function JournalContextProvider({children}){
             uploadTradeImage,
             addTrade,
             updateTrade,
+            retryTradeSave,
+            discardTradeSave,
             deleteTrade,
         }}>
             {children}
