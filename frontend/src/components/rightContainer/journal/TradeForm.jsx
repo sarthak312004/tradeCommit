@@ -4,6 +4,9 @@ import { formatMoney, formatR, getTradePnl, getTradeR, toneOf } from '../../../u
 import { DEFAULT_CURRENCY } from '../../../utils/currencies'
 import { isLocalPreview, preloadImage, prepareImage } from '../../../utils/imageUpload'
 import { FIELD_TYPES, MAX_CUSTOM_FIELDS, makeFieldKey, toFormField } from '../../../utils/customFields'
+import { clearInterim, getCleanHtml, insertDictatedText, parseDictation, showInterimText } from '../../../utils/dictation'
+import { SHORTCUT_LABEL, useDictationShortcut, useVoiceDictation } from '../../../hooks/useVoiceDictation'
+import VoiceLevel from './VoiceLevel'
 
 const defaultValues = {
   date: new Date().toISOString().slice(0, 10),
@@ -49,7 +52,8 @@ const iconPaths = {
   check: <path d="m5 12.5 4.5 4.5L19 7.5" />,
   text: (<><path d="M4 7V4h16v3" /><path d="M9 20h6" /><path d="M12 4v16" /></>),
   checkSquare: (<><path d="m9 11 3 3L22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></>),
-  plus: <path d="M12 5v14M5 12h14" />
+  plus: <path d="M12 5v14M5 12h14" />,
+  mic: (<><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" /><path d="M19 10v2a7 7 0 0 1-14 0v-2" /><path d="M12 19v3" /></>)
 }
 
 function Icon({ name, size = 16 }) {
@@ -281,7 +285,7 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
   const runEditorCommand = (command, value = null) => {
     editorRef.current?.focus()
     document.execCommand(command, false, value)
-    setValue('analysis', editorRef.current?.innerHTML ?? '', { shouldDirty: true })
+    setValue('analysis', getCleanHtml(editorRef.current), { shouldDirty: true })
   }
 
   const handleEditorInput = () => syncFormFromEditor()
@@ -302,10 +306,45 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
     }
     currentImageUrlsRef.current = nextImageUrls
     setValue('images', imageUrls, { shouldDirty: true })
-    setValue('analysis', editor?.innerHTML ?? '', { shouldDirty: true })
+    setValue('analysis', getCleanHtml(editor), { shouldDirty: true })
   }
 
   syncFormFromEditorRef.current = syncFormFromEditor
+
+  // voice dictation: words show up grey as they are heard, then become real text at the caret of the analysis editor
+  const dictationRef = useRef(null)
+  const dictationUndoRef = useRef([]) // one undo() per inserted phrase, for "scratch that"
+
+  const handleDictatedText = (text) => {
+    const editor = editorRef.current
+    clearInterim(editor)
+    const tokens = parseDictation(text)
+
+    const inserted = insertDictatedText(editor, editorSelectionRef.current, tokens)
+    if (inserted) {
+      editorSelectionRef.current = inserted.range
+      dictationUndoRef.current.push(inserted.undo)
+      if (dictationUndoRef.current.length > 30) dictationUndoRef.current.shift()
+      syncFormFromEditor()
+    }
+
+    for (const token of tokens) {
+      if (token.command === 'undo') {
+        const undo = dictationUndoRef.current.pop()
+        if (undo) {
+          editorSelectionRef.current = undo()
+          syncFormFromEditor()
+        }
+      } else if (token.command === 'stop') {
+        dictationRef.current?.stop()
+      }
+    }
+  }
+  const handleInterimText = (text) => showInterimText(editorRef.current, editorSelectionRef.current, text)
+
+  const dictation = useVoiceDictation({ onFinalText: handleDictatedText, onInterim: handleInterimText })
+  dictationRef.current = dictation
+  useDictationShortcut(dictation.toggle, { enabled: dictation.isSupported })
 
   useEffect(() => {
     const updateImageWidth = (event) => {
@@ -485,6 +524,8 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
     setSubmitError('')
     setIsSaving(true)
     try {
+      await dictation.stopAndFlush() // don't lose the last spoken phrase
+
       // screenshots usually finish uploading while the user is still typing; wait for any that haven't
       await Promise.all([...pendingUploadsRef.current])
 
@@ -501,7 +542,7 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
         image.src = await onUploadImage(await prepareImage(file))
       }
 
-      const analysis = editor?.innerHTML ?? values.analysis ?? ''
+      const analysis = editor ? getCleanHtml(editor) : values.analysis ?? ''
       const images = [...(editor?.querySelectorAll('img') ?? [])].map((image) => image.src)
       currentImageUrlsRef.current = new Set(images)
       setValue('analysis', analysis, { shouldDirty: true })
@@ -823,7 +864,41 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
                   {pendingUploads > 0 ? `Uploading ${pendingUploads}...` : 'Add screenshot'}
                 </button>
                 <input ref={imageInputRef} type="file" accept="image/*" multiple onChange={handleImageUpload} className="hidden" />
+                <button
+                  type="button"
+                  onMouseDown={keepSelection}
+                  onClick={dictation.toggle}
+                  disabled={!dictation.isSupported}
+                  aria-pressed={dictation.isListening}
+                  title={dictation.isSupported ? `${dictation.isListening ? 'Stop dictation' : 'Dictate your analysis'} (${SHORTCUT_LABEL})` : "Voice input isn't supported in this browser. Try Chrome, Edge or Safari."}
+                  className={`flex h-7 items-center gap-1.5 rounded-md px-2 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                    dictation.isListening
+                      ? 'bg-rose-500/10 text-rose-600 hover:bg-rose-500/15 dark:text-rose-400'
+                      : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-300 dark:hover:bg-white/10 dark:hover:text-zinc-100'
+                  }`}
+                >
+                  <Icon name="mic" size={14} />
+                  {dictation.isListening ? 'Stop' : 'Dictate'}
+                  <kbd className="hidden rounded border border-current/20 px-1 text-[10px] font-normal opacity-60 md:inline">{SHORTCUT_LABEL}</kbd>
+                </button>
               </div>
+
+              {(dictation.isListening || dictation.error || dictation.notice) && (
+                <div aria-live="polite" className="flex min-h-8 items-center gap-2 border-b border-zinc-200 px-1 py-1.5 text-xs dark:border-white/[0.08]">
+                  {dictation.error ? (
+                    <span role="alert" className="text-rose-500">{dictation.error}</span>
+                  ) : dictation.isListening ? (
+                    <>
+                      <VoiceLevel levelRef={dictation.levelRef} active />
+                      <span className="truncate text-zinc-500 dark:text-zinc-400">
+                        Listening… say &quot;full stop&quot;, &quot;new line&quot;, &quot;bullet point&quot;, &quot;scratch that&quot; or &quot;stop listening&quot;
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-zinc-500 dark:text-zinc-400">{dictation.notice}</span>
+                  )}
+                </div>
+              )}
 
               <div className="relative" onMouseMove={handleEditorMouseMove} onMouseLeave={() => setHoverImage(null)}>
                 <div
