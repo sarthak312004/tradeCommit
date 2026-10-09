@@ -273,24 +273,27 @@ body {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  min-height: 44px;
-  padding: 0 17px;
-  border: 1px solid rgba(82,82,91,.42);
+  min-height: 48px;
+  padding: 0 20px;
+  border: 1px solid rgba(63,63,70,.55);
   border-radius: 999px;
-  font-size: 12px;
+  font-size: 13px;
+  line-height: 1.2;
+  text-align: center;
   font-weight: 600;
   color: #3f3f46;
   background: rgba(255,255,255,.38);
   backdrop-filter: blur(10px);
   transition: transform 180ms ease, box-shadow 180ms ease, background-color 180ms ease;
 }
+@media (min-width: 640px) { .tc-hero-button { min-height: 44px; padding: 0 17px; font-size: 12px; } }
 .tc-hero-button:hover { transform: translateY(-2px); box-shadow: 0 12px 30px -18px rgba(24,24,27,.5); background: rgba(255,255,255,.72); }
 .tc-hero-button-primary { background: #18181b; border-color: #18181b; color: white; box-shadow: 0 10px 30px -18px rgba(24,24,27,.7); }
 .tc-hero-button-primary:hover { background: #3f3f46; color: white; }
-.dark .tc-hero-button { background: rgba(255,255,255,.035); border-color: rgba(255,255,255,.11); color: #e4e4e7; }
-.dark .tc-hero-button:hover { background: rgba(255,255,255,.08); }
+.dark .tc-hero-button { background: transparent; border-color: #3f3f46; color: #e4e4e7; }
+.dark .tc-hero-button:hover { background: #27272a; border-color: #52525b; color: #fff; }
 .dark .tc-hero-button-primary { background: #f4f4f5; border-color: #f4f4f5; color: #18181b; }
-.dark .tc-hero-button-primary:hover { background: white; color: #18181b; }
+.dark .tc-hero-button-primary:hover { background: white; border-color: white; color: #18181b; }
 
 .tc-scroll-cue { display: inline-flex; align-items: center; gap: 8px; color: #a1a1aa; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; }
 .tc-scroll-dot { width: 5px; height: 5px; border-radius: 999px; background: #a1a1aa; animation: tc-scroll-pulse 1.8s ease-in-out infinite; }

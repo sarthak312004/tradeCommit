@@ -18,7 +18,7 @@ const VIEWS = [
   { id: 'analysis', label: 'Analysis' }
 ]
 
-function TradeJournal({ journal, isSidebarOpen, onAddTrade, onUpdateTrade, onDeleteTrade, onUploadTradeImage, onSaveContext, onRetryTrade, onDiscardTrade }) {
+function TradeJournal({ journal, onAddTrade, onUpdateTrade, onDeleteTrade, onUploadTradeImage, onSaveContext, onRetryTrade, onDiscardTrade }) {
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [editingTrade, setEditingTrade] = useState(null)
   const [view, setView] = useState('trades')
@@ -167,7 +167,7 @@ function TradeJournal({ journal, isSidebarOpen, onAddTrade, onUpdateTrade, onDel
           <button
             type="button"
             onClick={() => setRange(ALL_TIME)}
-            className="mt-2 cursor-pointer text-xs font-medium text-sky-600 transition hover:text-sky-500 dark:text-sky-400"
+            className="mt-2 cursor-pointer text-xs font-medium text-sky-800 underline-offset-2 transition hover:underline dark:text-sky-300"
           >
             Clear filter
           </button>
@@ -177,7 +177,8 @@ function TradeJournal({ journal, isSidebarOpen, onAddTrade, onUpdateTrade, onDel
           <TradeAnalysis trades={visibleTrades} currency={currency} rangeLabel={isFiltered ? describeRangeInline(range) : null} />
         </Suspense>
       ) : (
-        <div className={`grid gap-3 sm:grid-cols-2 ${isSidebarOpen ? 'xl:grid-cols-3' : 'lg:grid-cols-3 2xl:grid-cols-4'}`}>
+        // auto-fill grid: as many >=272px columns as fit, so it reflows with the sidebar and window by itself; rows stretch to equal height
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(17rem,1fr))] gap-4">
           {visibleTrades.map((currentTrade) => (
             <TradeCard
               key={currentTrade.id}

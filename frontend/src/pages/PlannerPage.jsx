@@ -26,6 +26,7 @@ function PlannerWorkspace({ planner }) {
         ) : (
           <PlannerCalendar
             entries={entries}
+            selectedDate={formState?.entry?.date ?? formState?.date ?? null}
             onCreateForDate={(date) => setFormState({ entry: null, date })}
             onOpenEntry={(entry) => setFormState({ entry })}
           />
@@ -62,7 +63,7 @@ function PlannerPage() {
           {!isLoading && (
             <section className="rounded-lg border border-dashed border-zinc-400/60 bg-white/50 p-10 text-center dark:border-white/[0.14] dark:bg-transparent">
               <p className="text-sm font-medium text-zinc-600 dark:text-zinc-300">This planner doesn&apos;t exist anymore.</p>
-              <Link to="/" className="mt-2 inline-block text-xs font-medium text-sky-600 transition hover:text-sky-500 dark:text-sky-400">
+              <Link to="/" className="mt-2 inline-block text-xs font-medium text-sky-800 transition hover:underline dark:text-sky-300">
                 Back to journals
               </Link>
             </section>

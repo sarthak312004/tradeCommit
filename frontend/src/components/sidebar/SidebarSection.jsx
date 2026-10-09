@@ -48,11 +48,11 @@ function SidebarSection({
   return (
     <section aria-label={title} className={`flex min-w-0 shrink flex-col ${isSidebarOpen ? "min-h-[88px]" : "min-h-0"}`}>
       {/* Header: label + add */}
-      <div className="relative h-8 shrink-0">
+      <div className="relative h-9 shrink-0">
         <div
-          className={`absolute inset-y-0 left-0 flex w-[260px] items-center justify-between pl-4 pr-2 ${FADE_BASE} ${fade(isSidebarOpen)}`}
+          className={`absolute inset-y-0 left-0 flex w-[260px] items-center justify-between pl-4 pr-2 pt-1 ${FADE_BASE} ${fade(isSidebarOpen)}`}
         >
-          <span className="text-[11px] font-medium uppercase tracking-wider text-zinc-600 dark:text-zinc-400">
+          <span className="text-[11px] font-semibold uppercase leading-none tracking-wider text-zinc-700 dark:text-zinc-400">
             {title}
           </span>
           <button
@@ -61,7 +61,7 @@ function SidebarSection({
             aria-expanded={showForm}
             title={addLabel}
             aria-label={addLabel}
-            className={`flex h-6 w-6 items-center justify-center rounded-md ${ghostBtn}`}
+            className={`flex h-7 w-7 items-center justify-center rounded-md ${ghostBtn}`}
           >
             <PlusIcon className="h-4 w-4" />
           </button>
@@ -74,7 +74,7 @@ function SidebarSection({
             title={title}
             role="img"
             aria-label={title}
-            className="flex h-8 w-8 items-center justify-center text-zinc-500 dark:text-zinc-400"
+            className="flex h-8 w-8 items-center justify-center pt-1 text-zinc-700 dark:text-zinc-400"
           >
             <RailIcon className="h-4 w-4" />
           </span>
@@ -111,8 +111,8 @@ function SidebarSection({
               aria-current={item.isSelected ? "true" : undefined}
               className={`flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md text-[11px] font-medium transition-colors ${
                 item.isSelected
-                  ? "bg-black/[0.07] text-zinc-900 dark:bg-white/[0.1] dark:text-zinc-50"
-                  : "text-zinc-600 hover:bg-black/[0.05] dark:text-zinc-300 dark:hover:bg-white/[0.07]"
+                  ? "bg-white font-semibold text-zinc-900 shadow-card ring-1 ring-zinc-900/20 dark:bg-white/[0.12] dark:text-zinc-50 dark:shadow-none dark:ring-white/[0.16]"
+                  : "text-zinc-700 hover:bg-black/[0.05] dark:text-zinc-300 dark:hover:bg-white/[0.07]"
               }`}
             >
               {item.label.slice(0, 2).toUpperCase()}
@@ -123,7 +123,7 @@ function SidebarSection({
             onClick={handleAddClick}
             title={addLabel}
             aria-label={addLabel}
-            className={`flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md border border-dashed border-zinc-400/70 text-zinc-500 transition-colors hover:border-zinc-500 hover:bg-black/[0.05] hover:text-zinc-900 dark:border-white/[0.18] dark:text-zinc-400 dark:hover:bg-white/[0.07] dark:hover:text-zinc-100 ${focusRing}`}
+            className={`flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md border border-dashed border-zinc-500 text-zinc-700 transition-colors hover:border-zinc-700 hover:bg-black/[0.05] hover:text-zinc-900 dark:border-white/[0.24] dark:text-zinc-400 dark:hover:bg-white/[0.07] dark:hover:text-zinc-100 ${focusRing}`}
           >
             <PlusIcon className="h-3.5 w-3.5" />
           </button>

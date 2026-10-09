@@ -10,7 +10,9 @@ import { CheckIcon, CloseIcon, PencilIcon, TrashIcon } from "../../utils/Icons.j
 const rowBase = "group relative flex w-full items-center rounded-md transition-colors"
 
 const rowStates = {
-	selected: "bg-white shadow-card ring-1 ring-zinc-900/[0.06] dark:bg-white/[0.08] dark:shadow-none dark:ring-0",
+	// white tile + 3px accent bar: 7.7:1 text and a >=3:1 edge against the sidebar in both themes
+	selected:
+		"bg-white shadow-card ring-1 ring-zinc-900/20 before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded-full before:bg-sky-700 dark:bg-white/[0.12] dark:shadow-none dark:ring-white/[0.16] dark:before:bg-sky-400",
 	editing: "bg-black/[0.06] dark:bg-white/[0.05]",
 	idle: "hover:bg-black/[0.06] dark:hover:bg-white/[0.05]",
 }
@@ -22,17 +24,17 @@ const getRowClasses = ({ isEditing, isSelected }) => {
 }
 
 const focusRing =
-	"focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400/60 dark:focus-visible:ring-zinc-500"
+	"focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-600 dark:focus-visible:ring-sky-400"
 
 const iconButton = `flex h-6 w-6 shrink-0 items-center justify-center rounded transition-colors ${focusRing}`
 
 const iconTone = {
 	neutral:
-		"text-zinc-500 hover:bg-zinc-900/[0.06] hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-zinc-200",
+		"text-zinc-700 hover:bg-zinc-900/[0.06] hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-zinc-200",
 	confirm:
 		"text-zinc-600 hover:bg-zinc-900/[0.06] hover:text-zinc-900 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-zinc-600 dark:text-zinc-300 dark:hover:bg-white/10 dark:hover:text-zinc-50 dark:disabled:hover:text-zinc-300",
 	danger:
-		"text-zinc-500 hover:bg-rose-500/10 hover:text-rose-600 dark:text-zinc-400 dark:hover:text-rose-400",
+		"text-zinc-700 hover:bg-rose-500/10 hover:text-rose-700 dark:text-zinc-400 dark:hover:text-rose-400",
 }
 
 // ---- Component --------------------------------------------------------------
@@ -111,7 +113,7 @@ function SidebarItemCard({ id, label, noun, Icon, badge, isSelected, onSelect, o
 		<Icon
 			strokeWidth={1.5}
 			className={`h-[15px] w-[15px] shrink-0 transition-colors ${
-				isSelected ? "text-zinc-700 dark:text-zinc-300" : "text-zinc-600 dark:text-zinc-400"
+				isSelected ? "text-zinc-900 dark:text-zinc-50" : "text-zinc-700 dark:text-zinc-400"
 			}`}
 		/>
 	)
@@ -167,7 +169,7 @@ function SidebarItemCard({ id, label, noun, Icon, badge, isSelected, onSelect, o
 						{leadingIcon}
 						<span
 							className={`truncate text-[13px] leading-5 ${
-								isSelected ? "text-zinc-900 dark:text-zinc-50" : "text-zinc-700 dark:text-zinc-300"
+								isSelected ? "font-semibold text-zinc-900 dark:text-zinc-50" : "font-normal text-zinc-800 dark:text-zinc-300"
 							}`}
 						>
 							{label}

@@ -10,10 +10,11 @@ export const fade = (visible) =>
     ? "visible translate-x-0 opacity-100 delay-100"
     : "invisible -translate-x-2 opacity-0"
 
+// solid, >= 3:1 against both sidebar surfaces (zinc-400/60 was ~1.5:1)
 export const focusRing =
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400/60"
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-600 dark:focus-visible:ring-sky-400"
 
-export const ghostBtn = `cursor-pointer text-zinc-600 transition-colors hover:bg-black/[0.07] hover:text-zinc-900 dark:text-zinc-300 dark:hover:bg-white/[0.07] dark:hover:text-zinc-100 ${focusRing}`
+export const ghostBtn = `cursor-pointer text-zinc-700 transition-colors hover:bg-black/[0.07] hover:text-zinc-900 dark:text-zinc-300 dark:hover:bg-white/[0.07] dark:hover:text-zinc-100 ${focusRing}`
 
 export const fieldCls =
   "w-full rounded-md border border-zinc-300 bg-white px-2.5 py-1.5 text-[13px] text-zinc-900 outline-none transition placeholder:text-zinc-500 focus:border-zinc-400 focus:ring-2 focus:ring-zinc-400/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-zinc-500"

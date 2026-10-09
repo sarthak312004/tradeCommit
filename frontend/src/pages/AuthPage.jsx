@@ -56,9 +56,11 @@ function DotGrid() {
   return <div aria-hidden="true" className="tc-dot-grid absolute inset-0 opacity-50 dark:opacity-35" />
 }
 
-const previewCardBase = "rounded-2xl border border-zinc-200/80 bg-white dark:border-white/[0.06] dark:bg-[#222]"
+// min-w-0 on every card: grid items default to min-width:auto, which is what let long text push past the frame
+const previewCardBase = "min-w-0 rounded-2xl border border-zinc-200/80 bg-white dark:border-white/[0.06] dark:bg-[#222]"
 const previewCard = `${previewCardBase} p-3.5 sm:p-4`
-const previewLabel = "text-[10px] uppercase tracking-[0.16em] text-zinc-400"
+// zinc-600 on the cream/white card = 7.2:1 (was zinc-400, 2.4:1); zinc-400 on the dark card = 6.2:1
+const previewLabel = "text-[10px] font-medium uppercase leading-4 tracking-[0.16em] text-zinc-600 dark:text-zinc-400"
 
 function ProductPreview() {
   return (
@@ -72,38 +74,40 @@ function ProductPreview() {
           <div className="flex items-center gap-1.5 sm:gap-2" aria-hidden="true">
             {[0, 1, 2].map((dot) => <span key={dot} className="h-2.5 w-2.5 rounded-full bg-zinc-300 dark:bg-zinc-600" />)}
           </div>
-          <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-400">sample preview</span>
+          <span className="text-[10px] font-medium uppercase leading-4 tracking-[0.18em] text-zinc-600 dark:text-zinc-400">sample preview</span>
         </div>
 
-        <div className="grid gap-2.5 sm:gap-3 md:grid-cols-[.8fr_1.2fr]">
-          <div className="grid grid-cols-2 gap-2.5 sm:gap-3 md:grid-cols-1 md:content-start">
-            <div className={previewCard}>
-              <div className="flex items-center justify-between gap-2">
+        <div className="grid gap-2.5 sm:gap-3 md:grid-cols-[minmax(0,.8fr)_minmax(0,1.2fr)]">
+          <div className="grid min-w-0 grid-cols-1 gap-2.5 min-[520px]:grid-cols-2 sm:gap-3 md:grid-cols-1 md:content-start">
+            <div className={`${previewCard} flex flex-col`}>
+              {/* wraps instead of overflowing: "on plan" drops under the label when the card is narrow */}
+              <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5">
                 <span className={previewLabel}>today&apos;s focus</span>
-                <span className="text-[10px] text-emerald-600 dark:text-emerald-400">on plan</span>
+                <span className="text-[10px] font-medium leading-4 text-emerald-700 dark:text-emerald-400">on plan</span>
               </div>
-              <p className="mt-2.5 text-[13px] font-medium text-zinc-800 sm:mt-3 sm:text-sm dark:text-zinc-100">Wait for confirmation</p>
-              <div className="mt-3 h-1 rounded-full bg-zinc-100 sm:mt-4 dark:bg-white/[0.07]"><div className="h-1 w-[72%] rounded-full bg-zinc-500 dark:bg-zinc-400" /></div>
+              {/* leading-snug + break-words: a wrapped second line gets its own room, and the bar below is pushed down by margin, not overlapped */}
+              <p className="mt-2.5 break-words text-[13px] font-medium leading-snug text-zinc-900 sm:mt-3 sm:text-sm dark:text-zinc-100">Wait for confirmation</p>
+              <div aria-hidden="true" className="mt-4 h-1.5 shrink-0 overflow-hidden rounded-full bg-zinc-200 sm:mt-5 dark:bg-white/[0.1]"><div className="h-full w-[72%] rounded-full bg-zinc-600 dark:bg-zinc-300" /></div>
             </div>
             <div className={previewCard}>
               <span className={previewLabel}>journal streak</span>
-              <p className="mt-1.5 text-xl font-semibold tracking-tight sm:mt-2 sm:text-2xl">12 days</p>
-              <p className="mt-1 text-[11px] text-zinc-500">Showing up compounds.</p>
+              <p className="mt-1.5 text-xl font-semibold leading-tight tracking-tight sm:mt-2 sm:text-2xl">12 days</p>
+              <p className="mt-1 text-[11px] leading-4 text-zinc-600 dark:text-zinc-400">Showing up compounds.</p>
             </div>
           </div>
 
           <div className={`${previewCardBase} p-3.5 sm:p-5`}>
-            <div className="flex items-start justify-between gap-3">
-              <div>
+            <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
+              <div className="min-w-0">
                 <p className={previewLabel}>weekly review</p>
                 <p className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">+4.8R</p>
               </div>
-              <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-medium text-emerald-700 dark:border-emerald-400/15 dark:bg-emerald-400/10 dark:text-emerald-300">+12% vs last week</span>
+              <span className="shrink-0 whitespace-nowrap rounded-full border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-[10px] font-medium leading-4 text-emerald-800 dark:border-emerald-400/15 dark:bg-emerald-400/10 dark:text-emerald-300">+12% vs last week</span>
             </div>
             <div className="tc-chart mt-6 flex h-[104px] items-end gap-1.5 px-0.5 sm:mt-8 sm:h-[130px] sm:gap-2 sm:px-1">
               {CHART_BARS.map((height, index) => <span key={index} style={{ height }} className="w-full max-h-full rounded-t-md bg-zinc-200/90 dark:bg-white/[0.09]" />)}
             </div>
-            <div className="mt-2 grid grid-cols-5 text-center text-[10px] text-zinc-400">{WEEKDAYS.map((day) => <span key={day}>{day}</span>)}</div>
+            <div className="mt-2 grid grid-cols-5 text-center text-[10px] leading-4 text-zinc-600 dark:text-zinc-400">{WEEKDAYS.map((day) => <span key={day}>{day}</span>)}</div>
           </div>
         </div>
       </div>
@@ -328,16 +332,16 @@ export default function AuthPage() {
           <DotGrid /><div className="tc-orb tc-orb-one" /><div className="tc-orb tc-orb-two" />
           <div className="relative mx-auto w-full max-w-7xl">
             <div className="mx-auto max-w-4xl text-center">
-              <div className="tc-reveal mb-5 inline-flex max-w-full items-center gap-2 rounded-full border border-zinc-300/70 bg-white/50 px-3 py-1.5 text-[10px] font-medium uppercase tracking-[0.16em] text-zinc-500 shadow-sm backdrop-blur sm:mb-6 sm:text-[11px] sm:tracking-[0.18em] dark:border-white/[0.08] dark:bg-white/[0.035] dark:text-zinc-400">
-                <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-emerald-500" />A calmer trading workspace
+              <div className="tc-reveal mb-5 inline-flex max-w-full items-center gap-2 rounded-full border border-zinc-300/70 bg-white/50 px-3 py-1.5 text-[10px] font-semibold uppercase leading-4 tracking-[0.16em] text-zinc-700 shadow-sm backdrop-blur sm:mb-6 sm:text-[11px] sm:tracking-[0.18em] dark:border-white/[0.14] dark:bg-white/[0.04] dark:text-zinc-300">
+                <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-emerald-600 dark:bg-emerald-400" />A calmer trading workspace
               </div>
               <h1 className={`${SERIF} tc-reveal tc-delay-1 text-balance text-[clamp(40px,8.5vw,82px)] font-medium leading-[.96] tracking-[-.05em] text-zinc-950 sm:leading-[.92] sm:tracking-[-.055em] dark:text-zinc-50`}>
-                Trade with clarity.<br /><span className="text-zinc-400 dark:text-zinc-600">Review with intention.</span>
+                Trade with clarity.<br /><span className="text-zinc-600 dark:text-zinc-400">Review with intention.</span>
               </h1>
               <p className="tc-reveal tc-delay-2 mx-auto mt-5 max-w-[590px] text-[15px] leading-6 text-zinc-600 sm:mt-6 sm:text-[17px] sm:leading-7 dark:text-zinc-400">
                 Journal trades, plan setups, and understand your decisions in one quiet workspace designed to help you trade your process — not your emotions.
               </p>
-              <div className="tc-reveal tc-delay-2 mx-auto mt-7 flex w-full max-w-sm flex-col items-center justify-center gap-3 sm:max-w-none sm:flex-row">
+              <div className="tc-reveal tc-delay-2 mx-auto mt-8 flex w-full max-w-sm flex-col items-stretch justify-center gap-4 sm:mt-7 sm:max-w-none sm:flex-row sm:items-center sm:gap-3">
                 <button type="button" onClick={() => openAuth("register")} className="tc-hero-button tc-hero-button-primary">Create your workspace <Icon name="arrow" size={16} /></button>
                 <a href="#how" onClick={scrollToId("how")} className="tc-hero-button">See how it works</a>
               </div>

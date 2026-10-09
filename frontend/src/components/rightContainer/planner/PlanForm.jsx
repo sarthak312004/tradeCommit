@@ -76,7 +76,7 @@ function PlanForm({ plannerName, plannerType, initialEntry = null, initialDate, 
     <>
       <div className="flex items-center gap-2">
         {onDelete && !isConfirmingDelete && (
-          <button type="button" onClick={() => setIsConfirmingDelete(true)} disabled={isBusy} className="h-9 rounded-md px-3 text-[13px] font-medium text-rose-500 transition-colors hover:bg-rose-500/10 disabled:opacity-50">
+          <button type="button" onClick={() => setIsConfirmingDelete(true)} disabled={isBusy} className="h-9 rounded-lg px-3 text-[13px] font-medium text-rose-700 transition-colors hover:bg-rose-500/10 disabled:opacity-50 dark:text-rose-300">
             Delete
           </button>
         )}
@@ -92,7 +92,7 @@ function PlanForm({ plannerName, plannerType, initialEntry = null, initialDate, 
             </button>
           </>
         )}
-        {submitError && <p role="alert" className="text-xs text-rose-500">{submitError}</p>}
+        {submitError && <p role="alert" className="text-xs font-medium text-rose-700 dark:text-rose-300">{submitError}</p>}
       </div>
 
       <div className="flex items-center gap-2">

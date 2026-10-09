@@ -1,12 +1,10 @@
 import { useContext } from 'react'
-import { useOutletContext } from 'react-router'
 import { journalContext } from '../context/Context'
 import TopBar from '../components/rightContainer/TopBar.jsx'
 import TradeJournal from '../components/rightContainer/journal/TradeJournal.jsx'
 
 function MainJournal() {
   const { selectedJournal, addTrade, updateTrade, deleteTrade, uploadTradeImage, updateJournalContext, retryTradeSave, discardTradeSave } = useContext(journalContext)
-  const { isSidebarOpen } = useOutletContext()
 
   return (
     <>
@@ -15,7 +13,6 @@ function MainJournal() {
         <TradeJournal
           key={selectedJournal?.id ?? 'empty-journal'}
           journal={selectedJournal}
-          isSidebarOpen={isSidebarOpen}
           onAddTrade={addTrade}
           onUpdateTrade={updateTrade}
           onDeleteTrade={deleteTrade}

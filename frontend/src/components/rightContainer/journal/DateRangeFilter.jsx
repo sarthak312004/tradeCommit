@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { controlActive, controlNeutral } from '../../common/controlStyles'
 import { ALL_TIME, RANGE_PRESETS, describeRange, isRangeActive, rangeFromPreset } from '../../../utils/dateRange'
 
 const dateInputClass =
@@ -50,11 +51,7 @@ function DateRangeFilter({ range, onChange }) {
         onClick={() => setIsOpen((value) => !value)}
         aria-haspopup="dialog"
         aria-expanded={isOpen}
-        className={`flex h-8 cursor-pointer items-center gap-2 rounded-lg border px-2.5 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/40 ${
-          active
-            ? 'border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300'
-            : 'border-zinc-300 bg-white text-zinc-700 shadow-sm hover:bg-zinc-50 dark:border-white/[0.14] dark:bg-transparent dark:text-zinc-300 dark:shadow-none dark:hover:bg-white/[0.06]'
-        }`}
+        className={active ? controlActive : controlNeutral}
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M8 2v4" />
@@ -84,8 +81,8 @@ function DateRangeFilter({ range, onChange }) {
                     onClick={() => selectPreset(preset.id)}
                     className={`flex w-full cursor-pointer items-center justify-between rounded-md px-2.5 py-1.5 text-left text-[13px] transition-colors ${
                       selected
-                        ? 'bg-zinc-100 font-medium text-zinc-900 dark:bg-white/10 dark:text-zinc-100'
-                        : 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-white/[0.06]'
+                        ? 'bg-zinc-100 font-semibold text-zinc-900 dark:bg-white/10 dark:text-zinc-50'
+                        : 'text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-white/[0.06]'
                     }`}
                   >
                     {preset.label}

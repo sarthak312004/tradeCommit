@@ -162,30 +162,31 @@ function Sidebar({ isSidebarOpen, setIsSidebarOpen }) {
       </div>
 
       {/* ------------------------------ Footer ------------------------------ */}
-      <div className="relative h-[116px] shrink-0 border-t border-zinc-300 dark:border-white/[0.10]">
+      <div className="relative h-[132px] shrink-0 border-t border-zinc-300 dark:border-white/[0.10]">
         {/* Expanded */}
         <div
           className={`absolute inset-y-0 left-0 flex w-[260px] flex-col justify-center gap-1 px-2 ${FADE_BASE} ${fade(isSidebarOpen)}`}
         >
-          <div className="flex items-center justify-between pl-2">
-            <span className="text-xs text-zinc-600 dark:text-zinc-300">Theme</span>
+          {/* all three rows are h-8 with the same px-2 inset, so label, icons and text share two left edges */}
+          <div className="flex h-8 items-center justify-between px-2">
+            <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">Theme</span>
             <ThemeSegmented theme={theme} setTheme={setTheme} />
           </div>
           <button
             type="button"
             onClick={() => setIsFeedbackOpen(true)}
-            className={`flex h-8 w-full items-center gap-2 rounded-md px-2 text-[13px] ${ghostBtn}`}
+            className={`flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-[13px] ${ghostBtn}`}
           >
-            <MessageSquareIcon className="h-4 w-4" />
-            Feedback &amp; bugs
+            <MessageSquareIcon className="h-4 w-4 shrink-0" />
+            <span className="truncate">Feedback &amp; bugs</span>
           </button>
           <button
             type="button"
             onClick={() => setIsLogoutConfirmOpen(true)}
-            className={`flex h-8 w-full items-center gap-2 rounded-md px-2 text-[13px] ${ghostBtn}`}
+            className={`flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-[13px] ${ghostBtn}`}
           >
-            <LogoutIcon className="h-4 w-4" />
-            Log out
+            <LogoutIcon className="h-4 w-4 shrink-0" />
+            <span className="truncate">Log out</span>
           </button>
         </div>
 

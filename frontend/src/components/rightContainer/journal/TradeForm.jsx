@@ -1,3 +1,6 @@
+import { badgeBase, badgeTone, dotTone } from '../../common/controlStyles'
+import { dateInputClass, editorClass, footerClass, ghostFooterButton, iconButtonClass, inputClass, numberInputClass, primaryFooterButton, toolbarClass, toolbarDivider, toolbarIconButton, toolbarSelect, toolbarTextButton } from '../../common/formStyles'
+import { useActiveFormats } from '../../../hooks/useActiveFormats'
 import { useEffect, useRef, useState } from 'react'
 import { useFieldArray, useForm } from 'react-hook-form'
 import { formatMoney, formatR, getTradePnl, getTradeR, toneOf } from '../../../utils/tradeAnalytics'
@@ -66,36 +69,14 @@ function Icon({ name, size = 16 }) {
   )
 }
 
-/* ---------- shared styles ---------- */
-const iconButtonClass = 'flex h-7 w-7 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-zinc-200'
-
-const inputClass = 'h-8 w-full rounded-md bg-transparent px-2 text-sm text-zinc-800 outline-none transition-colors placeholder:text-zinc-500 hover:bg-zinc-100/80 focus:bg-zinc-100 focus:ring-1 focus:ring-zinc-300 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:hover:bg-white/[0.05] dark:focus:bg-white/[0.06] dark:focus:ring-white/15'
-const numberInputClass = `${inputClass} [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`
-const dateInputClass = `${inputClass} [color-scheme:light] dark:[color-scheme:dark]`
-
-const toolbarButtonClass = 'flex h-7 w-7 items-center justify-center rounded-md text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-300 dark:hover:bg-white/10 dark:hover:text-zinc-100'
-
-const editorClass = [
-  'min-h-[420px] py-4 text-[15px] leading-7 text-zinc-800 outline-none dark:text-zinc-200',
-  'empty:before:pointer-events-none empty:before:text-zinc-400 empty:before:content-[attr(data-placeholder)] dark:empty:before:text-zinc-600',
-  '[&_h2]:mb-1 [&_h2]:mt-6 [&_h2]:text-2xl [&_h2]:font-semibold [&_h2]:leading-9',
-  '[&_h3]:mb-1 [&_h3]:mt-4 [&_h3]:text-xl [&_h3]:font-semibold [&_h3]:leading-8',
-  '[&_h4]:mt-3 [&_h4]:text-base [&_h4]:font-semibold',
-  '[&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6',
-  '[&_blockquote]:my-2 [&_blockquote]:border-l-[3px] [&_blockquote]:border-zinc-300 [&_blockquote]:pl-4 dark:[&_blockquote]:border-zinc-600',
-  '[&_img]:my-4 [&_img]:h-auto [&_img]:max-w-full [&_img]:rounded-lg [&_img]:border [&_img]:border-zinc-200 dark:[&_img]:border-white/10'
-].join(' ')
+/* ---------- shared styles: see common/formStyles.js and common/controlStyles.js ---------- */
 
 const directionOptions = [
-  { value: 'Long', icon: 'trendUp', tone: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300' },
-  { value: 'Short', icon: 'trendDown', tone: 'bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300' }
+  { value: 'Long', icon: 'trendUp', tone: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-400/15 dark:text-emerald-300' },
+  { value: 'Short', icon: 'trendDown', tone: 'bg-rose-100 text-rose-800 dark:bg-rose-400/15 dark:text-rose-300' }
 ]
 
-const pnlTextClass = {
-  positive: 'text-emerald-600 dark:text-emerald-400',
-  negative: 'text-rose-500 dark:text-rose-400',
-  neutral: 'text-zinc-600 dark:text-zinc-300'
-}
+// P&L badge colours come from badgeTone, so every status chip in the app uses the same AA-checked pairs
 
 // keep the text selection inside the editor when a toolbar button is pressed
 const keepSelection = (event) => event.preventDefault()
@@ -106,24 +87,24 @@ function PropertyRow({ icon, label, hint, htmlFor, error, children }) {
   const labelProps = htmlFor ? { htmlFor } : {}
 
   return (
-    <div className="flex items-start gap-2 py-0.5">
-      <Label {...labelProps} className="flex h-8 w-32 shrink-0 items-center gap-2 text-[13px] text-zinc-600 dark:text-zinc-300">
-        <span className="text-zinc-500 dark:text-zinc-400"><Icon name={icon} size={15} /></span>
+    <div className="flex items-start gap-3 py-0.5">
+      <Label {...labelProps} className="flex h-8 w-36 shrink-0 items-center gap-2 text-[13px] text-zinc-600 dark:text-zinc-400">
+        <span className="shrink-0 text-zinc-600 dark:text-zinc-400"><Icon name={icon} size={15} /></span>
         <span className="truncate">{label}</span>
-        {hint && <span className="text-[11px] text-zinc-400/80 dark:text-zinc-500">{hint}</span>}
+        {hint && <span className="text-[11px] text-zinc-500 dark:text-zinc-400">({hint})</span>}
       </Label>
       <div className="min-w-0 flex-1">
         {children}
-        {error && <p className="mt-0.5 px-1 text-[11px] text-rose-500">{error}</p>}
+        {error && <p role="alert" className="mt-0.5 px-2 text-[11px] font-medium text-rose-700 dark:text-rose-300">{error}</p>}
       </div>
     </div>
   )
 }
 
-function ToolbarButton({ title, icon, onClick }) {
+function ToolbarButton({ title, icon, onClick, active }) {
   return (
-    <button type="button" title={title} aria-label={title} onMouseDown={keepSelection} onClick={onClick} className={toolbarButtonClass}>
-      <Icon name={icon} size={15} />
+    <button type="button" title={title} aria-label={title} aria-pressed={active === undefined ? undefined : active} onMouseDown={keepSelection} onClick={onClick} className={toolbarIconButton(active)}>
+      <Icon name={icon} size={16} />
     </button>
   )
 }
@@ -142,6 +123,7 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
   const [addMenuOpen, setAddMenuOpen] = useState(false)
   const [reduceMotion] = useState(() => respectReducedMotion && typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)
   const editorRef = useRef(null)
+  const formats = useActiveFormats(editorRef)
   const removedImagesRef = useRef(new Set())
   const pendingUploadsRef = useRef(new Set()) // promises of in-flight screenshot uploads
   const isSavingRef = useRef(false) // blocks a second submit (e.g. Enter key) while saving
@@ -685,7 +667,7 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
             >
               <Icon name={expanded ? 'minimize' : 'maximize'} size={15} />
             </button>
-            <p className="truncate pl-1 text-xs text-zinc-500 dark:text-zinc-400">
+            <p className="truncate pl-1 text-xs text-zinc-600 dark:text-zinc-400">
               {journalName}
               <span className="mx-1.5 opacity-60">/</span>
               {initialTrade ? 'Trade review' : 'New trade'}
@@ -705,23 +687,23 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
               aria-label="Asset name"
               autoComplete="off"
               placeholder="e.g. BTCUSD"
-              className="w-full bg-transparent text-3xl font-bold uppercase tracking-tight text-zinc-900 outline-none placeholder:font-bold placeholder:normal-case placeholder:text-zinc-300 sm:text-4xl sm:leading-tight dark:text-zinc-50 dark:placeholder:text-zinc-700"
+              className="w-full rounded-md bg-transparent text-3xl font-bold uppercase leading-tight tracking-tight text-zinc-900 outline-none placeholder:font-bold placeholder:normal-case placeholder:text-zinc-500 focus-visible:ring-2 focus-visible:ring-sky-600 sm:text-4xl sm:leading-tight dark:text-zinc-50 dark:placeholder:text-zinc-400 dark:focus-visible:ring-sky-400"
             />
             {errors.symbol && <p className="mt-1 text-xs text-rose-500">{errors.symbol.message}</p>}
 
-            {/* live status */}
-            <div className="mt-3 flex flex-wrap items-center gap-1.5 text-xs" aria-live="polite">
-              <span className="inline-flex items-center gap-1.5 rounded-md bg-zinc-100 px-2 py-1 font-medium text-zinc-600 dark:bg-white/[0.06] dark:text-zinc-300">
-                <span className={`h-1.5 w-1.5 rounded-full ${isDraftClosed ? 'bg-zinc-400' : 'bg-amber-400'}`} />
+            {/* live status: Closed / P&L / R share one badge shape, h-6 with gap-2, and wrap as whole chips */}
+            <div className="mt-3 flex flex-wrap items-center gap-2" aria-live="polite">
+              <span className={`${badgeBase} ${isDraftClosed ? badgeTone.neutral : badgeTone.open}`}>
+                <span aria-hidden="true" className={`h-1.5 w-1.5 shrink-0 rounded-full ${isDraftClosed ? dotTone.neutral : dotTone.open}`} />
                 {isDraftClosed ? 'Closed' : 'Open'}
               </span>
               {draftPnl !== null && (
-                <span className={`rounded-md bg-zinc-100 px-2 py-1 font-semibold tabular-nums dark:bg-white/[0.06] ${pnlTextClass[toneOf(draftPnl)]}`}>
+                <span className={`${badgeBase} font-semibold ${badgeTone[toneOf(draftPnl)] ?? badgeTone.neutral}`}>
                   {formatMoney(draftPnl, { signed: true, currency })}
                 </span>
               )}
               {draftR !== null && (
-                <span className="rounded-md bg-zinc-100 px-2 py-1 font-semibold tabular-nums text-zinc-600 dark:bg-white/[0.06] dark:text-zinc-300">
+                <span className={`${badgeBase} font-semibold ${badgeTone.neutral}`}>
                   {formatR(draftR)}
                 </span>
               )}
@@ -729,7 +711,7 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
 
             {/* properties: two columns when the drawer is wide enough */}
             <div className="@container mt-6">
-              <div className="grid gap-x-10 @2xl:grid-cols-2">
+              <div className="grid gap-x-12 gap-y-1 @2xl:grid-cols-2">
                 <PropertyRow icon="calendar" label="Date" htmlFor="trade-date">
                   <input id="trade-date" type="date" {...register('date')} className={dateInputClass} />
                 </PropertyRow>
@@ -747,7 +729,7 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
                           className={`inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[13px] font-medium transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-zinc-400/50 ${
                             direction === value
                               ? tone
-                              : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-600 dark:text-zinc-400 dark:hover:bg-white/[0.06] dark:hover:text-zinc-300'
+                              : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-white/[0.06] dark:hover:text-zinc-100'
                           }`}
                         >
                           <Icon name={icon} size={14} />
@@ -883,38 +865,40 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
 
             {/* analysis */}
             <section className="group">
-              <div className="mb-2 flex items-baseline justify-between">
-                <span id="trade-analysis-label" className="text-[13px] font-medium text-zinc-600 dark:text-zinc-300">Trade analysis</span>
-                <span className="hidden text-[11px] text-zinc-500 sm:block dark:text-zinc-500">Tip: paste screenshots straight in with Ctrl/⌘ + V</span>
+              <div className="mb-2 flex items-baseline justify-between gap-3">
+                <span id="trade-analysis-label" className="text-[13px] font-semibold text-zinc-800 dark:text-zinc-200">Trade analysis</span>
+                <span className="hidden text-[11px] text-zinc-600 sm:block dark:text-zinc-400">Tip: paste screenshots straight in with Ctrl/⌘ + V</span>
               </div>
 
-              <div className="sticky top-0 z-10 flex flex-wrap items-center gap-0.5 border-b border-zinc-300 bg-white py-1.5 opacity-70 transition-opacity focus-within:opacity-100 group-focus-within:opacity-100 hover:opacity-100 dark:border-white/[0.12] dark:bg-panel">
-                <ToolbarButton title="Bold" icon="bold" onClick={() => runEditorCommand('bold')} />
-                <ToolbarButton title="Italic" icon="italic" onClick={() => runEditorCommand('italic')} />
+              {/* toolbar: every control is h-8, 16px icons, 4px gap; Bold/Italic/lists show a real pressed state */}
+              <div role="toolbar" aria-label="Formatting" className={toolbarClass}>
+                <ToolbarButton title="Bold" icon="bold" active={formats.bold} onClick={() => runEditorCommand('bold')} />
+                <ToolbarButton title="Italic" icon="italic" active={formats.italic} onClick={() => runEditorCommand('italic')} />
                 <select
                   title="Text style"
                   aria-label="Text style"
-                  defaultValue="p"
+                  value={['h2', 'h3', 'h4'].includes(formats.block) ? formats.block : 'p'}
                   onChange={(event) => runEditorCommand('formatBlock', event.target.value)}
-                  className="mx-0.5 h-7 cursor-pointer rounded-md bg-transparent px-1.5 text-xs text-zinc-600 outline-none transition-colors hover:bg-zinc-100 dark:text-zinc-300 dark:[color-scheme:dark] dark:hover:bg-white/10"
+                  className={toolbarSelect}
                 >
                   <option value="p">Text</option>
                   <option value="h2">Headline</option>
                   <option value="h3">Subheadline</option>
                   <option value="h4">Small heading</option>
                 </select>
-                <ToolbarButton title="Bulleted list" icon="list" onClick={() => runEditorCommand('insertUnorderedList')} />
-                <ToolbarButton title="Numbered list" icon="listOrdered" onClick={() => runEditorCommand('insertOrderedList')} />
+                <span aria-hidden="true" className={toolbarDivider} />
+                <ToolbarButton title="Bulleted list" icon="list" active={formats.insertUnorderedList} onClick={() => runEditorCommand('insertUnorderedList')} />
+                <ToolbarButton title="Numbered list" icon="listOrdered" active={formats.insertOrderedList} onClick={() => runEditorCommand('insertOrderedList')} />
                 <ToolbarButton title="Pointer" icon="pointer" onClick={() => runEditorCommand('formatBlock', 'p')} />
-                <ToolbarButton title="Quote" icon="quote" onClick={() => runEditorCommand('formatBlock', 'blockquote')} />
-                <span className="mx-1.5 h-4 w-px bg-zinc-200 dark:bg-white/10" />
+                <ToolbarButton title="Quote" icon="quote" active={formats.block === 'blockquote'} onClick={() => runEditorCommand('formatBlock', 'blockquote')} />
+                <span aria-hidden="true" className={toolbarDivider} />
                 <button
                   type="button"
                   onMouseDown={keepSelection}
                   onClick={() => imageInputRef.current?.click()}
-                  className="flex h-7 items-center gap-1.5 rounded-md px-2 text-xs text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-300 dark:hover:bg-white/10 dark:hover:text-zinc-100"
+                  className={toolbarTextButton()}
                 >
-                  <Icon name="image" size={14} />
+                  <Icon name="image" size={16} />
                   {pendingUploads > 0 ? `Uploading ${pendingUploads}...` : 'Add screenshot'}
                 </button>
                 <input ref={imageInputRef} type="file" accept="image/*" multiple onChange={handleImageUpload} className="hidden" />
@@ -925,15 +909,11 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
                   disabled={!dictation.isSupported}
                   aria-pressed={dictation.isListening}
                   title={dictation.isSupported ? `${dictation.isListening ? 'Stop dictation' : 'Dictate your analysis'} (${SHORTCUT_LABEL})` : "Voice input isn't supported in this browser. Try Chrome, Edge or Safari."}
-                  className={`flex h-7 items-center gap-1.5 rounded-md px-2 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-                    dictation.isListening
-                      ? 'bg-rose-500/10 text-rose-600 hover:bg-rose-500/15 dark:text-rose-400'
-                      : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-300 dark:hover:bg-white/10 dark:hover:text-zinc-100'
-                  }`}
+                  className={toolbarTextButton(dictation.isListening)}
                 >
-                  <Icon name="mic" size={14} />
+                  <Icon name="mic" size={16} />
                   {dictation.isListening ? 'Stop' : 'Dictate'}
-                  <kbd className="hidden rounded border border-current/20 px-1 text-[10px] font-normal opacity-60 md:inline">{SHORTCUT_LABEL}</kbd>
+                  <kbd className="hidden rounded border border-current/30 px-1 text-[10px] font-normal opacity-80 md:inline">{SHORTCUT_LABEL}</kbd>
                 </button>
               </div>
 
@@ -980,7 +960,7 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
                     onClick={() => removeImage(hoverImage.index)}
                     title="Remove screenshot"
                     aria-label="Remove screenshot"
-                    className="absolute flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white transition-colors hover:bg-black/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+                    className="absolute flex h-6 w-6 items-center justify-center rounded-full bg-zinc-900/80 text-white shadow-sm transition-colors hover:bg-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
                     style={{ top: hoverImage.top + 8, left: hoverImage.left + hoverImage.width - 32 }}
                   >
                     <Icon name="x" size={13} />
@@ -993,7 +973,7 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
                     onPointerDown={startImageResize}
                     title="Drag to resize screenshot"
                     aria-label="Resize screenshot"
-                    className="absolute flex h-6 w-6 touch-none items-center justify-center rounded-full bg-black/60 text-white shadow-sm cursor-nwse-resize focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+                    className="absolute flex h-6 w-6 touch-none items-center justify-center rounded-full bg-zinc-900/80 text-white shadow-sm cursor-nwse-resize focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
                     style={{ top: hoverImage.top + hoverImage.height - 12, left: hoverImage.left + hoverImage.width - 12 }}
                   >
                     <Icon name="maximize" size={12} />
@@ -1007,10 +987,10 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
           </div>
         </div>
 
-        <footer className="flex shrink-0 items-center justify-end gap-2 border-t border-zinc-300 px-6 py-3 dark:border-white/[0.12]">
-          {submitError ? <p role="alert" className="mr-auto text-xs text-rose-500">{submitError}</p> : <ShortcutHint className="mr-auto hidden md:block" />}
-          <button type="button" onClick={requestClose} disabled={isSaving} className="h-9 rounded-md px-3 text-[13px] font-medium text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900 disabled:opacity-50 dark:text-zinc-300 dark:hover:bg-white/10 dark:hover:text-zinc-100">Cancel</button>
-          <button type="submit" disabled={isSaving} title={`Save (${MOD_LABEL}+Enter)`} className="inline-flex h-9 min-w-[116px] items-center justify-center gap-2 whitespace-nowrap rounded-md bg-zinc-900 px-3.5 text-[13px] font-medium text-white transition-colors hover:bg-zinc-700 disabled:cursor-default disabled:opacity-70 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white">
+        <footer className={`${footerClass} justify-end`}>
+          {submitError ? <p role="alert" className="mr-auto text-xs font-medium text-rose-700 dark:text-rose-300">{submitError}</p> : <ShortcutHint className="mr-auto hidden md:block" />}
+          <button type="button" onClick={requestClose} disabled={isSaving} className={ghostFooterButton}>Cancel</button>
+          <button type="submit" disabled={isSaving} title={`Save (${MOD_LABEL}+Enter)`} className={primaryFooterButton}>
             {isSaving && <span aria-hidden="true" className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/40 border-t-white dark:border-zinc-900/30 dark:border-t-zinc-900" />}
             {isSaving ? 'Saving...' : initialTrade ? 'Save review' : 'Save trade'}
           </button>

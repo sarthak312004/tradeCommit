@@ -4,28 +4,16 @@ import { isLocalPreview, preloadImage, prepareImage } from '../../utils/imageUpl
 import { clearInterim, getCleanHtml, insertDictatedText, parseDictation, showInterimText } from '../../utils/dictation'
 import { SHORTCUT_LABEL, useDictationShortcut, useVoiceDictation } from '../../hooks/useVoiceDictation'
 import VoiceLevel from '../rightContainer/journal/VoiceLevel'
-
-const editorClass = [
-  'min-h-[420px] py-4 text-[15px] leading-7 text-zinc-800 outline-none dark:text-zinc-200',
-  'empty:before:pointer-events-none empty:before:text-zinc-400 empty:before:content-[attr(data-placeholder)] dark:empty:before:text-zinc-600',
-  '[&_h2]:mb-1 [&_h2]:mt-6 [&_h2]:text-2xl [&_h2]:font-semibold [&_h2]:leading-9',
-  '[&_h3]:mb-1 [&_h3]:mt-4 [&_h3]:text-xl [&_h3]:font-semibold [&_h3]:leading-8',
-  '[&_h4]:mt-3 [&_h4]:text-base [&_h4]:font-semibold',
-  '[&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6',
-  '[&_blockquote]:my-2 [&_blockquote]:border-l-[3px] [&_blockquote]:border-zinc-300 [&_blockquote]:pl-4 dark:[&_blockquote]:border-zinc-600',
-  '[&_img]:my-4 [&_img]:h-auto [&_img]:max-w-full [&_img]:rounded-lg [&_img]:border [&_img]:border-zinc-200 dark:[&_img]:border-white/10'
-].join(' ')
-
-const toolbarButtonClass =
-  'flex h-7 w-7 items-center justify-center rounded-md text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-300 dark:hover:bg-white/10 dark:hover:text-zinc-100'
+import { useActiveFormats } from '../../hooks/useActiveFormats'
+import { editorClass, toolbarClass, toolbarDivider, toolbarIconButton, toolbarSelect, toolbarTextButton } from './formStyles'
 
 // keep the text selection inside the editor when a toolbar button is pressed
 const keepSelection = (event) => event.preventDefault()
 
-function ToolbarButton({ title, Icon, onClick }) {
+function ToolbarButton({ title, Icon, onClick, active }) {
   return (
-    <button type="button" title={title} aria-label={title} onMouseDown={keepSelection} onClick={onClick} className={toolbarButtonClass}>
-      <Icon className="h-[15px] w-[15px]" />
+    <button type="button" title={title} aria-label={title} aria-pressed={active === undefined ? undefined : active} onMouseDown={keepSelection} onClick={onClick} className={toolbarIconButton(active)}>
+      <Icon className="h-4 w-4" />
     </button>
   )
 }
@@ -45,6 +33,7 @@ function ToolbarButton({ title, Icon, onClick }) {
  */
 function RichTextEditor({ ref, id, label, initialHtml = '', placeholder, onUploadImage, onBusyChange, onChange }) {
   const editorRef = useRef(null)
+  const formats = useActiveFormats(editorRef)
   const selectionRef = useRef(null)
   const imageInputRef = useRef(null)
   const removedImagesRef = useRef(new Set())
@@ -333,37 +322,38 @@ function RichTextEditor({ ref, id, label, initialHtml = '', placeholder, onUploa
 
   return (
     <section className="group">
-      <div className="mb-2 flex items-baseline justify-between">
-        <span id={`${id}-label`} className="text-[13px] font-medium text-zinc-600 dark:text-zinc-300">{label}</span>
-        <span className="hidden text-[11px] text-zinc-500 sm:block dark:text-zinc-500">Tip: paste screenshots straight in with Ctrl/⌘ + V</span>
+      <div className="mb-2 flex items-baseline justify-between gap-3">
+        <span id={`${id}-label`} className="text-[13px] font-semibold text-zinc-800 dark:text-zinc-200">{label}</span>
+        <span className="hidden text-[11px] text-zinc-600 sm:block dark:text-zinc-400">Tip: paste screenshots straight in with Ctrl/⌘ + V</span>
       </div>
 
-      <div className="sticky top-0 z-10 flex flex-wrap items-center gap-0.5 border-b border-zinc-300 bg-white py-1.5 opacity-70 transition-opacity focus-within:opacity-100 group-focus-within:opacity-100 hover:opacity-100 dark:border-white/[0.12] dark:bg-panel">
-        <ToolbarButton title="Bold" Icon={BoldIcon} onClick={() => runCommand('bold')} />
-        <ToolbarButton title="Italic" Icon={ItalicIcon} onClick={() => runCommand('italic')} />
+      <div role="toolbar" aria-label="Formatting" className={toolbarClass}>
+        <ToolbarButton title="Bold" Icon={BoldIcon} active={formats.bold} onClick={() => runCommand('bold')} />
+        <ToolbarButton title="Italic" Icon={ItalicIcon} active={formats.italic} onClick={() => runCommand('italic')} />
         <select
           title="Text style"
           aria-label="Text style"
-          defaultValue="p"
+          value={['h2', 'h3', 'h4'].includes(formats.block) ? formats.block : 'p'}
           onChange={(event) => runCommand('formatBlock', event.target.value)}
-          className="mx-0.5 h-7 cursor-pointer rounded-md bg-transparent px-1.5 text-xs text-zinc-600 outline-none transition-colors hover:bg-zinc-100 dark:text-zinc-300 dark:[color-scheme:dark] dark:hover:bg-white/10"
+          className={toolbarSelect}
         >
           <option value="p">Text</option>
           <option value="h2">Headline</option>
           <option value="h3">Subheadline</option>
           <option value="h4">Small heading</option>
         </select>
-        <ToolbarButton title="Bulleted list" Icon={ListIcon} onClick={() => runCommand('insertUnorderedList')} />
-        <ToolbarButton title="Numbered list" Icon={ListOrderedIcon} onClick={() => runCommand('insertOrderedList')} />
-        <ToolbarButton title="Quote" Icon={QuoteIcon} onClick={() => runCommand('formatBlock', 'blockquote')} />
-        <span className="mx-1.5 h-4 w-px bg-zinc-200 dark:bg-white/10" />
+        <span aria-hidden="true" className={toolbarDivider} />
+        <ToolbarButton title="Bulleted list" Icon={ListIcon} active={formats.insertUnorderedList} onClick={() => runCommand('insertUnorderedList')} />
+        <ToolbarButton title="Numbered list" Icon={ListOrderedIcon} active={formats.insertOrderedList} onClick={() => runCommand('insertOrderedList')} />
+        <ToolbarButton title="Quote" Icon={QuoteIcon} active={formats.block === 'blockquote'} onClick={() => runCommand('formatBlock', 'blockquote')} />
+        <span aria-hidden="true" className={toolbarDivider} />
         <button
           type="button"
           onMouseDown={keepSelection}
           onClick={() => imageInputRef.current?.click()}
-          className="flex h-7 items-center gap-1.5 rounded-md px-2 text-xs text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-300 dark:hover:bg-white/10 dark:hover:text-zinc-100"
+          className={toolbarTextButton()}
         >
-          <ImageIcon className="h-3.5 w-3.5" />
+          <ImageIcon className="h-4 w-4" />
           {pendingUploads > 0 ? `Uploading ${pendingUploads}...` : 'Add screenshot'}
         </button>
         <input ref={imageInputRef} type="file" accept="image/*" multiple onChange={handleFileInput} className="hidden" />
@@ -374,31 +364,27 @@ function RichTextEditor({ ref, id, label, initialHtml = '', placeholder, onUploa
           disabled={!dictation.isSupported}
           aria-pressed={dictation.isListening}
           title={dictation.isSupported ? `${dictation.isListening ? 'Stop dictation' : 'Dictate'} (${SHORTCUT_LABEL})` : "Voice input isn't supported in this browser. Try Chrome, Edge or Safari."}
-          className={`flex h-7 items-center gap-1.5 rounded-md px-2 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-            dictation.isListening
-              ? 'bg-rose-500/10 text-rose-600 hover:bg-rose-500/15 dark:text-rose-400'
-              : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-300 dark:hover:bg-white/10 dark:hover:text-zinc-100'
-          }`}
+          className={toolbarTextButton(dictation.isListening)}
         >
-          <MicIcon className="h-3.5 w-3.5" />
+          <MicIcon className="h-4 w-4" />
           {dictation.isListening ? 'Stop' : 'Dictate'}
-          <kbd className="hidden rounded border border-current/20 px-1 text-[10px] font-normal opacity-60 md:inline">{SHORTCUT_LABEL}</kbd>
+          <kbd className="hidden rounded border border-current/30 px-1 text-[10px] font-normal opacity-80 md:inline">{SHORTCUT_LABEL}</kbd>
         </button>
       </div>
 
       {(dictation.isListening || dictation.error || dictation.notice) && (
         <div aria-live="polite" className="flex min-h-8 items-center gap-2 border-b border-zinc-200 px-1 py-1.5 text-xs dark:border-white/[0.08]">
           {dictation.error ? (
-            <span role="alert" className="text-rose-500">{dictation.error}</span>
+            <span role="alert" className="font-medium text-rose-700 dark:text-rose-300">{dictation.error}</span>
           ) : dictation.isListening ? (
             <>
               <VoiceLevel levelRef={dictation.levelRef} active />
-              <span className="truncate text-zinc-500 dark:text-zinc-400">
+              <span className="truncate text-zinc-600 dark:text-zinc-400">
                 Listening… say &quot;full stop&quot;, &quot;new line&quot;, &quot;bullet point&quot;, &quot;scratch that&quot; or &quot;stop listening&quot;
               </span>
             </>
           ) : (
-            <span className="text-zinc-500 dark:text-zinc-400">{dictation.notice}</span>
+            <span className="text-zinc-600 dark:text-zinc-400">{dictation.notice}</span>
           )}
         </div>
       )}
@@ -430,7 +416,7 @@ function RichTextEditor({ ref, id, label, initialHtml = '', placeholder, onUploa
             onClick={() => removeImage(hoverImage.index)}
             title="Remove screenshot"
             aria-label="Remove screenshot"
-            className="absolute flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white transition-colors hover:bg-black/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+            className="absolute flex h-6 w-6 items-center justify-center rounded-full bg-zinc-900/80 text-white shadow-sm transition-colors hover:bg-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
             style={{ top: hoverImage.top + 8, left: hoverImage.left + hoverImage.width - 32 }}
           >
             <CloseIcon className="h-[13px] w-[13px]" />
@@ -443,7 +429,7 @@ function RichTextEditor({ ref, id, label, initialHtml = '', placeholder, onUploa
             onPointerDown={startImageResize}
             title="Drag to resize screenshot"
             aria-label="Resize screenshot"
-            className="absolute flex h-6 w-6 touch-none items-center justify-center rounded-full bg-black/60 text-white shadow-sm cursor-nwse-resize focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+            className="absolute flex h-6 w-6 touch-none items-center justify-center rounded-full bg-zinc-900/80 text-white shadow-sm cursor-nwse-resize focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
             style={{ top: hoverImage.top + hoverImage.height - 12, left: hoverImage.left + hoverImage.width - 12 }}
           >
             <MaximizeIcon className="h-3 w-3" />

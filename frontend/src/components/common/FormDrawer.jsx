@@ -1,6 +1,6 @@
 import { useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { CloseIcon, MaximizeIcon, MinimizeIcon } from '../../utils/Icons.jsx'
-import { iconButtonClass } from './formStyles'
+import { footerClass, iconButtonClass } from './formStyles'
 import { useFormShortcuts } from '../../hooks/useFormShortcuts'
 
 /* ---------- motion + layout constants (identical to TradeForm) ---------- */
@@ -137,7 +137,7 @@ function FormDrawer({ ref, ariaTitle, breadcrumb, onSubmit, onClose, footer, chi
             >
               {expanded ? <MinimizeIcon className="h-[15px] w-[15px]" /> : <MaximizeIcon className="h-[15px] w-[15px]" />}
             </button>
-            <p className="truncate pl-1 text-xs text-zinc-500 dark:text-zinc-400">{breadcrumb}</p>
+            <p className="truncate pl-1 text-xs text-zinc-600 dark:text-zinc-400">{breadcrumb}</p>
           </div>
           <button type="button" onClick={requestClose} aria-label="Close" title="Close" className={iconButtonClass}>
             <CloseIcon className="h-4 w-4" />
@@ -151,7 +151,7 @@ function FormDrawer({ ref, ariaTitle, breadcrumb, onSubmit, onClose, footer, chi
           </div>
         </div>
 
-        <footer className="flex shrink-0 items-center justify-between gap-2 border-t border-zinc-300 px-6 py-3 dark:border-white/[0.12]">
+        <footer className={`${footerClass} justify-between`}>
           {footer}
         </footer>
       </form>
