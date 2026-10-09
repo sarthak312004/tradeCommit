@@ -29,3 +29,12 @@ services:
         sync: false
       - key: CLOUDINARY_API_SECRET
         sync: false
+      # Email codes (sign-up, forgot password, login code) are sent through Brevo
+      - key: BREVO_API_KEY
+        sync: false
+      - key: MAIL_FROM_EMAIL
+        sync: false
+      - key: MAIL_FROM_NAME
+        value: TradeCommit
+      - key: GOOGLE_CLIENT_ID
+        sync: false

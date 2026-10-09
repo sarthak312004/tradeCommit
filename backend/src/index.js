@@ -31,6 +31,12 @@ if (missingCloudinary.length > 0) {
     console.warn(`Cloudinary is not configured (${missingCloudinary.join(', ')}); image uploads will fail.`)
 }
 
+if (!process.env.BREVO_API_KEY || !process.env.MAIL_FROM_EMAIL) {
+    console.warn(process.env.NODE_ENV === 'production'
+        ? 'BREVO_API_KEY / MAIL_FROM_EMAIL are not set: sign-up and password-reset codes CANNOT be emailed.'
+        : 'Brevo is not configured; email codes will be printed in this console instead.')
+}
+
 const port = Number(process.env.PORT) || 3000
 
 try {

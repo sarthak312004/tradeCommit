@@ -89,12 +89,15 @@ app.use((error, req, res, next) => {
     const statusCode = Number.isInteger(error.statusCode) ? error.statusCode : 500
     if (statusCode >= 500) console.error(error)
 
+    // Errors we throw on purpose (ApiError, e.g. "Email service is not configured") are safe to show.
+    // Only unexpected crashes get the generic message in production.
+    const isIntentional = error.success === false && typeof error.message === 'string'
+    const hideMessage = statusCode >= 500 && process.env.NODE_ENV === 'production' && !isIntentional
+
     return res.status(statusCode).json({
         statusCode,
         success: false,
-        message: statusCode >= 500 && process.env.NODE_ENV === 'production'
-            ? "Internal server error"
-            : (error.message || "Internal server error"),
+        message: hideMessage ? "Internal server error" : (error.message || "Internal server error"),
         errors: error.errors ?? [],
     })
 })

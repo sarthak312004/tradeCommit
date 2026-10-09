@@ -12,6 +12,9 @@ Stack: Vercel + Render + MongoDB Atlas + Cloudinary.
 3. **GitHub** - push this project (run `git status` first and make sure no `.env` file is staged).
 
 ## 2. Secrets
+(Also create a free **Brevo** account, verify a sender email, and make an API key. Without `BREVO_API_KEY` and
+`MAIL_FROM_EMAIL` on Render, nobody can sign up or reset a password because the code email cannot be sent.)
+
 Generate two different secrets (run twice):
 
     node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
@@ -44,6 +47,10 @@ Alternatively, create a manual Render Web Service with:
 | `ACCESS_TOKEN_SECRET` / `REFRESH_TOKEN_SECRET` | the generated secrets (32+ chars) |
 | `ACCESS_TOKEN_EXPIRY` / `REFRESH_TOKEN_EXPIRY` | `1d` / `10d` |
 | `CLOUDINARY_CLOUD_NAME` / `_API_KEY` / `_API_SECRET` | from Cloudinary |
+| `BREVO_API_KEY` | Brevo -> SMTP & API -> API Keys (**required** for sign-up / password-reset codes) |
+| `MAIL_FROM_EMAIL` | a sender you verified in Brevo -> Senders & IP (**required**) |
+| `MAIL_FROM_NAME` | `TradeCommit` |
+| `GOOGLE_CLIENT_ID` | optional; leave empty to hide the Google button |
 | `CORS_ORIGIN` | leave empty; Vercel proxies requests to this service |
 
 Wait for the service to be live and copy its URL, for example

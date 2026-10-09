@@ -53,8 +53,9 @@ export const sendOtpEmail = async ({ to, name, otp, purpose = "signup" }) => {
       console.log(`[mail:dev] ${purpose} code for ${to}: ${otp}`);
       return;
     }
-    console.error("BREVO_API_KEY and MAIL_FROM_EMAIL must be set to send email");
-    throw new ApiError(500, "Email service is not configured");
+    const missing = [!apiKey && "BREVO_API_KEY", !senderEmail && "MAIL_FROM_EMAIL"].filter(Boolean).join(", ");
+    console.error(`Cannot send email: missing environment variable(s) ${missing}`);
+    throw new ApiError(503, "Email service is not set up yet. Please contact support.");
   }
 
   const { subject, text, html } = buildOtpEmail({ name, otp, purpose });
@@ -79,7 +80,8 @@ export const sendOtpEmail = async ({ to, name, otp, purpose = "signup" }) => {
   }
 
   if (!response.ok) {
+    // 401 = wrong API key, 400/403 = MAIL_FROM_EMAIL is not a verified sender in Brevo
     console.error("Brevo rejected the email:", response.status, await response.text().catch(() => ""));
-    throw new ApiError(502, "Could not send the verification email. Please try again.");
+    throw new ApiError(502, "Could not send the verification email. Please try again in a moment.");
   }
 };
