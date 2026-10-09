@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import Sidebar from './components/sidebar/Sidebar'
 import { Navigate, Outlet } from 'react-router'
 import { fetchPrefetched } from './utils/prefetch'
+import { SessionError, SessionLoading } from './components/common/SessionScreen'
 
 const AUTH_CHECK_TIMEOUT_MS = 60_000
 
@@ -72,30 +73,9 @@ function Home() {
     return () => window.removeEventListener('auth-expired', handleAuthExpired)
   }, [])
 
-  if (isCheckingAuth) {
-    return (
-      <div className="grid min-h-screen place-items-center bg-[#10151c] text-[#e6eaf0]">
-        Checking session...
-      </div>
-    )
-  }
+  if (isCheckingAuth) return <SessionLoading />
 
-  if (authError) {
-    return (
-      <div className="grid min-h-screen place-items-center bg-[#10151c] px-6 text-[#e6eaf0]">
-        <div className="text-center">
-          <p>We couldn't verify your session. The server may be temporarily unavailable. Please try again.</p>
-          <button
-            type="button"
-            onClick={retryAuthCheck}
-            className="mt-4 rounded-lg bg-indigo-500 px-4 py-2 font-medium text-white hover:bg-indigo-400"
-          >
-            Retry
-          </button>
-        </div>
-      </div>
-    )
-  }
+  if (authError) return <SessionError onRetry={retryAuthCheck} />
 
   if (!isAuthenticated) {
     return <Navigate to="/auth" replace />

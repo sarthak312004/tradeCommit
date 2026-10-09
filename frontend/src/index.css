@@ -335,3 +335,30 @@ body {
   .tc-text-link:hover svg,
   .tc-hero-button:hover svg { transform: none; }
 }
+/* ---- Session loading screen (Home.jsx / SessionScreen.jsx) ---- */
+@keyframes tc-session-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes tc-text-in {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes tc-session-breathe {
+  0%, 100% { transform: scale(1); opacity: .92; }
+  50% { transform: scale(1.05); opacity: 1; }
+}
+@keyframes tc-session-line {
+  0% { left: -35%; }
+  100% { left: 100%; }
+}
+
+.tc-session-in { animation: tc-session-in 500ms cubic-bezier(.22,1,.36,1) both; }
+.tc-session-text { animation: tc-text-in 400ms ease both; }
+.tc-session-breathe { animation: tc-session-breathe 3.2s ease-in-out infinite; }
+.tc-session-line { animation: tc-session-line 1.8s cubic-bezier(.4,0,.2,1) infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tc-session-in, .tc-session-text, .tc-session-breathe { animation: none; }
+  .tc-session-line { animation: none; left: 33%; }
+}

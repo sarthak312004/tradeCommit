@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import { JournalContextProvider } from './context/journalContextProvider.jsx'
 import Home from './Home.jsx'
-import {createBrowserRouter, RouterProvider } from 'react-router'
+import { createBrowserRouter, Navigate, RouterProvider } from 'react-router'
 import MainJournal from './pages/MainJournal.jsx'
 import AuthPage from './pages/AuthPage.jsx'
 import LazyPlannerPage from './pages/LazyPlannerPage.jsx'
@@ -32,6 +32,10 @@ const router = createBrowserRouter([
         element:<LazyPlannerPage/>
       }
     ]
+  },
+  {
+    path:'*',
+    element:<Navigate to='/' replace/>
   }
 ])
 createRoot(document.getElementById('root')).render(
