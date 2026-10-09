@@ -96,9 +96,7 @@ function Sidebar({ isSidebarOpen, setIsSidebarOpen }) {
               aria-label={isSidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
               className={`flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-md ${ghostBtn}`}
             >
-              <span className="flex h-6 w-6 items-center justify-center rounded bg-zinc-900 text-[11px] font-bold text-white dark:bg-zinc-100 dark:text-zinc-900">
-                <img src="../../../public/favicon.svg" alt="T" />
-              </span>
+              <img src="/favicon.svg" alt="" className="h-6 w-6 object-contain" />
             </button>
             <span
               className={`whitespace-nowrap text-sm font-medium text-zinc-800 dark:text-zinc-100 ${FADE_BASE} ${fade(isSidebarOpen)}`}
