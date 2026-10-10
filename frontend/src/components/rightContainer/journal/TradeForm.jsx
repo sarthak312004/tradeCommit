@@ -688,7 +688,7 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
               aria-label="Asset name"
               autoComplete="off"
               placeholder="e.g. BTCUSD"
-              className="w-full bg-transparent text-3xl font-bold tracking-tight text-zinc-900 outline-none placeholder:font-bold placeholder:text-zinc-300 sm:text-4xl sm:leading-tight dark:text-zinc-50 dark:placeholder:text-zinc-700"
+              className="w-full rounded-md bg-transparent text-3xl font-bold uppercase leading-tight tracking-tight text-zinc-900 outline-none placeholder:font-bold placeholder:normal-case placeholder:text-zinc-500 sm:text-4xl sm:leading-tight dark:text-zinc-50 dark:placeholder:text-zinc-400"
             />
             {errors.symbol && <p className="mt-1 text-xs text-rose-500">{errors.symbol.message}</p>}
 
