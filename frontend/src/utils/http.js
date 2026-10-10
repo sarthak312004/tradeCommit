@@ -11,9 +11,10 @@ export const readJson = async (response) => {
 }
 
 /** Sends a JSON request with the session cookie and returns the unwrapped data. */
-export const requestJson = async (url, { method = 'GET', body } = {}) => {
+export const requestJson = async (url, { method = 'GET', body, cache } = {}) => {
   const response = await fetch(url, {
     method,
+    cache,
     credentials: 'include',
     headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body)

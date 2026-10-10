@@ -38,3 +38,5 @@ services:
         value: TradeCommit
       - key: GOOGLE_CLIENT_ID
         sync: false
+      - key: GEMINI_API_KEY
+        sync: false

@@ -324,6 +324,38 @@ function AiMentorDialog({ journalId, journalName, currency, onClose, onOpenConte
     [journalId]
   )
 
+  useEffect(() => {
+    if (phase !== 'generating') return
+
+    const id = requestId.current
+    let cancelled = false
+    let timeoutId
+    const checkForCompletedReview = async () => {
+      try {
+        const latest = await getAiReview(journalId, weekStart)
+        if (cancelled || id !== requestId.current) return
+        if (latest.review && !latest.stale) {
+          setData(latest)
+          setError('')
+          setPhase('ready')
+          return
+        }
+      } catch (pollError) {
+        if (!cancelled && id === requestId.current) {
+          console.error('Could not check whether the AI review has completed:', pollError)
+        }
+      }
+
+      if (!cancelled) timeoutId = setTimeout(checkForCompletedReview, 4000)
+    }
+
+    timeoutId = setTimeout(checkForCompletedReview, 4000)
+    return () => {
+      cancelled = true
+      clearTimeout(timeoutId)
+    }
+  }, [phase, journalId, weekStart])
+
   const load = useCallback(
     async (week, autoGenerate) => {
       const id = ++requestId.current

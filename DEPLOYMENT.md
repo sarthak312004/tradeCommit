@@ -14,6 +14,7 @@ Stack: Vercel + Render + MongoDB Atlas + Cloudinary.
 ## 2. Secrets
 (Also create a free **Brevo** account, verify a sender email, and make an API key. Without `BREVO_API_KEY` and
 `MAIL_FROM_EMAIL` on Render, nobody can sign up or reset a password because the code email cannot be sent.)
+Create a **Gemini API key** in Google AI Studio and set `GEMINI_API_KEY` on Render to enable the weekly AI mentor.
 
 Generate two different secrets (run twice):
 
@@ -51,6 +52,7 @@ Alternatively, create a manual Render Web Service with:
 | `MAIL_FROM_EMAIL` | a sender you verified in Brevo -> Senders & IP (**required**) |
 | `MAIL_FROM_NAME` | `TradeCommit` |
 | `GOOGLE_CLIENT_ID` | optional; leave empty to hide the Google button |
+| `GEMINI_API_KEY` | Google AI Studio API key; required for weekly AI mentor reviews |
 | `CORS_ORIGIN` | leave empty; Vercel proxies requests to this service |
 
 Wait for the service to be live and copy its URL, for example

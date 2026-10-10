@@ -37,6 +37,10 @@ if (!process.env.BREVO_API_KEY || !process.env.MAIL_FROM_EMAIL) {
         : 'Brevo is not configured; email codes will be printed in this console instead.')
 }
 
+if (!process.env.GEMINI_API_KEY?.trim()) {
+    console.warn('GEMINI_API_KEY is not set: AI mentor reviews will be unavailable.')
+}
+
 const port = Number(process.env.PORT) || 3000
 
 try {
