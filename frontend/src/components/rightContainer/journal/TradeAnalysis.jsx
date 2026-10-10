@@ -1,6 +1,11 @@
-import { useMemo } from 'react'
+import { Suspense, lazy, useMemo, useState } from 'react'
 import EquityCurve from './EquityCurve'
+import SparklesIcon from './SparklesIcon'
+import { controlNeutral } from '../../common/controlStyles'
 import { computeAnalytics, formatMoney, formatPercent, formatR, formatRatio, toneOf } from '../../../utils/tradeAnalytics'
+
+// loaded only when the mentor is opened
+const AiMentorDialog = lazy(() => import('./AiMentorDialog'))
 
 const toneClass = {
   positive: 'text-emerald-600 dark:text-emerald-400',
@@ -39,7 +44,8 @@ function MetricList({ title, rows }) {
   )
 }
 
-function TradeAnalysis({ trades, currency, rangeLabel }) {
+function TradeAnalysis({ trades, currency, rangeLabel, journalId, journalName, onOpenContext }) {
+  const [isMentorOpen, setIsMentorOpen] = useState(false)
   const money = (value, options) => formatMoney(value, { currency, ...options })
   const stats = useMemo(() => computeAnalytics(trades), [trades])
   const hasClosed = stats.closedTrades > 0
@@ -64,12 +70,21 @@ function TradeAnalysis({ trades, currency, rangeLabel }) {
 
   return (
     <div className="rounded-2xl border border-zinc-300 bg-white shadow-card dark:border-white/[0.12] dark:bg-panel dark:shadow-none">
-      <div className="p-5 pb-3 sm:p-6 sm:pb-4">
-        <p className="text-xs text-zinc-600 dark:text-zinc-300">Net P&amp;L</p>
-        <p className={`mt-1 text-3xl font-semibold tracking-tight tabular-nums ${toneClass[toneOf(stats.netPnl)]}`}>
-          {money(stats.netPnl, { signed: true })}
-        </p>
-        <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">{plural(stats.closedTrades, 'closed trade')}{rangeLabel ? ` in ${rangeLabel}` : ''}</p>
+      <div className="flex items-start justify-between gap-4 p-5 pb-3 sm:p-6 sm:pb-4">
+        <div className="min-w-0">
+          <p className="text-xs text-zinc-600 dark:text-zinc-300">Net P&amp;L</p>
+          <p className={`mt-1 text-3xl font-semibold tracking-tight tabular-nums ${toneClass[toneOf(stats.netPnl)]}`}>
+            {money(stats.netPnl, { signed: true })}
+          </p>
+          <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">{plural(stats.closedTrades, 'closed trade')}{rangeLabel ? ` in ${rangeLabel}` : ''}</p>
+        </div>
+
+        {journalId && (
+          <button type="button" onClick={() => setIsMentorOpen(true)} title="Weekly feedback from an AI mentor, checked against your strategy" className={controlNeutral}>
+            <SparklesIcon className="h-3.5 w-3.5" />
+            Mentor review
+          </button>
+        )}
       </div>
 
       <div className="px-3 pb-4 sm:px-4">
@@ -102,6 +117,24 @@ function TradeAnalysis({ trades, currency, rangeLabel }) {
         <MetricList title="Performance" rows={performanceRows} />
         <MetricList title="Risk and consistency" rows={consistencyRows} />
       </div>
+
+      {isMentorOpen && (
+        <Suspense fallback={null}>
+          <AiMentorDialog
+            journalId={journalId}
+            journalName={journalName}
+            currency={currency}
+            onClose={() => setIsMentorOpen(false)}
+            onOpenContext={
+              onOpenContext &&
+              (() => {
+                setIsMentorOpen(false)
+                onOpenContext()
+              })
+            }
+          />
+        </Suspense>
+      )}
     </div>
   )
 }

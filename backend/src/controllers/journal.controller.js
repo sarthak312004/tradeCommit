@@ -1,5 +1,6 @@
 import { Journal, MAX_STRATEGY_LENGTH } from "../models/journal.models.js";
 import { Trade } from "../models/trade.models.js";
+import { AiReview } from "../models/aiReview.models.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
@@ -198,6 +199,7 @@ export const deleteJournal = asyncHandler(async (req, res) => {
 
   const trades = await Trade.find({ journal: journal._id, owner: req.user._id });
   await Trade.deleteMany({ journal: journal._id, owner: req.user._id });
+  await AiReview.deleteMany({ journal: journal._id, owner: req.user._id });
   await Journal.deleteOne({ _id: journal._id, owner: req.user._id });
 
   void deleteImagesFromCloudinary(

@@ -174,7 +174,14 @@ function TradeJournal({ journal, onAddTrade, onUpdateTrade, onDeleteTrade, onUpl
         </div>
       ) : view === 'analysis' ? (
         <Suspense fallback={null}>
-          <TradeAnalysis trades={visibleTrades} currency={currency} rangeLabel={isFiltered ? describeRangeInline(range) : null} />
+          <TradeAnalysis
+            trades={visibleTrades}
+            currency={currency}
+            rangeLabel={isFiltered ? describeRangeInline(range) : null}
+            journalId={journal.id}
+            journalName={journal.name}
+            onOpenContext={() => setIsContextOpen(true)}
+          />
         </Suspense>
       ) : (
         // auto-fill grid: as many >=272px columns as fit, so it reflows with the sidebar and window by itself; rows stretch to equal height
