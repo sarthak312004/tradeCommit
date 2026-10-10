@@ -124,7 +124,7 @@ function PlanForm({ plannerName, plannerType, initialEntry = null, initialDate, 
         maxLength={MAX_TITLE}
         placeholder="e.g. Nifty breakout plan"
         className="w-full bg-transparent text-3xl font-bold tracking-tight text-zinc-900 outline-none placeholder:font-bold placeholder:text-zinc-300 sm:text-4xl sm:leading-tight dark:text-zinc-50 dark:placeholder:text-zinc-700"
-      />
+      /> 
       {errors.title && <p className="mt-1 text-xs text-rose-500">{errors.title.message}</p>}
 
       <div className="mt-3 flex flex-wrap items-center gap-1.5 text-xs">
