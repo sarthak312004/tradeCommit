@@ -3,6 +3,7 @@ import Sidebar from './components/sidebar/Sidebar'
 import { Navigate, Outlet } from 'react-router'
 import { fetchPrefetched } from './utils/prefetch'
 import { SessionError, SessionLoading } from './components/common/SessionScreen'
+import ProductTour from './components/tour/ProductTour'
 
 const AUTH_CHECK_TIMEOUT_MS = 60_000
 
@@ -97,6 +98,7 @@ function Home() {
         </div>
       </div>
 
+      <ProductTour isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} />
     </div>
   )
 }

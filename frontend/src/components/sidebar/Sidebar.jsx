@@ -122,6 +122,7 @@ function Sidebar({ isSidebarOpen, setIsSidebarOpen }) {
       <div className="flex min-h-0 flex-1 flex-col">
         <SidebarSection
           title="Journals"
+          tourId="sidebar-journals"
           addLabel="New journal"
           isSidebarOpen={isSidebarOpen}
           setIsSidebarOpen={setIsSidebarOpen}
@@ -142,6 +143,7 @@ function Sidebar({ isSidebarOpen, setIsSidebarOpen }) {
 
         <SidebarSection
           title="Trade planner"
+          tourId="sidebar-planners"
           addLabel="New trade planner"
           isSidebarOpen={isSidebarOpen}
           setIsSidebarOpen={setIsSidebarOpen}
@@ -173,6 +175,7 @@ function Sidebar({ isSidebarOpen, setIsSidebarOpen }) {
           <button
             type="button"
             onClick={() => setIsFeedbackOpen(true)}
+            data-tour="sidebar-feedback"
             className={`flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-[13px] ${ghostBtn}`}
           >
             <MessageSquareIcon className="h-4 w-4 shrink-0" />

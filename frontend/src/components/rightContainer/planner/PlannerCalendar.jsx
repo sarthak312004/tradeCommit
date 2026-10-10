@@ -47,6 +47,7 @@ function DayCell({ day, entries, isToday, isSelected, isExpanded, onToggleExpand
     <div
       onClick={() => onCreate(day.key)}
       data-selected={isSelected || undefined}
+      data-tour={isToday ? 'planner-today' : undefined}
       className={`group relative flex min-h-[84px] min-w-0 cursor-pointer flex-col rounded-xl p-1.5 transition-colors sm:min-h-[116px] sm:p-2 ${surface}`}
     >
       <div className="flex h-6 items-center justify-between">

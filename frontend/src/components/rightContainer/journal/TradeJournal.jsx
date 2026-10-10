@@ -91,7 +91,7 @@ function TradeJournal({ journal, onAddTrade, onUpdateTrade, onDeleteTrade, onUpl
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <div role="tablist" aria-label="Journal view" className="inline-flex h-8 items-center rounded-lg border border-zinc-300 bg-white p-0.5 shadow-sm dark:border-white/[0.14] dark:bg-panel dark:shadow-none">
+          <div role="tablist" aria-label="Journal view" data-tour="journal-views" className="inline-flex h-8 items-center rounded-lg border border-zinc-300 bg-white p-0.5 shadow-sm dark:border-white/[0.14] dark:bg-panel dark:shadow-none">
             {VIEWS.map((item) => (
               <button
                 key={item.id}
@@ -115,6 +115,7 @@ function TradeJournal({ journal, onAddTrade, onUpdateTrade, onDeleteTrade, onUpl
           <button
             type="button"
             onClick={() => setIsContextOpen(true)}
+            data-tour="journal-context"
             title="Strategy and default trade properties"
             className="flex h-8 cursor-pointer items-center gap-2 rounded-lg border border-zinc-300 bg-white px-2.5 text-xs font-medium text-zinc-700 shadow-sm transition-colors hover:bg-zinc-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/40 dark:border-white/[0.14] dark:bg-panel dark:text-zinc-200 dark:shadow-none dark:hover:bg-white/[0.06]"
           >
@@ -126,6 +127,7 @@ function TradeJournal({ journal, onAddTrade, onUpdateTrade, onDeleteTrade, onUpl
           <button
             type="button"
             onClick={isFormOpen ? handleCloseForm : handleOpenNewTrade}
+            data-tour="add-trade"
             className="h-8 cursor-pointer rounded-lg bg-sky-500 px-3 text-xs font-semibold text-white transition hover:bg-sky-600"
           >
             + Add trade

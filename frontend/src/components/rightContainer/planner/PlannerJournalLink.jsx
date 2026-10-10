@@ -31,7 +31,7 @@ function PlannerJournalLink({ planner }) {
   if (options.length === 0) return null
 
   return (
-    <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+    <div data-tour="planner-journal" className="mb-4 flex w-fit max-w-full flex-wrap items-center gap-x-3 gap-y-1.5">
       <span
         className="text-xs font-medium text-zinc-600 dark:text-zinc-400"
         title="The AI mentor compares these plans with the trades you took in the connected journal. Days without a plan, plans that never triggered and skipped plans are not treated as mistakes."

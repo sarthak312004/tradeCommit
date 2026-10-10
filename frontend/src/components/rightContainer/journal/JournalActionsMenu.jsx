@@ -47,6 +47,7 @@ function JournalActionsMenu({ onExport }) {
         aria-haspopup="menu"
         aria-expanded={isOpen}
         aria-label="More journal actions"
+        data-tour="journal-more"
         title="More actions"
         className={`${controlNeutral} px-0! w-8`}
       >

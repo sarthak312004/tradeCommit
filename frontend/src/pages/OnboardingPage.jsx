@@ -3,6 +3,7 @@ import { useNavigate } from "react-router"
 import { useProfile } from "../hooks/useProfile"
 import { requestJson } from "../utils/http"
 import { clearProfileCache } from "../services/profileApi"
+import { queueProductTours } from "../utils/productTour"
 import { SERIF } from "../components/auth/authStyles"
 
 const STYLES = [
@@ -31,6 +32,8 @@ export default function OnboardingPage() {
       // The profile hook caches the pre-onboarding profile. Clear it before
       // returning home so Home does not redirect the user back to onboarding.
       clearProfileCache()
+      // a brand-new workspace gets the guided tour on its first visit
+      queueProductTours(profile?.username)
       navigate("/", { replace: true })
     } catch (error) {
       setMessage(error.message || "Could not save your setup. Please try again.")

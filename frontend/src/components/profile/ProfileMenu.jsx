@@ -3,6 +3,8 @@ import { useProfile } from '../../hooks/useProfile'
 import { AtSignIcon, ChevronDownIcon, LockIcon, MailIcon, UserIcon } from '../../utils/Icons.jsx'
 import ProfileAvatar from './ProfileAvatar'
 import ResetPasswordDialog from './ResetPasswordDialog'
+import { CompassIcon } from '../tour/tourIcons'
+import { replayProductTour } from '../../utils/productTour'
 import { focusRing } from './profileStyles'
 
 function DetailRow({ Icon, label, value }) {
@@ -50,6 +52,11 @@ function ProfileMenu() {
   const openReset = () => {
     setIsOpen(false)
     setIsResetOpen(true)
+  }
+
+  const startTour = () => {
+    setIsOpen(false)
+    replayProductTour()
   }
 
   return (
@@ -102,6 +109,16 @@ function ProfileMenu() {
             >
               <LockIcon className="h-3.5 w-3.5" />
               {profile.hasPassword ? 'Reset password' : 'Set a password'}
+            </button>
+
+            <button
+              type="button"
+              onClick={startTour}
+              tabIndex={isOpen ? 0 : -1}
+              className={`mt-1.5 flex h-9 w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-zinc-300 text-[13px] font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-white/[0.14] dark:text-zinc-200 dark:hover:bg-white/[0.06] ${focusRing}`}
+            >
+              <CompassIcon className="h-3.5 w-3.5" />
+              Take the product tour
             </button>
           </>
         ) : error ? (
