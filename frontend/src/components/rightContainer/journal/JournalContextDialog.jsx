@@ -266,7 +266,7 @@ function JournalContextDialog({ journalId, journalName, context, onSave, onClose
               placeholder="e.g. Intraday breakouts on index futures. I trade the first 90 minutes only, risk 1% per trade and skip high-impact news days."
             />
             <p className={`mt-1 flex justify-between text-[11px] ${isTooLong ? 'font-medium text-rose-600 dark:text-rose-400' : 'text-zinc-500 dark:text-zinc-400'}`}>
-              <span>{isTooLong ? 'Too long. Shorten it to save.' : 'Drag the bottom-right corner of the box to make it taller.'}</span>
+              <span>{isTooLong ? 'Too long. Shorten it to save.' : 'Use the expand button at the top to get a bigger writing area.'}</span>
               <span className="tabular-nums">{strategyLength}/{MAX_STRATEGY_LENGTH}</span>
             </p>
           </section>

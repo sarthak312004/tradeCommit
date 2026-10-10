@@ -264,3 +264,19 @@ export const SlidersIcon = (props) => (
 		<circle cx="17" cy="18" r="2" />
 	</Icon>
 )
+
+export const MoreIcon = (props) => (
+	<Icon {...props}>
+		<circle cx="5" cy="12" r="1.4" fill="currentColor" />
+		<circle cx="12" cy="12" r="1.4" fill="currentColor" />
+		<circle cx="19" cy="12" r="1.4" fill="currentColor" />
+	</Icon>
+)
+
+export const DownloadIcon = (props) => (
+	<Icon {...props}>
+		<path d="M12 3v12" />
+		<path d="m7 10 5 5 5-5" />
+		<path d="M4 20h16" />
+	</Icon>
+)

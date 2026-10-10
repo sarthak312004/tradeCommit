@@ -1,6 +1,7 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import TradeCard from './TradeCard'
 import DateRangeFilter from './DateRangeFilter'
+import JournalActionsMenu from './JournalActionsMenu'
 import { ALL_TIME, describeRangeInline, isRangeActive } from '../../../utils/dateRange'
 import { filterTradesByDate, sortTradesNewestFirst } from '../../../utils/tradeAnalytics'
 import { DEFAULT_CURRENCY } from '../../../utils/currencies'
@@ -12,6 +13,7 @@ const loadTradeForm = () => import('./TradeForm')
 const TradeForm = lazy(loadTradeForm)
 const TradeAnalysis = lazy(() => import('./TradeAnalysis'))
 const JournalContextDialog = lazy(() => import('./JournalContextDialog'))
+const ExportJournalDialog = lazy(() => import('./ExportJournalDialog'))
 
 const VIEWS = [
   { id: 'trades', label: 'Trades' },
@@ -24,6 +26,7 @@ function TradeJournal({ journal, onAddTrade, onUpdateTrade, onDeleteTrade, onUpl
   const [view, setView] = useState('trades')
   const [range, setRange] = useState(ALL_TIME)
   const [isContextOpen, setIsContextOpen] = useState(false)
+  const [isExportOpen, setIsExportOpen] = useState(false)
 
   // fetch the form's code while the browser is idle so the drawer opens instantly on the first click
   useEffect(() => {
@@ -127,6 +130,8 @@ function TradeJournal({ journal, onAddTrade, onUpdateTrade, onDeleteTrade, onUpl
           >
             + Add trade
           </button>
+
+          <JournalActionsMenu onExport={() => setIsExportOpen(true)} />
         </div>
       </div>
 
@@ -139,6 +144,12 @@ function TradeJournal({ journal, onAddTrade, onUpdateTrade, onDeleteTrade, onUpl
             onSave={(context, options) => onSaveContext(journal.id, context, options)}
             onClose={() => setIsContextOpen(false)}
           />
+        </Suspense>
+      )}
+
+      {isExportOpen && (
+        <Suspense fallback={null}>
+          <ExportJournalDialog journal={journal} onClose={() => setIsExportOpen(false)} />
         </Suspense>
       )}
 

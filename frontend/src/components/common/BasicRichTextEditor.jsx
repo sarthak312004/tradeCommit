@@ -3,23 +3,14 @@ import { BoldIcon, ItalicIcon, ListIcon, ListOrderedIcon, QuoteIcon } from '../.
 import { strategyToHtml } from '../../utils/richText'
 import { useActiveFormats } from '../../hooks/useActiveFormats'
 import TextStyleMenu from './TextStyleMenu'
-import { toolbarDivider, toolbarIconButton, toolbarTextButton } from './formStyles'
+import { editorClass, toolbarClass, toolbarDivider, toolbarIconButton, toolbarTextButton } from './formStyles'
 
 // keep the text selection inside the editor when a toolbar button is pressed
 const keepSelection = (event) => event.preventDefault()
 
-const contentClass = [
-  'w-full resize-y overflow-auto rounded-lg border border-zinc-300 bg-white px-3.5 py-3 text-sm leading-6 text-zinc-900 outline-none transition',
-  'focus:border-zinc-400 focus:ring-2 focus:ring-zinc-400/20',
-  'empty:before:pointer-events-none empty:before:text-zinc-500 empty:before:content-[attr(data-placeholder)]',
-  'dark:border-white/[0.14] dark:bg-night dark:text-zinc-100 dark:empty:before:text-zinc-500 dark:focus:border-white/25 dark:focus:ring-white/10',
-  '[&_p]:my-1 [&_b]:font-semibold [&_strong]:font-semibold [&_i]:italic [&_em]:italic',
-  '[&_h2]:mb-1 [&_h2]:mt-4 [&_h2]:text-lg [&_h2]:font-semibold [&_h2]:leading-7',
-  '[&_h3]:mb-1 [&_h3]:mt-3 [&_h3]:text-base [&_h3]:font-semibold',
-  '[&_h4]:mt-2 [&_h4]:text-sm [&_h4]:font-semibold',
-  '[&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-6 [&_li]:my-0.5',
-  '[&_blockquote]:my-2 [&_blockquote]:border-l-[3px] [&_blockquote]:border-zinc-400 [&_blockquote]:pl-4 [&_blockquote]:text-zinc-700 dark:[&_blockquote]:border-zinc-500 dark:[&_blockquote]:text-zinc-300'
-].join(' ')
+// Same writing surface as the trade analysis (TradeForm) and the plan editor (PlanForm): a sticky toolbar strip
+// above a borderless, roomy editing area. Only the starting height differs, so it is taken out of the shared class.
+const contentClass = editorClass.replace('min-h-[420px]', '').replace(/\s+/g, ' ').trim()
 
 // "- " / "* " / "1. " / "> " typed at the start of a line turn into a list or quote, like in most note apps
 const SHORTCUTS = [
@@ -40,7 +31,7 @@ function ToolbarButton({ title, Icon, onClick, active }) {
  * A small rich text editor for notes without images: bold, italic, headings, bullet and numbered lists
  * (Tab / Shift+Tab to nest), quotes and clear formatting. Pasted text is always inserted as plain text.
  * Uncontrolled: it is filled once from `initialHtml` and reports every change through `onChange(html, text)`.
- * The editing area can be dragged taller from its bottom-right corner; set its starting height with `editorClassName`.
+ * Looks like the editors in the trade form and the planner. Set the editing area's starting height with `editorClassName`.
  */
 function BasicRichTextEditor({ id, label, labelledBy, initialHtml = '', placeholder, onChange, editorClassName = 'min-h-[240px]' }) {
   const fallbackId = useId()
@@ -121,7 +112,7 @@ function BasicRichTextEditor({ id, label, labelledBy, initialHtml = '', placehol
 
   return (
     <div>
-      <div role="toolbar" aria-label={`${label ?? 'Text'} formatting`} className="mb-2 flex flex-wrap items-center gap-1 rounded-lg border border-zinc-200 bg-zinc-50 p-1 dark:border-zinc-800 dark:bg-white/[0.04]">
+      <div role="toolbar" aria-label={`${label ?? 'Text'} formatting`} className={toolbarClass}>
         <ToolbarButton title="Bold (Ctrl/⌘ + B)" Icon={BoldIcon} active={formats.bold} onClick={() => runCommand('bold')} />
         <ToolbarButton title="Italic (Ctrl/⌘ + I)" Icon={ItalicIcon} active={formats.italic} onClick={() => runCommand('italic')} />
         <TextStyleMenu value={formats.block} onChange={(tag) => runCommand('formatBlock', tag)} />
@@ -133,7 +124,7 @@ function BasicRichTextEditor({ id, label, labelledBy, initialHtml = '', placehol
         <button type="button" onMouseDown={keepSelection} onClick={clearFormatting} title="Clear formatting" className={toolbarTextButton()}>
           Clear
         </button>
-        <span className="ml-auto hidden px-2 text-[11px] text-zinc-600 md:block dark:text-zinc-400">Tip: type &quot;- &quot; or &quot;1. &quot; to start a list, Tab to nest it</span>
+        <span className="ml-auto hidden px-2 text-[11px] text-zinc-600 lg:block dark:text-zinc-400">Tip: type &quot;- &quot; or &quot;1. &quot; to start a list</span>
       </div>
 
       <div
