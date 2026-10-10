@@ -1,7 +1,8 @@
+import { isRichTextEmpty } from './richText'
 // User-defined properties (name + type + value) shared by the trade form and the journal context editor.
 
 export const MAX_CUSTOM_FIELDS = 20
-export const MAX_STRATEGY_LENGTH = 2000
+export const MAX_STRATEGY_LENGTH = 6000
 
 export const FIELD_TYPES = {
   text: { label: 'Text', icon: 'text', empty: '' },
@@ -37,5 +38,5 @@ export const buildTemplateFields = (journalContext, trades = []) => {
 }
 
 export const hasJournalContext = (journalContext) => (
-  Boolean(journalContext?.strategy?.trim()) || (journalContext?.attributes?.length ?? 0) > 0
+  !isRichTextEmpty(journalContext?.strategy?.trim()) || (journalContext?.attributes?.length ?? 0) > 0
 )

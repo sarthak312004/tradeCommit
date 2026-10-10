@@ -47,6 +47,14 @@ const RULE_STATUS = {
   unclear: { label: "Can't tell", dot: 'bg-zinc-400 dark:bg-zinc-500' }
 }
 
+// Plans that were not taken and trades without a plan are facts, never faults, so none of these use a negative tone.
+const PLAN_STATUS = {
+  executed_as_planned: { label: 'Executed as planned', tone: 'positive' },
+  executed_with_differences: { label: 'Executed with differences', tone: 'warning' },
+  plan_not_taken: { label: 'Not triggered or skipped', tone: 'neutral' },
+  unplanned_trade: { label: 'No plan for this trade', tone: 'neutral' }
+}
+
 const pillTone = {
   positive: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-400/15 dark:text-emerald-300',
   warning: 'bg-amber-100 text-amber-900 dark:bg-amber-400/15 dark:text-amber-200',
@@ -178,6 +186,29 @@ function Review({ review }) {
           </ul>
         )}
       </Section>
+
+      {review.planAlignment && (
+        <Section title="Plan vs execution">
+          {review.planAlignment.summary && <p className="text-sm leading-6 text-zinc-700 dark:text-zinc-300">{review.planAlignment.summary}</p>}
+          {review.planAlignment.days.length > 0 && (
+            <ul className="mt-3 divide-y divide-zinc-200 rounded-xl border border-zinc-200 dark:divide-white/[0.08] dark:border-white/[0.08]">
+              {review.planAlignment.days.map((day, index) => {
+                const status = PLAN_STATUS[day.status] ?? PLAN_STATUS.plan_not_taken
+                return (
+                  <li key={`${day.date}-${index}`} className="px-4 py-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-medium tabular-nums text-zinc-900 dark:text-zinc-100">{formatDateKey(day.date)}</span>
+                      <Pill tone={status.tone}>{status.label}</Pill>
+                    </div>
+                    {day.detail && <p className="mt-1.5 text-[13px] leading-5 text-zinc-600 dark:text-zinc-400">{day.detail}</p>}
+                    <TradeChips trades={day.trades} />
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </Section>
+      )}
 
       {review.strengths.length > 0 && (
         <Section title="What went well">
@@ -401,7 +432,7 @@ function AiMentorDialog({ journalId, journalName, currency, onClose, onOpenConte
             </button>
           }
         >
-          {data?.tradeCount ?? 0} trade{data?.tradeCount === 1 ? '' : 's'} logged. The mentor compares each one with your strategy and your journal's history.
+          {data?.tradeCount ?? 0} trade{data?.tradeCount === 1 ? '' : 's'} logged. The mentor compares each one with your strategy{data?.planner?.connected ? ', the plans in your connected planner' : ''} and your journal's history.
         </EmptyState>
       )
     }
@@ -411,7 +442,7 @@ function AiMentorDialog({ journalId, journalName, currency, onClose, onOpenConte
         {data.week && <WeekStats week={data.week} currency={currency} />}
         {data.stale && (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-300/60 bg-amber-50 px-4 py-2.5 text-[13px] text-amber-900 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200">
-            <span>Your trades or strategy changed after this review was written.</span>
+            <span>Your trades, strategy or plans changed after this review was written.</span>
             <button type="button" onClick={() => generate(weekStart, { force: true })} className="cursor-pointer font-medium underline-offset-2 hover:underline">
               Update review
             </button>

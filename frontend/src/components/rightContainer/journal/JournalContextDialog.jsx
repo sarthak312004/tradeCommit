@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { CalendarIcon, CheckSquareIcon, CloseIcon, HashIcon, PlusIcon, TextIcon } from '../../../utils/Icons.jsx'
+import { CalendarIcon, CheckSquareIcon, CloseIcon, HashIcon, MaximizeIcon, MinimizeIcon, PlusIcon, TextIcon } from '../../../utils/Icons.jsx'
 import { FIELD_TYPES, MAX_CUSTOM_FIELDS, MAX_STRATEGY_LENGTH, makeFieldKey, toFormField } from '../../../utils/customFields'
 import { dateInputClass, ghostFooterButton, iconButtonClass, inputClass } from '../../common/formStyles'
-import { dialogTextareaClass } from '../../profile/profileStyles'
+import { cleanStrategy, richTextLength, strategyToHtml } from '../../../utils/richText'
+import BasicRichTextEditor from '../../common/BasicRichTextEditor'
 
 const TYPE_ICONS = { text: TextIcon, number: HashIcon, date: CalendarIcon, checkbox: CheckSquareIcon }
 const numberInputClass = `${inputClass} [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`
@@ -32,12 +33,28 @@ const rememberScope = (journalId, scope) => {
     // storage unavailable (private mode): the choice just isn't remembered
   }
 }
+// Dialog size (normal / wide) is remembered in this browser too.
+const WIDE_KEY = 'tradecommit:context-wide'
+const readWide = () => {
+  try {
+    return window.localStorage.getItem(WIDE_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+const rememberWide = (isWide) => {
+  try {
+    window.localStorage.setItem(WIDE_KEY, isWide ? '1' : '0')
+  } catch {
+    // storage unavailable: the size just isn't remembered
+  }
+}
 const labelInputClass =
   'h-8 min-w-0 flex-1 rounded-md bg-transparent px-1.5 text-[13px] text-zinc-600 outline-none transition-colors placeholder:text-zinc-500 hover:bg-zinc-100/80 focus:bg-zinc-100 focus:text-zinc-800 dark:text-zinc-300 dark:hover:bg-white/[0.05] dark:focus:bg-white/[0.06] dark:focus:text-zinc-100'
 
 // what gets sent to (and compared with) the server copy
 const toPayload = (strategy, attributes) => ({
-  strategy: strategy.trim(),
+  strategy: cleanStrategy(strategy),
   attributes: attributes.map((field) => ({
     key: field.key,
     type: field.type,
@@ -112,7 +129,11 @@ function AttributeRow({ field, autoFocus, onChange, onRemove }) {
  * Rendered in a portal because the page header uses backdrop-blur, which would trap `fixed` children.
  */
 function JournalContextDialog({ journalId, journalName, context, onSave, onClose }) {
-  const [strategy, setStrategy] = useState(context?.strategy ?? '')
+  // the strategy is rich text: older journals hold plain text, which is turned into paragraphs once, here
+  const [initialStrategy] = useState(() => strategyToHtml(context?.strategy))
+  const [strategy, setStrategy] = useState(initialStrategy)
+  const [strategyLength, setStrategyLength] = useState(() => richTextLength(strategyToHtml(context?.strategy)))
+  const [isWide, setIsWide] = useState(readWide)
   const [attributes, setAttributes] = useState(() => (context?.attributes ?? []).map(toFormField))
   const [typeMenuOpen, setTypeMenuOpen] = useState(false)
   const [focusKey, setFocusKey] = useState(null)
@@ -127,14 +148,38 @@ function JournalContextDialog({ journalId, journalName, context, onSave, onClose
     dialogRef.current?.focus({ preventScroll: true })
   }, [])
 
-  const savedPayload = useMemo(() => JSON.stringify(toPayload(context?.strategy ?? '', (context?.attributes ?? []).map(toFormField))), [context])
+  const savedPayload = useMemo(() => JSON.stringify(toPayload(strategyToHtml(context?.strategy), (context?.attributes ?? []).map(toFormField))), [context])
   const isDirty = JSON.stringify(toPayload(strategy, attributes)) !== savedPayload
+  const isTooLong = strategyLength > MAX_STRATEGY_LENGTH
+
+  // a long strategy is easy to lose with a stray Esc or click outside, so ask first when there are unsaved edits
+  const requestClose = () => {
+    if (isSaving) return
+    if (isDirty && !window.confirm('Discard your unsaved changes?')) return
+    onClose()
+  }
+  const closeRef = useRef(requestClose)
+  useEffect(() => {
+    closeRef.current = requestClose
+  })
+
+  const handleStrategyChange = useCallback((html, text) => {
+    setStrategy(html)
+    setStrategyLength(text.length)
+  }, [])
+
+  const toggleWide = () => {
+    setIsWide((current) => {
+      rememberWide(!current)
+      return !current
+    })
+  }
 
   useEffect(() => {
-    const handleKeyDown = (event) => event.key === 'Escape' && !isSaving && onClose()
+    const handleKeyDown = (event) => event.key === 'Escape' && closeRef.current()
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [isSaving, onClose])
+  }, [])
 
   const addAttribute = (type) => {
     if (attributes.length >= MAX_CUSTOM_FIELDS) return
@@ -154,7 +199,7 @@ function JournalContextDialog({ journalId, journalName, context, onSave, onClose
 
   const handleSubmit = async (event) => {
     event.preventDefault()
-    if (isSaving || !isDirty) return
+    if (isSaving || !isDirty || isTooLong) return
 
     setIsSaving(true)
     setError('')
@@ -171,7 +216,7 @@ function JournalContextDialog({ journalId, journalName, context, onSave, onClose
   return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4 backdrop-blur-[2px]"
-      onMouseDown={(event) => event.target === event.currentTarget && !isSaving && onClose()}
+      onMouseDown={(event) => event.target === event.currentTarget && requestClose()}
     >
       <form
         ref={dialogRef}
@@ -180,34 +225,50 @@ function JournalContextDialog({ journalId, journalName, context, onSave, onClose
         role="dialog"
         aria-modal="true"
         aria-label="Journal context"
-        className="flex max-h-[90vh] outline-none w-full max-w-xl flex-col rounded-2xl border border-zinc-300 bg-white shadow-2xl dark:border-white/[0.14] dark:bg-panel"
+        className={`flex w-full flex-col rounded-2xl border border-zinc-300 bg-white shadow-2xl outline-none transition-[max-width] duration-200 dark:border-white/[0.14] dark:bg-panel ${
+          isWide ? 'h-[92vh] max-w-6xl' : 'max-h-[90vh] max-w-2xl'
+        }`}
       >
         <div className="flex items-start justify-between gap-3 px-6 pb-2 pt-5">
           <div className="min-w-0">
             <h3 className="text-base font-semibold tracking-[-0.03em] text-zinc-900 dark:text-zinc-100">Journal context</h3>
             <p className="mt-0.5 truncate text-xs text-zinc-500 dark:text-zinc-400">{journalName}</p>
           </div>
-          <button type="button" onClick={onClose} disabled={isSaving} aria-label="Close" className={`${iconButtonClass} cursor-pointer disabled:opacity-50`}>
-            <CloseIcon className="h-4 w-4" />
-          </button>
+          <div className="flex shrink-0 items-center gap-1">
+            <button
+              type="button"
+              onClick={toggleWide}
+              title={isWide ? 'Smaller window' : 'Bigger window'}
+              aria-label={isWide ? 'Make the window smaller' : 'Make the window bigger'}
+              aria-pressed={isWide}
+              className={`${iconButtonClass} hidden cursor-pointer md:flex`}
+            >
+              {isWide ? <MinimizeIcon className="h-4 w-4" /> : <MaximizeIcon className="h-4 w-4" />}
+            </button>
+            <button type="button" onClick={requestClose} disabled={isSaving} aria-label="Close" className={`${iconButtonClass} cursor-pointer disabled:opacity-50`}>
+              <CloseIcon className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
-        <div className="subtle-scrollbar min-h-0 flex-1 space-y-6 overflow-y-auto px-6 pb-5 pt-3">
+        <div className={`subtle-scrollbar min-h-0 flex-1 overflow-y-auto px-6 pb-5 pt-3 ${isWide ? 'space-y-6 lg:grid lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] lg:items-start lg:gap-8 lg:space-y-0' : 'space-y-6'}`}>
           <section>
-            <label htmlFor="journal-strategy" className="text-[13px] font-medium text-zinc-700 dark:text-zinc-200">Strategy</label>
+            <span id="journal-strategy-label" className="text-[13px] font-medium text-zinc-700 dark:text-zinc-200">Strategy</span>
             <p className="mb-2 mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-              Describe how you trade this journal. It is saved with the journal and gives future AI insights the background they need.
+              Describe how you trade this journal: entries, risk, stops, hours, what you skip. Use lists to keep rules easy to check. It is saved with the journal and gives AI insights the background they need.
             </p>
-            <textarea
+            <BasicRichTextEditor
               id="journal-strategy"
-              value={strategy}
-              onChange={(event) => setStrategy(event.target.value)}
-              maxLength={MAX_STRATEGY_LENGTH}
-              rows={5}
+              labelledBy="journal-strategy-label"
+              initialHtml={initialStrategy}
+              onChange={handleStrategyChange}
+              editorClassName={isWide ? 'min-h-[55vh]' : 'min-h-[260px]'}
               placeholder="e.g. Intraday breakouts on index futures. I trade the first 90 minutes only, risk 1% per trade and skip high-impact news days."
-              className={dialogTextareaClass}
             />
-            <p className="mt-1 text-right text-[11px] text-zinc-500 dark:text-zinc-400">{strategy.length}/{MAX_STRATEGY_LENGTH}</p>
+            <p className={`mt-1 flex justify-between text-[11px] ${isTooLong ? 'font-medium text-rose-600 dark:text-rose-400' : 'text-zinc-500 dark:text-zinc-400'}`}>
+              <span>{isTooLong ? 'Too long. Shorten it to save.' : 'Drag the bottom-right corner of the box to make it taller.'}</span>
+              <span className="tabular-nums">{strategyLength}/{MAX_STRATEGY_LENGTH}</span>
+            </p>
           </section>
 
           <section>
@@ -288,8 +349,8 @@ function JournalContextDialog({ journalId, journalName, context, onSave, onClose
         <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-zinc-300 px-6 py-3 dark:border-white/[0.12]">
           <p role="alert" className="min-w-0 text-xs text-rose-600 dark:text-rose-400">{error}</p>
           <div className="flex shrink-0 items-center gap-2">
-            <button type="button" onClick={onClose} disabled={isSaving} className={`${ghostFooterButton} cursor-pointer disabled:opacity-50`}>Cancel</button>
-            <button type="submit" disabled={!isDirty || isSaving} className={saveButtonClass}>
+            <button type="button" onClick={requestClose} disabled={isSaving} className={`${ghostFooterButton} cursor-pointer disabled:opacity-50`}>Cancel</button>
+            <button type="submit" disabled={!isDirty || isSaving || isTooLong} className={saveButtonClass}>
               {isSaving ? 'Saving...' : 'Save'}
             </button>
           </div>

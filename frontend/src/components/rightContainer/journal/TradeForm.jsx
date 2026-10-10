@@ -1,5 +1,5 @@
 import { badgeBase, badgeTone, dotTone } from '../../common/controlStyles'
-import { dateInputClass, editorClass, footerClass, ghostFooterButton, iconButtonClass, inputClass, numberInputClass, primaryFooterButton, toolbarClass, toolbarDivider, toolbarIconButton, toolbarSelect, toolbarTextButton } from '../../common/formStyles'
+import { dateInputClass, editorClass, footerClass, ghostFooterButton, iconButtonClass, inputClass, numberInputClass, primaryFooterButton, toolbarClass, toolbarDivider, toolbarIconButton, toolbarTextButton } from '../../common/formStyles'
 import { useActiveFormats } from '../../../hooks/useActiveFormats'
 import { useEffect, useRef, useState } from 'react'
 import { useFieldArray, useForm } from 'react-hook-form'
@@ -11,6 +11,7 @@ import { clearInterim, getCleanHtml, insertDictatedText, parseDictation, showInt
 import { SHORTCUT_LABEL, useDictationShortcut, useVoiceDictation } from '../../../hooks/useVoiceDictation'
 import { MOD_LABEL, useFormShortcuts } from '../../../hooks/useFormShortcuts'
 import ShortcutHint from '../../common/ShortcutHint'
+import TextStyleMenu from '../../common/TextStyleMenu'
 import VoiceLevel from './VoiceLevel'
 
 const defaultValues = {
@@ -874,18 +875,7 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
               <div role="toolbar" aria-label="Formatting" className={toolbarClass}>
                 <ToolbarButton title="Bold" icon="bold" active={formats.bold} onClick={() => runEditorCommand('bold')} />
                 <ToolbarButton title="Italic" icon="italic" active={formats.italic} onClick={() => runEditorCommand('italic')} />
-                <select
-                  title="Text style"
-                  aria-label="Text style"
-                  value={['h2', 'h3', 'h4'].includes(formats.block) ? formats.block : 'p'}
-                  onChange={(event) => runEditorCommand('formatBlock', event.target.value)}
-                  className={toolbarSelect}
-                >
-                  <option value="p">Text</option>
-                  <option value="h2">Headline</option>
-                  <option value="h3">Subheadline</option>
-                  <option value="h4">Small heading</option>
-                </select>
+                <TextStyleMenu value={formats.block} onChange={(tag) => runEditorCommand('formatBlock', tag)} />
                 <span aria-hidden="true" className={toolbarDivider} />
                 <ToolbarButton title="Bulleted list" icon="list" active={formats.insertUnorderedList} onClick={() => runEditorCommand('insertUnorderedList')} />
                 <ToolbarButton title="Numbered list" icon="listOrdered" active={formats.insertOrderedList} onClick={() => runEditorCommand('insertOrderedList')} />

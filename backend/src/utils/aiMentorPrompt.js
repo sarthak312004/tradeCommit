@@ -1,8 +1,11 @@
-import { computeAnalytics, computeWeekEvidence, dateKey, tradePnl, tradeR, tradeRisk, weeklyHistory } from "./tradeStats.js";
+import { addDays, computeAnalytics, computeWeekEvidence, dateKey, tradePnl, tradeR, tradeRisk, weeklyHistory } from "./tradeStats.js";
+import { htmlToPlainText } from "./richText.js";
 
 const MAX_WEEK_TRADES = 40; // trades sent in full detail
 const MAX_HISTORY_TRADES = 40; // earlier trades sent as one short line each
 const NOTE_CHARS = 700;
+const PLAN_CHARS = 1200; // written text of one plan
+const PLAN_STATUSES = ["executed_as_planned", "executed_with_differences", "plan_not_taken", "unplanned_trade"];
 
 /* ------------------------------- schema ------------------------------- */
 
@@ -48,6 +51,22 @@ export const REVIEW_SCHEMA = {
       },
       required: ["verdict", "reasoning", "suggestedChanges", "marketAdaptation"],
     },
+    // only present when a planner is connected to the journal
+    planAlignment: {
+      type: "OBJECT",
+      properties: {
+        summary: str,
+        days: {
+          type: "ARRAY",
+          items: {
+            type: "OBJECT",
+            properties: { date: str, status: { type: "STRING", enum: PLAN_STATUSES }, detail: str, trades: strList },
+            required: ["date", "status", "detail", "trades"],
+          },
+        },
+      },
+      required: ["summary", "days"],
+    },
     nextWeek: strList,
     mentorNote: str,
   },
@@ -65,6 +84,17 @@ Your job:
 4. Judge the strategy itself, not only the trader. Look across the weekly history and the journal-wide numbers. If the same rule keeps being broken, ask whether the rule is unrealistic. If the rules were followed over a meaningful sample and results are still weak, say the strategy may need adjusting and say exactly what to test. If evidence is thin, say "keep" and explain that more trades are needed. Never recommend changes based on one or two trades.
 5. Market adaptation: you have NO live market data. Only comment on market conditions when the trader's own logs show a pattern (for example: longs lose while shorts win, one instrument or weekday keeps losing, stops get hit more often than before, win rate shifted versus earlier weeks). Describe it as "your results suggest" and never claim to know what the market did.
 
+6. Plan vs execution (ONLY when the prompt contains a "TRADER'S TRADE PLANS" block, meaning the trader connected a planner to this journal). The plans are what the trader intended to do on each day; the trade logs are what they actually did. Compare them by content (instrument, direction, entry zone, stop, target, size), not just by date: a plan for one day may be executed the next day. Apply these rules strictly:
+- A plan is a CONDITIONAL idea ("if price breaks X, buy"), not an obligation. A plan with no matching trade almost always means the entry never triggered, or the trader chose to skip it. You cannot tell which, so say "not triggered or skipped". This is NOT an inconsistency, NOT a missed trade, and NOT a discipline failure. Skipping a setup that did not look right is often good discipline. Only treat it as a problem if the trader's own notes say the setup triggered and they hesitated, or the written strategy explicitly says every valid setup must be taken.
+- A trade with no plan for that day is an "unplanned trade". State it neutrally as a fact. It is a rule break only if the written strategy says every trade must be planned in advance. Never call it a mismatch between plan and journal.
+- A day with no plan and no trade is a normal day off. Do not mention it.
+- A planner connected but holding no plans this week is not a flaw. Plans simply may not have been written. Do not penalise it, and do not claim the trader did not plan unless the strategy requires planning.
+- When a trade matches a plan, say it was executed as planned. When it differs, name ONLY the differences that the plan actually specified (for example a different stop, direction or entry zone). Never penalise details the plan did not mention.
+- Plans may contain screenshots you cannot see, and a plan with no written text cannot be compared in detail; say so rather than guessing.
+- Executed-trade statistics come from the trade logs only. Plans that were not taken do not change win rate, P&L or any other number.
+- Never invent plans, triggers or reasons. If the trader's notes do not explain why a plan was skipped, say the reason is not recorded.
+Do not mention planning, planners or plans at all when no TRADER'S TRADE PLANS block is present.
+
 Rules of evidence:
 - Use only the data given. Never invent trades, prices, rules, or market events. If something can't be verified from the logs (for example the strategy mentions a time window but trades have no time), mark that rule "unclear" and say what the trader should start logging.
 - Numbers you quote must come from the data. Use the journal's currency code for money.
@@ -80,6 +110,7 @@ Output rules:
 - ruleChecks: 3 to 8 of the most important rules from the strategy. "trades" lists T-numbers, or an empty list for week-wide rules.
 - strengths: 1 to 3 items. issues: 1 to 4 items, most important first, each with the T-numbers involved.
 - strategyFeedback.verdict: "keep", "tweak", or "rethink". suggestedChanges: 0 to 3 specific, testable edits to the written strategy (empty list when verdict is keep). marketAdaptation: 1 to 3 sentences grounded in the trader's own data, or say plainly that the data is too thin to tell.
+- planAlignment: ONLY when the TRADER'S TRADE PLANS block is present, otherwise omit it. summary: 1 to 3 sentences on how closely execution matched the plans, treating plans that were not triggered or skipped and unplanned trades as neutral facts. days: one item per day that has a plan or a trade, using the date as written in the prompt. status is "executed_as_planned", "executed_with_differences", "plan_not_taken" (not triggered or skipped), or "unplanned_trade". detail: 1 or 2 sentences. trades: T-numbers involved, or an empty list.
 - nextWeek: exactly 2 or 3 concrete actions for next week.
 - mentorNote: 2 to 3 sentences, personal and encouraging but honest.`;
 
@@ -149,11 +180,77 @@ const statsBlock = (stats, currency) =>
     `long: ${stats.long.count} trades, ${money(stats.long.netPnl, currency)}, ${pct(stats.long.winRate)} win | short: ${stats.short.count} trades, ${money(stats.short.netPnl, currency)}, ${pct(stats.short.winRate)} win`,
   ].join("\n");
 
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const weekday = (key) => WEEKDAYS[new Date(`${key}T00:00:00Z`).getUTCDay()];
+
+const planText = (entry) => {
+  const text = htmlToPlainText(entry.content).replace(/\s*\n\s*/g, " / ").slice(0, PLAN_CHARS);
+  if (text) return text;
+  return (entry.images?.length ?? 0) > 0 ? "(no written text, only screenshots that you cannot see)" : "(no written text)";
+};
+
+/**
+ * What the trader planned (connected planner) next to what they executed, day by day, plus ground-truth counts.
+ * Returns null when no planner is connected, so the prompt then says nothing about planning at all.
+ */
+const buildPlanSection = ({ planners, planEntries, shown, weekStart, weekEnd, currency }) => {
+  if (!planners?.length) return null;
+
+  const plannerNames = new Map(planners.map((planner) => [String(planner._id), planner.name]));
+  const tradedLabel = (trade, index) =>
+    `T${index + 1} ${trade.assetName} ${trade.direction} qty ${trade.quantity} entry ${trade.entryPrice} stop ${trade.stopLoss ?? "not logged"} exit ${trade.exitPrice ?? "still open"}`;
+
+  const lines = [];
+  const planDays = new Set();
+  const plannedAndTraded = [];
+  const plannedNotTraded = [];
+  const tradedNotPlanned = [];
+
+  for (let offset = 0; offset < 7; offset += 1) {
+    const day = addDays(weekStart, offset);
+    const plans = planEntries.filter((entry) => entry.date === day);
+    const trades = shown.map((trade, index) => ({ trade, index })).filter(({ trade }) => dateKey(trade.date) === day);
+    if (!plans.length && !trades.length) continue;
+
+    lines.push(`${day} (${weekday(day)})`);
+    if (plans.length) {
+      planDays.add(day);
+      plans.forEach((entry) => {
+        lines.push(`  PLAN "${entry.title}" [planner: ${plannerNames.get(String(entry.planner)) ?? "unknown"}]: ${planText(entry)}`);
+      });
+    } else {
+      lines.push("  PLAN: nothing written for this day");
+    }
+    if (trades.length) {
+      trades.forEach(({ trade, index }) => lines.push(`  EXECUTED: ${tradedLabel(trade, index)}`));
+    } else {
+      lines.push("  EXECUTED: no trades logged this day");
+    }
+
+    if (plans.length && trades.length) plannedAndTraded.push(day);
+    else if (plans.length) plannedNotTraded.push(day);
+    else tradedNotPlanned.push(day);
+  }
+
+  const dayList = (days) => (days.length ? days.join(", ") : "none");
+  const out = [
+    `Connected planner(s): ${planners.map((planner) => `"${planner.name}" (${planner.type})`).join(", ")}`,
+    `plans written for days of this week: ${planEntries.length} plan(s) on ${planDays.size} day(s)`,
+    `days with a plan AND trades logged: ${dayList(plannedAndTraded)}`,
+    `days with a plan but NO trade logged (entry not triggered, or skipped by choice; the reason is unknown unless the notes say): ${dayList(plannedNotTraded)}`,
+    `days with trades but NO plan written (unplanned trades): ${dayList(tradedNotPlanned)}`,
+    "",
+    "Day by day (days with neither a plan nor a trade are left out; match plans to trades by content, not only by date):",
+    ...(lines.length ? lines : ["(nothing planned and nothing traded this week)"]),
+  ];
+  return out.join("\n");
+};
+
 /**
  * Assembles everything the mentor reads. Returns { prompt, tradeLabels } where tradeLabels maps "T3" to a
  * readable name so the answer's trade references can be shown to the user.
  */
-export const buildMentorPrompt = ({ journal, weekStart, weekEnd, weekTrades, priorTrades, allTradesToDate }) => {
+export const buildMentorPrompt = ({ journal, weekStart, weekEnd, weekTrades, priorTrades, allTradesToDate, planners = [], planEntries = [] }) => {
   const currency = journal.currency ?? "USD";
   const context = journal.context ?? {};
 
@@ -190,19 +287,24 @@ export const buildMentorPrompt = ({ journal, weekStart, weekEnd, weekTrades, pri
 
   const priorLines = priorTrades.slice(-MAX_HISTORY_TRADES).map((trade) => tradeLine(trade, currency));
 
+  const planSection = buildPlanSection({ planners, planEntries, shown, weekStart, weekEnd, currency });
+
   const prompt = [
     `JOURNAL: "${journal.journalName}" | currency ${currency}`,
     journal.description ? `Journal description: ${journal.description}` : null,
     `WEEK UNDER REVIEW: ${weekStart} (Monday) to ${weekEnd} (Sunday)`,
     "",
     "=== TRADER'S WRITTEN STRATEGY (the rules they committed to) ===",
-    context.strategy,
+    htmlToPlainText(context.strategy),
     defaults.length ? `\nProperties the trader tracks on every trade: ${defaults.join(", ")}` : null,
     "",
     "=== THIS WEEK'S TRADES, as logged ===",
     ...shown.map((trade, index) => tradeDetail(trade, `T${index + 1}`, currency)),
     weekTrades.length > shown.length ? `(${weekTrades.length - shown.length} more trades this week not shown)` : null,
     "",
+    planSection ? "=== TRADER'S TRADE PLANS vs WHAT WAS EXECUTED (from the planner connected to this journal) ===" : null,
+    planSection,
+    planSection ? "" : null,
     "=== Facts computed from the logs (ground truth) ===",
     ...evidenceLines,
     "",
@@ -223,7 +325,7 @@ export const buildMentorPrompt = ({ journal, weekStart, weekEnd, weekTrades, pri
     .filter((line) => line !== null)
     .join("\n");
 
-  return { prompt, tradeLabels };
+  return { prompt, tradeLabels, hasPlanContext: Boolean(planSection) };
 };
 
 /* ---------------------------- sanitising ---------------------------- */
@@ -239,8 +341,24 @@ const resolveTrades = (value, labels) =>
     return match ? labels[match[0]] ?? null : null;
   });
 
+// only kept when a planner was actually connected: otherwise the model has nothing to compare and must not invent it
+const sanitizePlanAlignment = (raw, labels, weekStart, weekEnd) => {
+  const summary = text(raw?.summary, 700);
+  const days = list(raw?.days, 14, (item) => {
+    const date = text(item?.date, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date < weekStart || date > weekEnd) return null;
+    return {
+      date,
+      status: oneOf(item.status, PLAN_STATUSES, "plan_not_taken"),
+      detail: text(item.detail, 500),
+      trades: resolveTrades(item.trades, labels),
+    };
+  }).sort((a, b) => a.date.localeCompare(b.date));
+  return summary || days.length ? { summary, days } : null;
+};
+
 /** Never trust the model's JSON blindly: clamp lengths, enforce the enums, resolve trade references. */
-export const sanitizeReview = (raw, tradeLabels) => {
+export const sanitizeReview = (raw, tradeLabels, { hasPlanContext = false, weekStart = "", weekEnd = "" } = {}) => {
   const discipline = raw?.discipline ?? {};
   const verdict = oneOf(discipline.verdict, ["followed", "mostly_followed", "partly_followed", "not_followed", "cannot_assess"], "cannot_assess");
   const score = Number.isFinite(Number(discipline.score)) ? Math.min(100, Math.max(0, Math.round(Number(discipline.score)))) : 0;
@@ -270,6 +388,7 @@ export const sanitizeReview = (raw, tradeLabels) => {
       suggestedChanges: list(feedback.suggestedChanges, 3, (item) => text(item, 400) || null),
       marketAdaptation: text(feedback.marketAdaptation, 700),
     },
+    planAlignment: hasPlanContext ? sanitizePlanAlignment(raw?.planAlignment, tradeLabels, weekStart, weekEnd) : null,
     nextWeek: list(raw?.nextWeek, 3, (item) => text(item, 300) || null),
     mentorNote: text(raw?.mentorNote, 700),
   };

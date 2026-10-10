@@ -1,4 +1,5 @@
-import { Journal, MAX_STRATEGY_LENGTH } from "../models/journal.models.js";
+import { Journal, MAX_STRATEGY_HTML_LENGTH, MAX_STRATEGY_LENGTH } from "../models/journal.models.js";
+import { Planner } from "../models/planner.models.js";
 import { Trade } from "../models/trade.models.js";
 import { AiReview } from "../models/aiReview.models.js";
 import { ApiError } from "../utils/ApiError.js";
@@ -7,6 +8,7 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { deleteImagesFromCloudinary } from "../utils/cloudinary.js";
 import { DEFAULT_CURRENCY, isValidCurrency, normalizeCurrency } from "../constants/currency.js";
 import { applyContextToFields, parseCustomFields } from "../utils/customFields.js";
+import { htmlToPlainText, sanitizeRichText } from "../utils/richText.js";
 
 const imageUrlsFromHtml = (html = "") =>
   [...html.matchAll(/<img[^>]+src=["']([^"']+)["']/gi)].map((match) => match[1].trim()).filter(Boolean);
@@ -54,10 +56,17 @@ const parseJournalContext = (raw) => {
     throw new ApiError(400, "Journal context must be an object");
   }
 
-  const strategy = raw.strategy ?? "";
-  if (typeof strategy !== "string") throw new ApiError(400, "Strategy must be text");
-  if (strategy.trim().length > MAX_STRATEGY_LENGTH) {
+  const rawStrategy = raw.strategy ?? "";
+  if (typeof rawStrategy !== "string") throw new ApiError(400, "Strategy must be text");
+  if (rawStrategy.length > MAX_STRATEGY_HTML_LENGTH * 2) throw new ApiError(400, "Strategy is too long");
+
+  // the editor sends HTML: keep only formatting tags, and measure the length of the visible text
+  const strategy = sanitizeRichText(rawStrategy);
+  if (htmlToPlainText(strategy).length > MAX_STRATEGY_LENGTH) {
     throw new ApiError(400, `Strategy can be up to ${MAX_STRATEGY_LENGTH} characters`);
+  }
+  if (strategy.length > MAX_STRATEGY_HTML_LENGTH) {
+    throw new ApiError(400, "Strategy has too much formatting. Remove some and try again.");
   }
 
   const attributes = parseCustomFields(raw.attributes);
@@ -65,7 +74,7 @@ const parseJournalContext = (raw) => {
     throw new ApiError(400, "Each default property needs its own key");
   }
 
-  return { strategy: strategy.trim(), attributes };
+  return { strategy, attributes };
 };
 
 const serializeJournal = (journal) => ({
@@ -200,6 +209,8 @@ export const deleteJournal = asyncHandler(async (req, res) => {
   const trades = await Trade.find({ journal: journal._id, owner: req.user._id });
   await Trade.deleteMany({ journal: journal._id, owner: req.user._id });
   await AiReview.deleteMany({ journal: journal._id, owner: req.user._id });
+  // planners connected to this journal stay, they just are not connected to anything anymore
+  await Planner.updateMany({ linkedJournal: journal._id, owner: req.user._id }, { $set: { linkedJournal: null } });
   await Journal.deleteOne({ _id: journal._id, owner: req.user._id });
 
   void deleteImagesFromCloudinary(

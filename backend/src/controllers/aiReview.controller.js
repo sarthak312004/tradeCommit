@@ -2,12 +2,15 @@ import crypto from "node:crypto";
 import mongoose from "mongoose";
 import { AiReview } from "../models/aiReview.models.js";
 import { Journal } from "../models/journal.models.js";
+import { PlanEntry } from "../models/planEntry.models.js";
+import { Planner } from "../models/planner.models.js";
 import { Trade } from "../models/trade.models.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { buildMentorPrompt, REVIEW_SCHEMA, sanitizeReview, SYSTEM_PROMPT } from "../utils/aiMentorPrompt.js";
 import { generateJson } from "../utils/gemini.js";
+import { htmlToPlainText } from "../utils/richText.js";
 import { addDays, computeAnalytics, dateKey, isDateKey, mondayOf } from "../utils/tradeStats.js";
 
 // A strategy shorter than this has no rules to check trades against.
@@ -47,7 +50,21 @@ const loadWeek = async (req) => {
   });
   const priorTrades = allTradesToDate.filter((trade) => dateKey(trade.date) < weekStart);
 
-  const strategy = journal.context?.strategy?.trim() ?? "";
+  // Planners the trader connected to this journal, and the plans they wrote for this week. The mentor compares
+  // them with the executed trades. Nothing is loaded (and the hash is unchanged) when no planner is connected.
+  const planners = await Planner.find({ linkedJournal: journal._id, owner: req.user._id }).select("name type").sort({ createdAt: 1 }).lean();
+  const planEntries = planners.length
+    ? await PlanEntry.find({
+        planner: { $in: planners.map((planner) => planner._id) },
+        owner: req.user._id,
+        date: { $gte: weekStart, $lte: weekEnd },
+      })
+        .sort({ date: 1, createdAt: 1 })
+        .lean()
+    : [];
+
+  // the strategy is stored as HTML (or plain text in older journals): judge its length by the visible text
+  const strategy = htmlToPlainText(journal.context?.strategy ?? "");
   const inputHash = crypto
     .createHash("sha256")
     .update(
@@ -56,11 +73,19 @@ const loadWeek = async (req) => {
         strategy,
         attributes: (journal.context?.attributes ?? []).map(({ label, type }) => [label, type]),
         trades: allTradesToDate.map((trade) => [String(trade._id), new Date(trade.updatedAt ?? 0).getTime()]),
+        ...(planners.length
+          ? {
+              plans: [
+                planners.map((planner) => String(planner._id)),
+                planEntries.map((entry) => [String(entry._id), new Date(entry.updatedAt ?? 0).getTime()]),
+              ],
+            }
+          : {}),
       })
     )
     .digest("hex");
 
-  return { journal, weekStart, weekEnd, weekTrades, priorTrades, allTradesToDate, hasStrategy: strategy.length >= MIN_STRATEGY_LENGTH, inputHash };
+  return { journal, weekStart, weekEnd, weekTrades, priorTrades, allTradesToDate, planners, planEntries, hasStrategy: strategy.length >= MIN_STRATEGY_LENGTH, inputHash };
 };
 
 const weekSummary = (weekTrades) => {
@@ -74,6 +99,8 @@ const serialize = (week, saved) => ({
   currency: week.journal.currency,
   hasStrategy: week.hasStrategy,
   tradeCount: week.weekTrades.length,
+  // how many planners are connected to this journal, and how many plans they hold for this week
+  planner: { connected: week.planners.length, plans: week.planEntries.length },
   week: weekSummary(week.weekTrades),
   review: saved?.review ?? null,
   model: saved?.model ?? null,
@@ -83,9 +110,9 @@ const serialize = (week, saved) => ({
 });
 
 const generate = async (week) => {
-  const { prompt, tradeLabels } = buildMentorPrompt(week);
+  const { prompt, tradeLabels, hasPlanContext } = buildMentorPrompt(week);
   const { result, model } = await generateJson({ system: SYSTEM_PROMPT, prompt, schema: REVIEW_SCHEMA });
-  const review = sanitizeReview(result, tradeLabels);
+  const review = sanitizeReview(result, tradeLabels, { hasPlanContext, weekStart: week.weekStart, weekEnd: week.weekEnd });
   if (!review.summary || !review.headline) throw new ApiError(502, "The AI returned an incomplete review. Please try again.");
 
   return AiReview.findOneAndUpdate(

@@ -1,5 +1,6 @@
 import { useContext, useEffect, useRef, useState } from "react"
-import { plannerContext } from "../../context/Context"
+import { journalContext, plannerContext } from "../../context/Context"
+import JournalPicker from "../common/JournalPicker"
 import {
   CUSTOM_TYPE,
   DEFAULT_PLANNER_TYPE,
@@ -19,9 +20,11 @@ import {
 
 function PlannerCreateForm({ open, onClose }) {
   const { createPlanner } = useContext(plannerContext)
+  const { journals } = useContext(journalContext)
   const [name, setName] = useState("")
   const [type, setType] = useState(DEFAULT_PLANNER_TYPE)
   const [customType, setCustomType] = useState("")
+  const [linkedJournalId, setLinkedJournalId] = useState("")
   const [error, setError] = useState("")
   const [isSaving, setIsSaving] = useState(false)
   const inputRef = useRef(null)
@@ -36,6 +39,7 @@ function PlannerCreateForm({ open, onClose }) {
     setName("")
     setType(DEFAULT_PLANNER_TYPE)
     setCustomType("")
+    setLinkedJournalId("")
     setError("")
     onClose()
   }
@@ -49,7 +53,7 @@ function PlannerCreateForm({ open, onClose }) {
     setIsSaving(true)
     setError("")
     try {
-      await createPlanner(trimmedName, plannerType)
+      await createPlanner(trimmedName, plannerType, linkedJournalId || null)
       reset()
     } catch (submitError) {
       setError(submitError.message || "Could not create the planner")
@@ -110,6 +114,24 @@ function PlannerCreateForm({ open, onClose }) {
             />
           )}
         </div>
+
+        {journals.length > 0 && (
+          <div>
+            <label className={createFieldLabel}>Connect to a journal <span className="font-normal opacity-70">(optional)</span></label>
+            <JournalPicker
+              variant="field"
+              journals={journals.filter((journal) => !String(journal.id).startsWith("pending-"))}
+              value={linkedJournalId}
+              onChange={setLinkedJournalId}
+              disabled={isSaving}
+              emptyLabel="Not connected"
+              ariaLabel="Connect to a journal"
+            />
+            <p className="mt-1.5 text-[11px] leading-snug text-zinc-600 dark:text-zinc-400">
+              The AI mentor then compares your plans with the trades you took in that journal.
+            </p>
+          </div>
+        )}
       </div>
 
       {error && (

@@ -21,6 +21,13 @@ const STRATEGY = {
 
 const RULE_STATUS = { followed: 'You followed it.', broken: 'You broke it.', unclear: "I can't verify it from your logs." }
 
+const PLAN_STATUS = {
+  executed_as_planned: 'executed as planned',
+  executed_with_differences: 'executed with some differences from the plan',
+  plan_not_taken: 'planned, but not triggered or skipped',
+  unplanned_trade: 'traded without a plan'
+}
+
 const ORDINALS = ['First', 'Second', 'Third']
 
 // small fixes so numbers and symbols are read the way a person would say them
@@ -101,6 +108,11 @@ export const buildReviewSpeech = (review) => {
       'Rule checks',
       review.ruleChecks.map((check) => `${endSentence(check.rule)} ${RULE_STATUS[check.status] ?? ''} ${check.evidence ?? ''}`)
     )
+  }
+
+  if (review.planAlignment?.summary || review.planAlignment?.days?.length) {
+    const days = (review.planAlignment.days ?? []).map((day) => `${day.date}, ${PLAN_STATUS[day.status] ?? ''}. ${day.detail ?? ''}`)
+    add('Plan vs execution', ['Plan versus execution.', review.planAlignment.summary, ...days])
   }
 
   if (review.strengths?.length) {

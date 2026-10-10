@@ -2,13 +2,16 @@ import mongoose from "mongoose";
 import { DEFAULT_CURRENCY, isValidCurrency } from "../constants/currency.js";
 import { customFieldSchema } from "./customField.schema.js";
 
-export const MAX_STRATEGY_LENGTH = 2000;
+// limit on the visible text; the stored HTML also carries formatting tags, so it gets a larger cap
+export const MAX_STRATEGY_LENGTH = 6000;
+export const MAX_STRATEGY_HTML_LENGTH = 24000;
 
 // Background about how this journal is traded. Edited from the journal header and read by
 // the trade form (default properties) and, later, by AI features (strategy + attributes).
 const journalContextSchema = new mongoose.Schema(
   {
-    strategy: { type: String, trim: true, maxlength: MAX_STRATEGY_LENGTH, default: "" },
+    // sanitised HTML from the context editor (older journals hold plain text, which still works)
+    strategy: { type: String, trim: true, maxlength: MAX_STRATEGY_HTML_LENGTH, default: "" },
     // properties added to every new trade form in this journal; `value` is the default
     attributes: { type: [customFieldSchema], default: [] },
   },

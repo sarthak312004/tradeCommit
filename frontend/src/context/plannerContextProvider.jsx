@@ -36,14 +36,16 @@ function PlannerContextProvider({ children }) {
     }
   }, [])
 
-  const createPlanner = useCallback(async (name, type) => {
-    const created = await plannerApi.create({ name: name.trim(), type: type.trim() })
+  const createPlanner = useCallback(async (name, type, linkedJournalId = null) => {
+    const created = await plannerApi.create({ name: name.trim(), type: type.trim(), linkedJournalId })
     setPlanners((current) => [...current, created])
     return created
   }, [])
 
-  const updatePlanner = useCallback(async (id, name) => {
-    const updated = await plannerApi.update(id, { name: name.trim() })
+  // `changes` is a new name (string) or an object like { name } / { linkedJournalId } (null disconnects the journal)
+  const updatePlanner = useCallback(async (id, changes) => {
+    const body = typeof changes === 'string' ? { name: changes.trim() } : changes
+    const updated = await plannerApi.update(id, body)
     setPlanners((current) => current.map((planner) => (planner.id === id ? updated : planner)))
     return updated
   }, [])

@@ -16,6 +16,14 @@ const plannerSchema = new mongoose.Schema(
       maxlength: [30, "Planner type can be at most 30 characters"],
       default: "Intraday",
     },
+    // Optional connection to one journal. The AI mentor reads this planner's plans next to that journal's
+    // executed trades, to see how closely the trader followed what they planned.
+    linkedJournal: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Journal",
+      default: null,
+      index: true,
+    },
     owner: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

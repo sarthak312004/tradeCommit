@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { Journal } from "../models/journal.models.js";
 import { Planner } from "../models/planner.models.js";
 import { PlanEntry } from "../models/planEntry.models.js";
 import { ApiError } from "../utils/ApiError.js";
@@ -25,6 +26,7 @@ const serializePlanner = (planner) => ({
   id: String(planner._id),
   name: planner.name,
   type: planner.type || DEFAULT_TYPE,
+  linkedJournalId: planner.linkedJournal ? String(planner.linkedJournal) : null,
   createdAt: new Date(planner.createdAt).toISOString(),
   updatedAt: new Date(planner.updatedAt).toISOString(),
 });
@@ -66,6 +68,21 @@ const parsePlannerPayload = (body, { requireName = true } = {}) => {
   return { name, type };
 };
 
+// `linkedJournalId`: undefined = not sent (leave as is), null / "" = disconnect, an id = connect to that journal
+const parseLinkedJournal = async (body, ownerId) => {
+  if (!body || !Object.prototype.hasOwnProperty.call(body, "linkedJournalId")) return undefined;
+
+  const value = body.linkedJournalId;
+  if (value === null || value === "") return null;
+  if (typeof value !== "string" || !mongoose.isValidObjectId(value)) {
+    throw new ApiError(400, "A valid journal ID is required");
+  }
+
+  const journal = await Journal.findOne({ _id: value, owner: ownerId }).select("_id");
+  if (!journal) throw new ApiError(404, "Journal not found");
+  return journal._id;
+};
+
 const parseEntryPayload = (body) => {
   const title = typeof body?.title === "string" ? body.title.trim() : "";
   const date = typeof body?.date === "string" ? body.date.trim() : "";
@@ -95,10 +112,12 @@ export const getAllPlanners = asyncHandler(async (req, res) => {
 
 export const createPlanner = asyncHandler(async (req, res) => {
   const { name, type } = parsePlannerPayload(req.body);
+  const linkedJournal = await parseLinkedJournal(req.body, req.user._id);
 
   const planner = await Planner.create({
     name,
     type: type || DEFAULT_TYPE,
+    linkedJournal: linkedJournal ?? null,
     owner: req.user._id,
   });
 
@@ -108,9 +127,11 @@ export const createPlanner = asyncHandler(async (req, res) => {
 export const updatePlanner = asyncHandler(async (req, res) => {
   const planner = await findOwnedPlanner(req);
   const { name, type } = parsePlannerPayload(req.body, { requireName: false });
+  const linkedJournal = await parseLinkedJournal(req.body, req.user._id);
 
   if (name) planner.name = name;
   if (type) planner.type = type;
+  if (linkedJournal !== undefined) planner.linkedJournal = linkedJournal;
   await planner.save();
 
   return res.status(200).json(new ApiResponse(200, serializePlanner(planner), "Planner updated successfully"));

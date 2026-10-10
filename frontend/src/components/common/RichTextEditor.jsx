@@ -5,7 +5,8 @@ import { clearInterim, getCleanHtml, insertDictatedText, parseDictation, showInt
 import { SHORTCUT_LABEL, useDictationShortcut, useVoiceDictation } from '../../hooks/useVoiceDictation'
 import VoiceLevel from '../rightContainer/journal/VoiceLevel'
 import { useActiveFormats } from '../../hooks/useActiveFormats'
-import { editorClass, toolbarClass, toolbarDivider, toolbarIconButton, toolbarSelect, toolbarTextButton } from './formStyles'
+import TextStyleMenu from './TextStyleMenu'
+import { editorClass, toolbarClass, toolbarDivider, toolbarIconButton, toolbarTextButton } from './formStyles'
 
 // keep the text selection inside the editor when a toolbar button is pressed
 const keepSelection = (event) => event.preventDefault()
@@ -330,18 +331,7 @@ function RichTextEditor({ ref, id, label, initialHtml = '', placeholder, onUploa
       <div role="toolbar" aria-label="Formatting" className={toolbarClass}>
         <ToolbarButton title="Bold" Icon={BoldIcon} active={formats.bold} onClick={() => runCommand('bold')} />
         <ToolbarButton title="Italic" Icon={ItalicIcon} active={formats.italic} onClick={() => runCommand('italic')} />
-        <select
-          title="Text style"
-          aria-label="Text style"
-          value={['h2', 'h3', 'h4'].includes(formats.block) ? formats.block : 'p'}
-          onChange={(event) => runCommand('formatBlock', event.target.value)}
-          className={toolbarSelect}
-        >
-          <option value="p">Text</option>
-          <option value="h2">Headline</option>
-          <option value="h3">Subheadline</option>
-          <option value="h4">Small heading</option>
-        </select>
+        <TextStyleMenu value={formats.block} onChange={(tag) => runCommand('formatBlock', tag)} />
         <span aria-hidden="true" className={toolbarDivider} />
         <ToolbarButton title="Bulleted list" Icon={ListIcon} active={formats.insertUnorderedList} onClick={() => runCommand('insertUnorderedList')} />
         <ToolbarButton title="Numbered list" Icon={ListOrderedIcon} active={formats.insertOrderedList} onClick={() => runCommand('insertOrderedList')} />

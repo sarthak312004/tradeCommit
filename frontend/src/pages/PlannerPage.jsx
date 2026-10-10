@@ -5,6 +5,7 @@ import { usePlanEntries } from '../hooks/usePlanEntries'
 import TopBar from '../components/rightContainer/TopBar'
 import PlannerCalendar from '../components/rightContainer/planner/PlannerCalendar'
 import PlanForm from '../components/rightContainer/planner/PlanForm'
+import PlannerJournalLink from '../components/rightContainer/planner/PlannerJournalLink'
 
 const pageBody = 'subtle-scrollbar flex-1 overflow-y-auto p-6 md:p-8'
 
@@ -20,6 +21,7 @@ function PlannerWorkspace({ planner }) {
     <>
       <TopBar label={`Trade planner · ${planner.type}`} title={planner.name} />
       <div className={pageBody}>
+        <PlannerJournalLink planner={planner} />
         {error && <p role="alert" className="mb-4 text-sm text-rose-500">{error}</p>}
         {isLoading ? (
           <p className="text-sm text-zinc-600 dark:text-zinc-300">Loading plans…</p>

@@ -7,6 +7,8 @@ export const normalizePlanner = (planner) => ({
   id: planner.id ?? planner._id,
   name: planner.name ?? 'Untitled planner',
   type: planner.type ?? DEFAULT_PLANNER_TYPE,
+  // the journal this planner is connected to (so the AI mentor can compare plans with executed trades), or null
+  linkedJournalId: planner.linkedJournalId ?? null,
   createdAt: planner.createdAt,
   updatedAt: planner.updatedAt
 })
@@ -27,8 +29,9 @@ export const plannerApi = {
     return (await requestJson(API_BASE) ?? []).map(normalizePlanner)
   },
 
-  async create({ name, type }) {
-    return normalizePlanner(await requestJson(API_BASE, { method: 'POST', body: { name, type } }))
+  async create({ name, type, linkedJournalId }) {
+    const body = linkedJournalId ? { name, type, linkedJournalId } : { name, type }
+    return normalizePlanner(await requestJson(API_BASE, { method: 'POST', body }))
   },
 
   async update(plannerId, changes) {
