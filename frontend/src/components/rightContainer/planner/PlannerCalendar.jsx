@@ -38,7 +38,7 @@ function DayCell({ day, entries, isToday, isSelected, isExpanded, onToggleExpand
   //   today         number becomes a filled sky badge (so today and selected can be told apart, and can combine)
   //   other month   slightly tinted cell, same text colours (no opacity, so contrast is never reduced)
   const surface = isSelected
-    ? 'bg-white shadow-card ring-2 ring-sky-700 dark:bg-white/[0.08] dark:shadow-none dark:ring-sky-400'
+    ? 'bg-white shadow-card dark:bg-white/[0.08] dark:shadow-none'
     : day.inMonth
       ? 'hover:bg-zinc-900/[0.05] dark:hover:bg-white/[0.05]'
       : 'bg-zinc-900/[0.03] hover:bg-zinc-900/[0.06] dark:bg-white/[0.02] dark:hover:bg-white/[0.05]'
