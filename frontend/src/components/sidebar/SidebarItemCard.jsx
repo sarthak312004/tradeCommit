@@ -12,7 +12,7 @@ const rowBase = "group relative flex w-full items-center rounded-md transition-c
 const rowStates = {
 	// white tile + 3px accent bar: 7.7:1 text and a >=3:1 edge against the sidebar in both themes
 	selected:
-		"bg-white shadow-card ring-1 ring-zinc-900/20 before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded-full before:bg-sky-700 dark:bg-white/[0.12] dark:shadow-none dark:ring-white/[0.16] dark:before:bg-sky-400",
+		"bg-white/60 shadow-card before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded-full before:bg-sky-700 dark:bg-white/[0.12] dark:shadow-none dark:before:bg-sky-400",
 	editing: "bg-black/[0.06] dark:bg-white/[0.05]",
 	idle: "hover:bg-black/[0.06] dark:hover:bg-white/[0.05]",
 }

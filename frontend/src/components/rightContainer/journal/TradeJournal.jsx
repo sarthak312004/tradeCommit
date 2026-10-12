@@ -128,7 +128,7 @@ function TradeJournal({ journal, onAddTrade, onUpdateTrade, onDeleteTrade, onUpl
             type="button"
             onClick={isFormOpen ? handleCloseForm : handleOpenNewTrade}
             data-tour="add-trade"
-            className="h-8 cursor-pointer rounded-lg bg-sky-500 px-3 text-xs font-semibold text-white transition hover:bg-sky-600"
+            className="h-8 cursor-pointer rounded-lg bg-sky-600 px-3 text-xs font-semibold text-white transition hover:bg-sky-600"
           >
             + Add trade
           </button>
