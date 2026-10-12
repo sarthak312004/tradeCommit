@@ -93,7 +93,7 @@ const serializeJournal = (journal) => ({
 
 export const getAllJournals = asyncHandler(async (req, res) => {
   const journals = await Journal.find({ owner: req.user._id })
-    .sort({ updatedAt: -1 })
+    .sort({ createdAt: 1 })
     .populate({
       path: "trades",
       options: { sort: { date: -1, createdAt: -1 } },
