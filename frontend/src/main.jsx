@@ -28,6 +28,14 @@ const router = createBrowserRouter([
         element:<MainJournal/>
       },
       {
+        path:'calendar',
+        element:<MainJournal/>
+      },
+      {
+        path:'analysis',
+        element:<MainJournal/>
+      },
+      {
         path:'planner/:plannerId',
         element:<LazyPlannerPage/>
       }

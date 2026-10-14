@@ -1,9 +1,11 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router'
+import JournalCalendar from './JournalCalendar'
 import TradeCard from './TradeCard'
 import DateRangeFilter from './DateRangeFilter'
 import JournalActionsMenu from './JournalActionsMenu'
 import { ALL_TIME, describeRangeInline, isRangeActive } from '../../../utils/dateRange'
-import { filterTradesByDate, sortTradesNewestFirst } from '../../../utils/tradeAnalytics'
+import { filterTradesByDate, sortTradesNewestFirst, toDateKey } from '../../../utils/tradeAnalytics'
 import { DEFAULT_CURRENCY } from '../../../utils/currencies'
 import { buildTemplateFields, hasJournalContext } from '../../../utils/customFields'
 import { SlidersIcon } from '../../../utils/Icons.jsx'
@@ -16,14 +18,17 @@ const JournalContextDialog = lazy(() => import('./JournalContextDialog'))
 const ExportJournalDialog = lazy(() => import('./ExportJournalDialog'))
 
 const VIEWS = [
-  { id: 'trades', label: 'Trades' },
-  { id: 'analysis', label: 'Analysis' }
+  { id: 'trades', label: 'Trades', path: '/' },
+  { id: 'calendar', label: 'Calendar', path: '/calendar' },
+  { id: 'analysis', label: 'Analysis', path: '/analysis' }
 ]
 
-function TradeJournal({ journal, onAddTrade, onUpdateTrade, onDeleteTrade, onUploadTradeImage, onSaveContext, onRetryTrade, onDiscardTrade }) {
+function TradeJournal({ view = 'trades', journal, onAddTrade, onUpdateTrade, onDeleteTrade, onUploadTradeImage, onSaveContext, onRetryTrade, onDiscardTrade }) {
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [editingTrade, setEditingTrade] = useState(null)
-  const [view, setView] = useState('trades')
+  const navigate = useNavigate()
+  // date picked on the calendar for a new trade (null = form opens on today)
+  const [newTradeDate, setNewTradeDate] = useState(null)
   const [range, setRange] = useState(ALL_TIME)
   const [isContextOpen, setIsContextOpen] = useState(false)
   const [isExportOpen, setIsExportOpen] = useState(false)
@@ -44,8 +49,9 @@ function TradeJournal({ journal, onAddTrade, onUpdateTrade, onDeleteTrade, onUpl
   const journalContext = journal?.context
   const templateFields = useMemo(() => buildTemplateFields(journalContext, allTrades ?? []), [journalContext, allTrades])
 
-  const handleOpenNewTrade = () => {
+  const handleOpenNewTrade = (date = null) => {
     setEditingTrade(null)
+    setNewTradeDate(typeof date === 'string' ? date : null)
     setIsFormOpen(true)
   }
 
@@ -57,6 +63,7 @@ function TradeJournal({ journal, onAddTrade, onUpdateTrade, onDeleteTrade, onUpl
 
   const handleCloseForm = () => {
     setEditingTrade(null)
+    setNewTradeDate(null)
     setIsFormOpen(false)
   }
 
@@ -86,7 +93,7 @@ function TradeJournal({ journal, onAddTrade, onUpdateTrade, onDeleteTrade, onUpl
     <section>
       <div className="mb-5 flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
         <div className="min-w-0">
-          <h2 className="text-xl font-semibold tracking-[-0.05em]">{view === 'analysis' ? 'Analysis' : 'Recent trades'}</h2>
+          <h2 className="text-xl font-semibold tracking-[-0.05em]">{view === 'analysis' ? 'Analysis' : view === 'calendar' ? 'Trade calendar' : 'Recent trades'}</h2>
           <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">{subtitle}</p>
         </div>
 
@@ -98,7 +105,7 @@ function TradeJournal({ journal, onAddTrade, onUpdateTrade, onDeleteTrade, onUpl
                 type="button"
                 role="tab"
                 aria-selected={view === item.id}
-                onClick={() => setView(item.id)}
+                onClick={() => navigate(item.path)}
                 className={`h-full cursor-pointer rounded-md px-3 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/40 ${
                   view === item.id
                     ? 'bg-zinc-900 text-white dark:bg-white/10 dark:text-zinc-100'
@@ -126,7 +133,7 @@ function TradeJournal({ journal, onAddTrade, onUpdateTrade, onDeleteTrade, onUpl
 
           <button
             type="button"
-            onClick={isFormOpen ? handleCloseForm : handleOpenNewTrade}
+            onClick={isFormOpen ? handleCloseForm : () => handleOpenNewTrade()}
             data-tour="add-trade"
             className="h-8 cursor-pointer rounded-lg bg-sky-600 px-3 text-xs font-semibold text-white transition hover:bg-sky-600"
           >
@@ -162,6 +169,7 @@ function TradeJournal({ journal, onAddTrade, onUpdateTrade, onDeleteTrade, onUpl
             currency={currency}
             templateFields={templateFields}
             initialTrade={editingTrade}
+            initialDate={newTradeDate}
             onSubmit={handleSubmitTrade}
             onClose={handleCloseForm}
             onUploadImage={(file) => onUploadTradeImage(journal.id, file)}
@@ -169,7 +177,15 @@ function TradeJournal({ journal, onAddTrade, onUpdateTrade, onDeleteTrade, onUpl
         </Suspense>
       )}
 
-      {journal.trades.length === 0 ? (
+      {view === 'calendar' ? (
+        // always shown, even with no trades, so any day can be clicked to log one
+        <JournalCalendar
+          trades={visibleTrades}
+          selectedDate={isFormOpen ? (editingTrade ? toDateKey(editingTrade.date) : newTradeDate) : null}
+          onCreateForDate={handleOpenNewTrade}
+          onOpenTrade={handleOpenEditTrade}
+        />
+      ) : journal.trades.length === 0 ? (
         <div className="rounded-lg border border-dashed border-zinc-400/60 bg-white/50 p-10 text-center dark:border-white/[0.14] dark:bg-transparent">
           <p className="text-sm font-medium text-zinc-600 dark:text-zinc-300">No trades in this journal yet.</p>
           <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">Add your first trade to start tracking this journal.</p>

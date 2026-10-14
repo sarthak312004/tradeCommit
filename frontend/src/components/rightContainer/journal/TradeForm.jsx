@@ -111,7 +111,7 @@ function ToolbarButton({ title, icon, onClick, active }) {
 }
 
 //---------------------Main Form-------------
-function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = [], initialTrade = null, onSubmit, onClose, onUploadImage, respectReducedMotion = false }) {
+function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = [], initialTrade = null, initialDate = null, onSubmit, onClose, onUploadImage, respectReducedMotion = false }) {
   const [drawerWidth, setDrawerWidth] = useState(DEFAULT_WIDTH)
   const [expanded, setExpanded] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
@@ -170,7 +170,7 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
           direction: initialTrade.direction ?? initialTrade.side ?? 'Long',
           customFields: (initialTrade.customFields ?? []).map(toFormField)
         }
-      : { ...defaultValues, customFields: templateRef.current.map(toFormField) }
+      : { ...defaultValues, ...(initialDate ? { date: initialDate } : {}), customFields: templateRef.current.map(toFormField) }
 
     removedImagesRef.current.clear()
     reset(formValues)
@@ -180,7 +180,7 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
         [...editorRef.current.querySelectorAll('img')].map((image) => image.src)
       )
     }
-  }, [initialTrade, reset])
+  }, [initialTrade, initialDate, reset])
 
   // close the "Add property" menu on outside click / Esc
   useEffect(() => {

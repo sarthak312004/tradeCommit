@@ -1,5 +1,5 @@
 import { useContext } from "react"
-import { useNavigate } from "react-router"
+import { useLocation, useNavigate } from "react-router"
 import { journalContext } from "../../context/Context.js"
 import { FileIcon } from "../../utils/Icons.jsx"
 import SidebarItemCard from "./SidebarItemCard"
@@ -7,10 +7,12 @@ import SidebarItemCard from "./SidebarItemCard"
 function JournalCard({ journal, isSelected }) {
 	const { updateJournal, deleteJournal, selectJournal } = useContext(journalContext)
 	const navigate = useNavigate()
+	const { pathname } = useLocation()
 
 	const handleSelect = () => {
 		selectJournal(journal.id)
-		navigate("/") // journals live on the index route, planners on /planner/:id
+		// journals live on /, /calendar and /analysis (stay on the current view), planners on /planner/:id
+		navigate(pathname === "/calendar" || pathname === "/analysis" ? pathname : "/")
 	}
 
 	return (

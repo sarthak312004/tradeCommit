@@ -1,6 +1,6 @@
 import { useContext, useEffect, useState } from "react"
 import { createPortal } from "react-dom"
-import { useMatch, useNavigate } from "react-router"
+import { useLocation, useMatch, useNavigate } from "react-router"
 import { journalContext, plannerContext } from "../../context/Context"
 import JournalCard from "./JournalCard"
 import JournalCreateForm from "./JournalCreateForm"
@@ -19,6 +19,7 @@ function Sidebar({ isSidebarOpen, setIsSidebarOpen }) {
   const { planners } = useContext(plannerContext)
   const { theme, setTheme } = useTheme()
   const navigate = useNavigate()
+  const { pathname } = useLocation()
 
   // which page is showing decides which section highlights its selected row
   const plannerMatch = useMatch("/planner/:plannerId")
@@ -68,7 +69,7 @@ function Sidebar({ isSidebarOpen, setIsSidebarOpen }) {
     isSelected: activeJournalId === journal.id,
     onSelect: () => {
       selectJournal(journal.id)
-      navigate("/")
+      navigate(pathname === "/calendar" || pathname === "/analysis" ? pathname : "/")
     },
   }))
 
