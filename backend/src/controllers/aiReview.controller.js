@@ -10,6 +10,7 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { buildMentorPrompt, REVIEW_SCHEMA, sanitizeReview, SYSTEM_PROMPT } from "../utils/aiMentorPrompt.js";
 import { evaluateAccess, markUsageOk, releaseUsage, reserveUsage } from "../utils/aiQuota.js";
+import { isUserBusy, markUserBusy, releaseUser } from "../utils/aiJobGuard.js";
 import { generateJson } from "../utils/gemini.js";
 import { runQueued } from "../utils/geminiQueue.js";
 import { htmlToPlainText } from "../utils/richText.js";
@@ -19,8 +20,7 @@ import { addDays, computeAnalytics, dateKey, isDateKey, mondayOf } from "../util
 const MIN_STRATEGY_LENGTH = 15;
 // one generation per journal-week at a time: a double click shares the same Gemini call
 const inFlight = new Map();
-// ...and one generation per trader at a time, so nobody can fan out several Gemini calls at once
-const userBusy = new Map();
+// ...and one generation per trader at a time (shared with date-range reviews, see aiJobGuard.js)
 
 const todayKey = () => new Date().toISOString().slice(0, 10);
 
@@ -193,14 +193,14 @@ export const createAiReview = asyncHandler(async (req, res) => {
 
   // no awaits between these checks and the set() calls below, so two requests cannot both start
   if (inFlight.has(key)) return respond(await inFlight.get(key));
-  if (userBusy.has(String(ownerId))) throw new ApiError(429, "Your other review is still being written. Wait for it to finish, then try again.");
+  if (isUserBusy(ownerId)) throw new ApiError(429, "Your other review is still being written. Wait for it to finish, then try again.");
 
   const job = generate(week).finally(() => {
     inFlight.delete(key);
-    userBusy.delete(String(ownerId));
+    releaseUser(ownerId);
   });
   inFlight.set(key, job);
-  userBusy.set(String(ownerId), key);
+  markUserBusy(ownerId, key);
 
   return respond(await job);
 });

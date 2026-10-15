@@ -44,7 +44,7 @@ function MetricList({ title, rows }) {
   )
 }
 
-function TradeAnalysis({ trades, currency, rangeLabel, journalId, journalName, onOpenContext }) {
+function TradeAnalysis({ trades, currency, rangeLabel, range = null, journalId, journalName, onOpenContext }) {
   const [isMentorOpen, setIsMentorOpen] = useState(false)
   const money = (value, options) => formatMoney(value, { currency, ...options })
   const stats = useMemo(() => computeAnalytics(trades), [trades])
@@ -80,7 +80,7 @@ function TradeAnalysis({ trades, currency, rangeLabel, journalId, journalName, o
         </div>
 
         {journalId && (
-          <button type="button" onClick={() => setIsMentorOpen(true)} title="Weekly feedback from an AI mentor, checked against your strategy" className={controlNeutral}>
+          <button type="button" onClick={() => setIsMentorOpen(true)} title="Feedback from an AI mentor on a week or any date range, checked against your strategy" className={controlNeutral}>
             <SparklesIcon className="h-3.5 w-3.5" />
             Mentor review
           </button>
@@ -124,6 +124,7 @@ function TradeAnalysis({ trades, currency, rangeLabel, journalId, journalName, o
             journalId={journalId}
             journalName={journalName}
             currency={currency}
+            initialRange={range}
             onClose={() => setIsMentorOpen(false)}
             onOpenContext={
               onOpenContext &&

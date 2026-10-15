@@ -28,9 +28,9 @@ const pill = `inline-flex h-8 cursor-pointer items-center justify-center gap-1.5
  * "Listen" row for a finished review: read it aloud with the browser's speech engine, pause / resume, stop,
  * and change the speed. Reading stops by itself when this unmounts (review closed, week changed, regenerating).
  */
-function ListenControls({ review }) {
+function ListenControls({ review, period = 'week' }) {
   const { supported, status, label, rate, speak, pause, resume, stop, cycleRate } = useSpeechSynthesis()
-  const chunks = useMemo(() => buildReviewSpeech(review), [review])
+  const chunks = useMemo(() => buildReviewSpeech(review, period), [review, period])
 
   if (!supported || !chunks.length) return null
 

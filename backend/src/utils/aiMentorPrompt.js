@@ -114,13 +114,13 @@ Output rules:
 - nextWeek: exactly 2 or 3 concrete actions for next week.
 - mentorNote: 2 to 3 sentences, personal and encouraging but honest.`;
 
-const money = (value, currency) => (value === null || value === undefined || Number.isNaN(value) ? "n/a" : `${value < 0 ? "-" : "+"}${currency} ${Math.abs(value).toFixed(2)}`);
-const plain = (value, currency) => (value === null || value === undefined || Number.isNaN(value) ? "n/a" : `${currency} ${value.toFixed(2)}`);
-const pct = (value) => (value === null || value === undefined ? "n/a" : `${Math.round(value * 100)}%`);
-const ratio = (value) => (value === null || value === undefined ? "n/a" : value.toFixed(2));
-const rText = (value) => (value === null || value === undefined ? "n/a" : `${value.toFixed(2)}R`);
+export const money = (value, currency) => (value === null || value === undefined || Number.isNaN(value) ? "n/a" : `${value < 0 ? "-" : "+"}${currency} ${Math.abs(value).toFixed(2)}`);
+export const plain = (value, currency) => (value === null || value === undefined || Number.isNaN(value) ? "n/a" : `${currency} ${value.toFixed(2)}`);
+export const pct = (value) => (value === null || value === undefined ? "n/a" : `${Math.round(value * 100)}%`);
+export const ratio = (value) => (value === null || value === undefined ? "n/a" : value.toFixed(2));
+export const rText = (value) => (value === null || value === undefined ? "n/a" : `${value.toFixed(2)}R`);
 
-const htmlToText = (html = "") =>
+export const htmlToText = (html = "") =>
   String(html)
     .replace(/<img[^>]*>/gi, " ")
     .replace(/<\/(p|div|li|h[1-6]|blockquote)>/gi, ". ")
@@ -142,7 +142,7 @@ const fieldText = (field) => {
   return `${field.label}: ${String(field.value).slice(0, 200)}`;
 };
 
-const tradeDetail = (trade, label, currency) => {
+export const tradeDetail = (trade, label, currency) => {
   const pnl = tradePnl(trade);
   const r = tradeR(trade);
   const risk = tradeRisk(trade);
@@ -159,14 +159,14 @@ const tradeDetail = (trade, label, currency) => {
     .join("\n");
 };
 
-const tradeLine = (trade, currency) => {
+export const tradeLine = (trade, currency) => {
   const pnl = tradePnl(trade);
   const r = tradeR(trade);
   const fields = (trade.customFields ?? []).map(fieldText).filter(Boolean).join("; ");
   return `${dateKey(trade.date)} | ${trade.assetName} ${trade.direction} | ${pnl === null ? "open" : money(pnl, currency)}${r === null ? "" : ` | ${rText(r)}`}${fields ? ` | ${fields}` : ""}`;
 };
 
-const statsBlock = (stats, currency) =>
+export const statsBlock = (stats, currency) =>
   [
     `trades ${stats.totalTrades} (${stats.closedTrades} closed, ${stats.openTrades} open)`,
     `net P&L ${money(stats.netPnl, currency)}`,
@@ -183,7 +183,7 @@ const statsBlock = (stats, currency) =>
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const weekday = (key) => WEEKDAYS[new Date(`${key}T00:00:00Z`).getUTCDay()];
 
-const planText = (entry) => {
+export const planText = (entry) => {
   const text = htmlToPlainText(entry.content).replace(/\s*\n\s*/g, " / ").slice(0, PLAN_CHARS);
   if (text) return text;
   return (entry.images?.length ?? 0) > 0 ? "(no written text, only screenshots that you cannot see)" : "(no written text)";
@@ -193,7 +193,7 @@ const planText = (entry) => {
  * What the trader planned (connected planner) next to what they executed, day by day, plus ground-truth counts.
  * Returns null when no planner is connected, so the prompt then says nothing about planning at all.
  */
-const buildPlanSection = ({ planners, planEntries, shown, weekStart, weekEnd, currency }) => {
+export const buildPlanSection = ({ planners, planEntries, shown, extraTrades = [], weekStart, weekEnd, currency }) => {
   if (!planners?.length) return null;
 
   const plannerNames = new Map(planners.map((planner) => [String(planner._id), planner.name]));
@@ -206,11 +206,15 @@ const buildPlanSection = ({ planners, planEntries, shown, weekStart, weekEnd, cu
   const plannedNotTraded = [];
   const tradedNotPlanned = [];
 
-  for (let offset = 0; offset < 7; offset += 1) {
+  const dayCount = Math.round((new Date(`${weekEnd}T00:00:00Z`) - new Date(`${weekStart}T00:00:00Z`)) / 86_400_000) + 1;
+  for (let offset = 0; offset < dayCount; offset += 1) {
     const day = addDays(weekStart, offset);
     const plans = planEntries.filter((entry) => entry.date === day);
     const trades = shown.map((trade, index) => ({ trade, index })).filter(({ trade }) => dateKey(trade.date) === day);
-    if (!plans.length && !trades.length) continue;
+    // trades of a long date range that are listed without a T-number: they still count as executed that day
+    const unnumbered = extraTrades.filter((trade) => dateKey(trade.date) === day);
+    const executedCount = trades.length + unnumbered.length;
+    if (!plans.length && !executedCount) continue;
 
     lines.push(`${day} (${weekday(day)})`);
     if (plans.length) {
@@ -221,13 +225,14 @@ const buildPlanSection = ({ planners, planEntries, shown, weekStart, weekEnd, cu
     } else {
       lines.push("  PLAN: nothing written for this day");
     }
-    if (trades.length) {
+    if (executedCount) {
+      unnumbered.forEach((trade) => lines.push(`  EXECUTED (short line, no T-number): ${tradeLine(trade, currency)}`));
       trades.forEach(({ trade, index }) => lines.push(`  EXECUTED: ${tradedLabel(trade, index)}`));
     } else {
       lines.push("  EXECUTED: no trades logged this day");
     }
 
-    if (plans.length && trades.length) plannedAndTraded.push(day);
+    if (plans.length && executedCount) plannedAndTraded.push(day);
     else if (plans.length) plannedNotTraded.push(day);
     else tradedNotPlanned.push(day);
   }
@@ -342,9 +347,9 @@ const resolveTrades = (value, labels) =>
   });
 
 // only kept when a planner was actually connected: otherwise the model has nothing to compare and must not invent it
-const sanitizePlanAlignment = (raw, labels, weekStart, weekEnd) => {
+const sanitizePlanAlignment = (raw, labels, weekStart, weekEnd, maxDays = 14) => {
   const summary = text(raw?.summary, 700);
-  const days = list(raw?.days, 14, (item) => {
+  const days = list(raw?.days, maxDays, (item) => {
     const date = text(item?.date, 10);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date < weekStart || date > weekEnd) return null;
     return {
@@ -358,7 +363,7 @@ const sanitizePlanAlignment = (raw, labels, weekStart, weekEnd) => {
 };
 
 /** Never trust the model's JSON blindly: clamp lengths, enforce the enums, resolve trade references. */
-export const sanitizeReview = (raw, tradeLabels, { hasPlanContext = false, weekStart = "", weekEnd = "" } = {}) => {
+export const sanitizeReview = (raw, tradeLabels, { hasPlanContext = false, weekStart = "", weekEnd = "", maxPlanDays = 14 } = {}) => {
   const discipline = raw?.discipline ?? {};
   const verdict = oneOf(discipline.verdict, ["followed", "mostly_followed", "partly_followed", "not_followed", "cannot_assess"], "cannot_assess");
   const score = Number.isFinite(Number(discipline.score)) ? Math.min(100, Math.max(0, Math.round(Number(discipline.score)))) : 0;
@@ -388,7 +393,7 @@ export const sanitizeReview = (raw, tradeLabels, { hasPlanContext = false, weekS
       suggestedChanges: list(feedback.suggestedChanges, 3, (item) => text(item, 400) || null),
       marketAdaptation: text(feedback.marketAdaptation, 700),
     },
-    planAlignment: hasPlanContext ? sanitizePlanAlignment(raw?.planAlignment, tradeLabels, weekStart, weekEnd) : null,
+    planAlignment: hasPlanContext ? sanitizePlanAlignment(raw?.planAlignment, tradeLabels, weekStart, weekEnd, maxPlanDays) : null,
     nextWeek: list(raw?.nextWeek, 3, (item) => text(item, 300) || null),
     mentorNote: text(raw?.mentorNote, 700),
   };

@@ -45,6 +45,7 @@ import { tradeRouter } from './routes/trade.routes.js'
 import { plannerRouter } from './routes/planner.routes.js'
 import { feedbackRouter } from './routes/feedback.routes.js'
 import { aiReviewRouter } from './routes/aiReview.routes.js'
+import { aiRangeReviewRouter } from './routes/aiRangeReview.routes.js'
 
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20 })
 app.use("/api/v1/auth/login", authLimiter)
@@ -67,11 +68,13 @@ app.use("/api/v1/feedback", (req, res, next) => (req.method === "POST" ? feedbac
 // AI mentor reviews call Gemini's free tier, which has tight per-minute and per-day quotas: keep raw volume low per IP.
 const aiReviewLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 20, message: "Too many AI review requests, please try again later" })
 app.use("/api/v1/journals/:journalId/ai-review", (req, res, next) => (req.method === "POST" ? aiReviewLimiter(req, res, next) : next()))
+app.use("/api/v1/journals/:journalId/ai-range-reviews", (req, res, next) => (req.method === "POST" ? aiReviewLimiter(req, res, next) : next()))
 
 app.use("/api/v1/auth", userRouter)
 app.use("/api/v1/journals", journalRouter)
 app.use("/api/v1/journals/:journalId/trades", tradeRouter)
 app.use("/api/v1/journals/:journalId/ai-review", aiReviewRouter)
+app.use("/api/v1/journals/:journalId/ai-range-reviews", aiRangeReviewRouter)
 app.use("/api/v1/planners", plannerRouter)
 app.use("/api/v1/feedback", feedbackRouter)
 

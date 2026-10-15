@@ -42,7 +42,8 @@ export const evaluateAccess = async ({ week, saved, ownerId }) => {
   const reviewedBefore = saved ? saved.reviewedTradeCount ?? 0 : 0;
   const newTrades = Math.max(0, week.weekTrades.length - reviewedBefore);
   // a finished week unlocks with a single trade; an open week waits for enough trades to find patterns
-  const threshold = week.isClosed ? 1 : saved ? limits.stepTrades : limits.firstTrades;
+  // a date-range review never takes the closed-week shortcut: it always needs the full minimum of trades
+  const threshold = week.isClosed && !week.strictMinimum ? 1 : saved ? limits.stepTrades : limits.firstTrades;
   const rulesRewritten = Boolean(saved?.contextHash) && saved.contextHash !== week.contextHash;
 
   const mine = await AiUsage.find({ owner: ownerId, ok: true, createdAt: { $gte: new Date(now - 7 * DAY_MS) } })
@@ -62,9 +63,10 @@ export const evaluateAccess = async ({ week, saved, ownerId }) => {
 
   if (!rulesRewritten && newTrades < threshold) {
     const missing = threshold - newTrades;
+    const scope = week.scopeLabel; // set for date ranges ("this date range"); weekly reviews keep their original wording
     const message = saved
-      ? `Log ${plural(missing, "more trade")} in this week to unlock an updated review (${newTrades} of ${threshold} new trades).`
-      : `Log ${plural(missing, "more trade")} this week to unlock your review (${week.weekTrades.length} of ${threshold}). More trades give the mentor real patterns to work with.`;
+      ? `Log ${plural(missing, "more trade")} in ${scope ?? "this week"} to unlock an updated review (${newTrades} of ${threshold} new trades).`
+      : `Log ${plural(missing, "more trade")} ${scope ? `in ${scope}` : "this week"} to unlock your review (${week.weekTrades.length} of ${threshold}). More trades give the mentor real patterns to work with.`;
     return { ...base, canGenerate: false, reason: "not_enough_trades", message };
   }
 

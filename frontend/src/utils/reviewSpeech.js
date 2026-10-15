@@ -5,13 +5,14 @@
 // The speech hook re-splits smaller for voices that cut off long text (Google's online voices in Chrome).
 const MAX_CHUNK = 300
 
-const DISCIPLINE = {
-  followed: 'You followed your rules this week.',
-  mostly_followed: 'You mostly followed your rules this week.',
-  partly_followed: 'You only partly followed your rules this week.',
-  not_followed: 'You did not follow your rules this week.',
+// wording for a weekly review vs a date-range review ("this week" / "in this period")
+const DISCIPLINE = (when) => ({
+  followed: `You followed your rules ${when}.`,
+  mostly_followed: `You mostly followed your rules ${when}.`,
+  partly_followed: `You only partly followed your rules ${when}.`,
+  not_followed: `You did not follow your rules ${when}.`,
   cannot_assess: "There wasn't enough in your logs to judge your discipline."
-}
+})
 
 const STRATEGY = {
   keep: 'My advice is to keep your strategy as it is.',
@@ -85,8 +86,9 @@ export const chunkText = (text, max = MAX_CHUNK) => {
 }
 
 /** Returns [{ label, text }]: one entry per spoken chunk, labelled with the section it belongs to. */
-export const buildReviewSpeech = (review) => {
+export const buildReviewSpeech = (review, period = 'week') => {
   if (!review) return []
+  const isRange = period === 'range'
 
   const sections = []
   const add = (label, parts) => {
@@ -98,7 +100,7 @@ export const buildReviewSpeech = (review) => {
 
   const discipline = review.discipline ?? {}
   add('Discipline', [
-    DISCIPLINE[discipline.verdict] ?? DISCIPLINE.cannot_assess,
+    (DISCIPLINE(isRange ? 'in this period' : 'this week')[discipline.verdict] ?? DISCIPLINE('').cannot_assess),
     discipline.score !== null && discipline.score !== undefined ? `That is about ${discipline.score} percent of the rules I could check.` : '',
     discipline.explanation
   ])
@@ -132,7 +134,7 @@ export const buildReviewSpeech = (review) => {
   ])
 
   if (review.nextWeek?.length) {
-    add('Next week', ['For next week.', ...review.nextWeek.map((action, index) => `${ORDINALS[index] ?? 'Also'}, ${endSentence(action)}`)])
+    add(isRange ? 'Next steps' : 'Next week', [isRange ? 'For the next period.' : 'For next week.', ...review.nextWeek.map((action, index) => `${ORDINALS[index] ?? 'Also'}, ${endSentence(action)}`)])
   }
 
   add('Closing note', [review.mentorNote])

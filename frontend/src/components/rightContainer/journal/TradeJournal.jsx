@@ -207,6 +207,7 @@ function TradeJournal({ view = 'trades', journal, onAddTrade, onUpdateTrade, onD
             trades={visibleTrades}
             currency={currency}
             rangeLabel={isFiltered ? describeRangeInline(range) : null}
+            range={isFiltered ? range : null}
             journalId={journal.id}
             journalName={journal.name}
             onOpenContext={() => setIsContextOpen(true)}
