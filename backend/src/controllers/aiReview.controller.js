@@ -9,17 +9,18 @@ import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { buildMentorPrompt, REVIEW_SCHEMA, sanitizeReview, SYSTEM_PROMPT } from "../utils/aiMentorPrompt.js";
+import { evaluateAccess, markUsageOk, releaseUsage, reserveUsage } from "../utils/aiQuota.js";
 import { generateJson } from "../utils/gemini.js";
+import { runQueued } from "../utils/geminiQueue.js";
 import { htmlToPlainText } from "../utils/richText.js";
 import { addDays, computeAnalytics, dateKey, isDateKey, mondayOf } from "../utils/tradeStats.js";
 
 // A strategy shorter than this has no rules to check trades against.
 const MIN_STRATEGY_LENGTH = 15;
-// Pressing "Regenerate" right after a fresh, still-current review returns it instead of spending quota again.
-const REGENERATE_COOLDOWN_MS = 60_000;
-
 // one generation per journal-week at a time: a double click shares the same Gemini call
 const inFlight = new Map();
+// ...and one generation per trader at a time, so nobody can fan out several Gemini calls at once
+const userBusy = new Map();
 
 const todayKey = () => new Date().toISOString().slice(0, 10);
 
@@ -65,6 +66,18 @@ const loadWeek = async (req) => {
 
   // the strategy is stored as HTML (or plain text in older journals): judge its length by the visible text
   const strategy = htmlToPlainText(journal.context?.strategy ?? "");
+  // strategy, custom fields and connected plans without the trades: a change here unlocks a refresh on its own
+  const contextHash = crypto
+    .createHash("sha256")
+    .update(
+      JSON.stringify({
+        strategy,
+        attributes: (journal.context?.attributes ?? []).map(({ label, type }) => [label, type]),
+        plans: planners.length ? [planners.map((planner) => String(planner._id)), planEntries.map((entry) => [String(entry._id), new Date(entry.updatedAt ?? 0).getTime()])] : [],
+      })
+    )
+    .digest("hex");
+  // NOTE: inputHash's shape is unchanged on purpose, so reviews saved before this update are not flagged stale
   const inputHash = crypto
     .createHash("sha256")
     .update(
@@ -85,7 +98,7 @@ const loadWeek = async (req) => {
     )
     .digest("hex");
 
-  return { journal, weekStart, weekEnd, weekTrades, priorTrades, allTradesToDate, planners, planEntries, hasStrategy: strategy.length >= MIN_STRATEGY_LENGTH, inputHash };
+  return { journal, weekStart, weekEnd, weekTrades, priorTrades, allTradesToDate, planners, planEntries, hasStrategy: strategy.length >= MIN_STRATEGY_LENGTH, inputHash, contextHash, isClosed: weekEnd < todayKey() };
 };
 
 const weekSummary = (weekTrades) => {
@@ -93,7 +106,7 @@ const weekSummary = (weekTrades) => {
   return { trades: stats.totalTrades, closed: stats.closedTrades, netPnl: stats.netPnl, winRate: stats.winRate, avgRrr: stats.avgRrr };
 };
 
-const serialize = (week, saved) => ({
+const serialize = (week, saved, access) => ({
   weekStart: week.weekStart,
   weekEnd: week.weekEnd,
   currency: week.journal.currency,
@@ -107,19 +120,37 @@ const serialize = (week, saved) => ({
   generatedAt: saved?.updatedAt ? new Date(saved.updatedAt).toISOString() : null,
   // the journal's trades or strategy changed after this review was written
   stale: Boolean(saved) && saved.inputHash !== week.inputHash,
+  // whether a new review may be generated now (unlock rule, the trader's caps, the shared daily budget) and why not
+  access,
 });
 
 const generate = async (week) => {
+  const ownerId = week.journal.owner;
   const { prompt, tradeLabels, hasPlanContext } = buildMentorPrompt(week);
-  const { result, model } = await generateJson({ system: SYSTEM_PROMPT, prompt, schema: REVIEW_SCHEMA });
-  const review = sanitizeReview(result, tradeLabels, { hasPlanContext, weekStart: week.weekStart, weekEnd: week.weekEnd });
-  if (!review.summary || !review.headline) throw new ApiError(502, "The AI returned an incomplete review. Please try again.");
 
-  return AiReview.findOneAndUpdate(
-    { journal: week.journal._id, weekStart: week.weekStart },
-    { $set: { owner: week.journal.owner, inputHash: week.inputHash, model, review } },
-    { upsert: true, new: true, setDefaultsOnInsert: true }
-  ).lean();
+  // reserve the generation first so concurrent traders cannot overshoot the shared daily budget
+  const usage = await reserveUsage({ ownerId, journalId: week.journal._id, weekStart: week.weekStart });
+  let reachedGemini = false;
+  try {
+    const { result, model } = await runQueued(() => {
+      reachedGemini = true;
+      return generateJson({ system: SYSTEM_PROMPT, prompt, schema: REVIEW_SCHEMA });
+    });
+    const review = sanitizeReview(result, tradeLabels, { hasPlanContext, weekStart: week.weekStart, weekEnd: week.weekEnd });
+    if (!review.summary || !review.headline) throw new ApiError(502, "The AI returned an incomplete review. Please try again.");
+
+    const saved = await AiReview.findOneAndUpdate(
+      { journal: week.journal._id, weekStart: week.weekStart },
+      { $set: { owner: ownerId, inputHash: week.inputHash, contextHash: week.contextHash, reviewedTradeCount: week.weekTrades.length, model, review } },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    ).lean();
+    await markUsageOk(usage._id);
+    return saved;
+  } catch (error) {
+    // turned away by the queue before Gemini was called: nothing was spent, so nothing is charged
+    if (!reachedGemini) await releaseUsage(usage._id).catch(() => {});
+    throw error;
+  }
 };
 
 // GET /api/v1/journals/:journalId/ai-review?weekStart=YYYY-MM-DD
@@ -127,34 +158,49 @@ const generate = async (week) => {
 export const getAiReview = asyncHandler(async (req, res) => {
   const week = await loadWeek(req);
   const saved = await AiReview.findOne({ journal: week.journal._id, weekStart: week.weekStart }).lean();
-  return res.status(200).json(new ApiResponse(200, serialize(week, saved), "AI review fetched"));
+  const access = await evaluateAccess({ week, saved, ownerId: req.user._id });
+  return res.status(200).json(new ApiResponse(200, serialize(week, saved, access), "AI review fetched"));
 });
 
-// POST /api/v1/journals/:journalId/ai-review   { weekStart?, force? }
-// Returns the saved review when it is still current; otherwise asks Gemini and saves the result.
+// POST /api/v1/journals/:journalId/ai-review   { weekStart? }
+// Returns the saved review when it is still current. Otherwise it checks that the review is unlocked and within the
+// trader's caps and the shared daily budget, then asks Gemini (through the queue) and saves the result.
 export const createAiReview = asyncHandler(async (req, res) => {
-  const { force } = req.body ?? {};
-  if (force !== undefined && typeof force !== "boolean") throw new ApiError(400, "force must be true or false");
-
   const week = await loadWeek(req);
   if (!week.hasStrategy) {
     throw new ApiError(400, "Write your strategy in this journal's Context first, so the mentor has rules to check your trades against.");
   }
   if (week.weekTrades.length === 0) throw new ApiError(400, "There are no trades in this week to review.");
 
-  const saved = await AiReview.findOne({ journal: week.journal._id, weekStart: week.weekStart }).lean();
-  if (saved && saved.inputHash === week.inputHash) {
-    const age = Date.now() - new Date(saved.updatedAt).getTime();
-    if (!force || age < REGENERATE_COOLDOWN_MS) return res.status(200).json(new ApiResponse(200, serialize(week, saved), "AI review ready"));
-  }
-
+  const ownerId = req.user._id;
   const key = `${week.journal._id}:${week.weekStart}`;
-  let job = inFlight.get(key);
-  if (!job) {
-    job = generate(week).finally(() => inFlight.delete(key));
-    inFlight.set(key, job);
-  }
-  const fresh = await job;
+  const respond = async (saved) => {
+    const access = await evaluateAccess({ week, saved, ownerId });
+    return res.status(200).json(new ApiResponse(200, serialize(week, saved, access), "AI review ready"));
+  };
 
-  return res.status(200).json(new ApiResponse(200, serialize(week, fresh), "AI review ready"));
+  const saved = await AiReview.findOne({ journal: week.journal._id, weekStart: week.weekStart }).lean();
+  // a current review is always returned as is: the same inputs would only spend quota to get the same answer
+  if (saved && saved.inputHash === week.inputHash) return respond(saved);
+
+  // a double click joins the generation that is already running
+  if (inFlight.has(key)) return respond(await inFlight.get(key));
+
+  const access = await evaluateAccess({ week, saved, ownerId });
+  if (!access.canGenerate) {
+    throw new ApiError(access.reason === "not_enough_trades" ? 403 : 429, access.message || "A new review is not available right now.");
+  }
+
+  // no awaits between these checks and the set() calls below, so two requests cannot both start
+  if (inFlight.has(key)) return respond(await inFlight.get(key));
+  if (userBusy.has(String(ownerId))) throw new ApiError(429, "Your other review is still being written. Wait for it to finish, then try again.");
+
+  const job = generate(week).finally(() => {
+    inFlight.delete(key);
+    userBusy.delete(String(ownerId));
+  });
+  inFlight.set(key, job);
+  userBusy.set(String(ownerId), key);
+
+  return respond(await job);
 });

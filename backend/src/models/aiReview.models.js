@@ -9,6 +9,11 @@ const aiReviewSchema = new mongoose.Schema(
     weekStart: { type: String, required: true }, // Monday, YYYY-MM-DD
     // fingerprint of everything the review was written from (strategy + trades); a mismatch means "stale"
     inputHash: { type: String, required: true },
+    // fingerprint of the strategy, custom fields and connected plans only (no trades). When it differs from the
+    // current one the trader rewrote their rules, which unlocks a refresh without needing new trades.
+    contextHash: { type: String, default: "" },
+    // how many trades the week held when this review was written; "new trades" are counted against it
+    reviewedTradeCount: { type: Number, default: 0 },
     model: { type: String, default: "" },
     review: { type: mongoose.Schema.Types.Mixed, required: true },
   },

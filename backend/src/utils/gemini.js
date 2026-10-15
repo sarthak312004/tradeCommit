@@ -10,6 +10,14 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export const geminiModelName = () => (process.env.GEMINI_MODEL || "gemini-3.8-flash").trim();
 
+// Gemini tells us how long to back off, either as a RetryInfo detail ("27s") or inside the message ("retry in 27.5s").
+const retryDelayMs = (detail) => {
+  const info = (detail?.error?.details ?? []).find((item) => typeof item?.retryDelay === "string");
+  const text = info?.retryDelay ?? /retry in ([\d.]+)s/i.exec(detail?.error?.message ?? "")?.[1];
+  const seconds = Number.parseFloat(text);
+  return Number.isFinite(seconds) && seconds > 0 ? Math.ceil(seconds * 1000) : undefined;
+};
+
 const callOnce = async (model, apiKey, body) => {
   let response;
   try {
@@ -34,7 +42,9 @@ const callOnce = async (model, apiKey, body) => {
     throw Object.assign(new ApiError(502, "This model does not accept the thinking setting."), { dropThinking: true });
   }
   if (response.status === 404) throw Object.assign(new ApiError(502, "The configured AI model is unavailable."), { modelMissing: true });
-  if (response.status === 429) throw new ApiError(429, "The AI mentor is busy right now (free-tier limit reached). Try again in a minute.");
+  if (response.status === 429) {
+    throw Object.assign(new ApiError(429, "The AI mentor is busy right now (free-tier limit reached). Try again in a minute."), { retryAfterMs: retryDelayMs(detail) });
+  }
   if (response.status === 400 || response.status === 403) {
     // 400 covers an invalid key as well as a bad request; both are server configuration problems, not the user's
     throw new ApiError(502, "The AI service rejected the request. Check the server's GEMINI_API_KEY and GEMINI_MODEL.");
