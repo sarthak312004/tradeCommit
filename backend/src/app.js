@@ -46,6 +46,7 @@ import { plannerRouter } from './routes/planner.routes.js'
 import { feedbackRouter } from './routes/feedback.routes.js'
 import { aiReviewRouter } from './routes/aiReview.routes.js'
 import { aiRangeReviewRouter } from './routes/aiRangeReview.routes.js'
+import { marketRouter } from './routes/market.routes.js'
 
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20 })
 app.use("/api/v1/auth/login", authLimiter)
@@ -70,6 +71,10 @@ const aiReviewLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 20, message: 
 app.use("/api/v1/journals/:journalId/ai-review", (req, res, next) => (req.method === "POST" ? aiReviewLimiter(req, res, next) : next()))
 app.use("/api/v1/journals/:journalId/ai-range-reviews", (req, res, next) => (req.method === "POST" ? aiReviewLimiter(req, res, next) : next()))
 
+// Live price + symbol search for the trade form: it polls while open, so allow a generous (but bounded) rate per IP.
+const marketLimiter = rateLimit({ windowMs: 60 * 1000, max: 240, message: "Too many price requests, please slow down" })
+app.use("/api/v1/market", marketLimiter)
+
 app.use("/api/v1/auth", userRouter)
 app.use("/api/v1/journals", journalRouter)
 app.use("/api/v1/journals/:journalId/trades", tradeRouter)
@@ -77,6 +82,7 @@ app.use("/api/v1/journals/:journalId/ai-review", aiReviewRouter)
 app.use("/api/v1/journals/:journalId/ai-range-reviews", aiRangeReviewRouter)
 app.use("/api/v1/planners", plannerRouter)
 app.use("/api/v1/feedback", feedbackRouter)
+app.use("/api/v1/market", marketRouter)
 
 app.use("/api", (req, res) => {
     res.status(404).json({ statusCode: 404, success: false, message: "Route not found", errors: [] })

@@ -10,14 +10,20 @@ import { FIELD_TYPES, MAX_CUSTOM_FIELDS, makeFieldKey, toFormField } from '../..
 import { clearInterim, getCleanHtml, insertDictatedText, parseDictation, showInterimText } from '../../../utils/dictation'
 import { SHORTCUT_LABEL, useDictationShortcut, useVoiceDictation } from '../../../hooks/useVoiceDictation'
 import { MOD_LABEL, useFormShortcuts } from '../../../hooks/useFormShortcuts'
+import { todayKey } from '../../../utils/calendar'
+import { useLivePrice } from '../../../hooks/useLivePrice'
+import { useSymbolSearch } from '../../../hooks/useSymbolSearch'
 import ShortcutHint from '../../common/ShortcutHint'
 import TextStyleMenu from '../../common/TextStyleMenu'
 import VoiceLevel from './VoiceLevel'
+import SymbolSuggestions from './SymbolSuggestions'
 
-const defaultValues = {
-  date: new Date().toISOString().slice(0, 10),
+// built when the form opens, in local time (UTC would show yesterday for Indian users before 5:30 am)
+const getDefaultValues = () => ({
+  date: todayKey(),
   symbol: '',
   quantity: '',
+  risk: '', // helper only, never saved: when filled it sizes the quantity from entry and stop loss
   entry: '',
   stopLoss: '',
   exit: '',
@@ -25,6 +31,42 @@ const defaultValues = {
   analysis: '',
   images: [],
   customFields: []
+})
+
+// last quantity used per symbol, kept in this browser only
+const QUANTITY_MEMORY_KEY = 'tradecommit:lastQuantity'
+const readQuantityMemory = () => {
+  try {
+    return JSON.parse(localStorage.getItem(QUANTITY_MEMORY_KEY)) ?? {}
+  } catch {
+    return {}
+  }
+}
+const rememberQuantity = (symbol, quantity) => {
+  try {
+    const memory = readQuantityMemory()
+    delete memory[symbol]
+    memory[symbol] = quantity // re-added last, so the 200 most recent symbols are the ones kept
+    const recent = Object.fromEntries(Object.entries(memory).slice(-200))
+    localStorage.setItem(QUANTITY_MEMORY_KEY, JSON.stringify(recent))
+  } catch {
+    // storage blocked or full: remembering the quantity is only a convenience
+  }
+}
+
+// quantity that risks `risk` between entry and stop loss (whole units when there are more than one)
+const sizeFromRisk = (risk, entry, stop) => {
+  const amount = Number(risk)
+  const distance = Math.abs(Number(entry) - Number(stop))
+  if (!(amount > 0) || !(Number(entry) > 0) || !(Number(stop) > 0) || !(distance > 0)) return null
+  const size = amount / distance
+  return size >= 1 ? Math.floor(size) : Number(size.toFixed(4))
+}
+
+// keep the stop loss at the same number of decimals the price has (1.08123 -> 5, 2845.1 -> 2)
+const roundToTick = (price, value) => {
+  const decimals = price >= 1000 ? 2 : price >= 100 ? 3 : price >= 10 ? 4 : price >= 1 ? 5 : 8
+  return Number(value.toFixed(decimals))
 }
 
 /* ---------- motion + layout constants ---------- */
@@ -59,6 +101,7 @@ const iconPaths = {
   text: (<><path d="M4 7V4h16v3" /><path d="M9 20h6" /><path d="M12 4v16" /></>),
   checkSquare: (<><path d="m9 11 3 3L22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></>),
   plus: <path d="M12 5v14M5 12h14" />,
+  risk: (<><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" /><path d="M12 9v4" /><path d="M12 17h.01" /></>),
   mic: (<><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" /><path d="M19 10v2a7 7 0 0 1-14 0v-2" /><path d="M12 19v3" /></>)
 }
 
@@ -102,6 +145,17 @@ function PropertyRow({ icon, label, hint, htmlFor, error, children }) {
   )
 }
 
+// A soft mint glow that fades in and out behind a field that was just filled in for the user.
+// `pulse` changes every time the field is filled, which restarts the animation.
+function Flash({ pulse, children }) {
+  return (
+    <div className="relative">
+      {pulse ? <span key={pulse} aria-hidden="true" className="tc-soft-flash pointer-events-none absolute inset-0 rounded-lg" /> : null}
+      {children}
+    </div>
+  )
+}
+
 function ToolbarButton({ title, icon, onClick, active }) {
   return (
     <button type="button" title={title} aria-label={title} aria-pressed={active === undefined ? undefined : active} onMouseDown={keepSelection} onClick={onClick} className={toolbarIconButton(active)}>
@@ -122,6 +176,10 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
   const [imageUploadError, setImageUploadError] = useState('')
   const [hoverImage, setHoverImage] = useState(null)
   const [addMenuOpen, setAddMenuOpen] = useState(false)
+  const [picked, setPicked] = useState(null) // suggestion chosen from the asset-name dropdown
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [activeSuggestion, setActiveSuggestion] = useState(-1)
+  const [flashed, setFlashed] = useState({}) // fields that were just auto-filled
   const [reduceMotion] = useState(() => respectReducedMotion && typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)
   const editorRef = useRef(null)
   const formats = useActiveFormats(editorRef)
@@ -141,8 +199,17 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
   const sourceFilesRef = useRef(new Map()) // local preview URL -> original file, so a failed upload can be retried after the form closed
   const addMenuRef = useRef(null)
   const pendingFocusKeyRef = useRef(null)
+  const symbolInputRef = useRef(null)
+  const isNewTradeRef = useRef(!initialTrade) // decided once: a new trade opens with the cursor in the asset name
+  const entryManualRef = useRef(Boolean(initialTrade)) // true once the user typed the entry price themselves
+  const filledForRef = useRef(null) // instrument whose live price is currently auto-filled into entry
+  const qtyManualRef = useRef(Boolean(initialTrade)) // true once the user typed the quantity themselves
+  const qtyFromMemoryRef = useRef(false) // quantity currently comes from the remembered one for this symbol
+  const flashTimerRef = useRef(null)
+  const stopManualRef = useRef(Boolean(initialTrade)) // true once the user typed the stop loss themselves
+  const autoStopRef = useRef(null) // { price, distance } the automatic stop loss is based on
   const templateRef = useRef(templateFields) // fields of the latest trade, read once when the form opens
-  const { register, handleSubmit, setValue, reset, watch, control, formState: { errors } } = useForm({ defaultValues })
+  const { register, handleSubmit, setValue, getValues, reset, watch, control, formState: { errors } } = useForm({ defaultValues: getDefaultValues() })
   const { fields: customFields, append: appendCustomField, remove: removeCustomField } = useFieldArray({ control, name: 'customFields' })
 
   const duration = reduceMotion ? 0 : DURATION
@@ -150,7 +217,27 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
   const direction = live.direction
   const draftPnl = getTradePnl(live)
   const draftR = getTradeR(live)
+  const draftRisk = (() => {
+    const entry = Number(live.entry)
+    const stop = Number(live.stopLoss)
+    const quantity = Number(live.quantity)
+    return entry > 0 && stop > 0 && quantity > 0 && entry !== stop ? Math.abs(entry - stop) * quantity : null
+  })()
   const isDraftClosed = String(live.exit ?? '').trim() !== ''
+
+  // live price: new trades follow today's market; an open trade being reviewed only gets the exit shortcut
+  const prefer = currency === 'INR' ? 'IN' : 'GLOBAL'
+  const typedSymbol = String(live.symbol ?? '').trim().toUpperCase()
+  const pickedMatches = picked !== null && picked.display.toUpperCase() === typedSymbol
+  const priceEnabled = initialTrade ? !isDraftClosed : live.date === todayKey()
+  const { quote, status: priceStatus } = useLivePrice({
+    symbol: pickedMatches ? picked.symbol : typedSymbol,
+    exact: pickedMatches && picked.exact,
+    prefer,
+    enabled: priceEnabled
+  })
+  const suggestions = useSymbolSearch({ query: typedSymbol, enabled: searchOpen && !pickedMatches, prefer })
+  const suggestionsOpen = searchOpen && suggestions.length > 0
 
   // hide the remove button whenever the editor content changes (typing, delete key, reset)
   useEffect(() => {
@@ -164,15 +251,21 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
   useEffect(() => {
     const formValues = initialTrade
       ? {
-          ...defaultValues,
+          ...getDefaultValues(),
           ...initialTrade,
           quantity: initialTrade.quantity ?? initialTrade.qty ?? '',
           direction: initialTrade.direction ?? initialTrade.side ?? 'Long',
           customFields: (initialTrade.customFields ?? []).map(toFormField)
         }
-      : { ...defaultValues, ...(initialDate ? { date: initialDate } : {}), customFields: templateRef.current.map(toFormField) }
+      : { ...getDefaultValues(), ...(initialDate ? { date: initialDate } : {}), customFields: templateRef.current.map(toFormField) }
 
     removedImagesRef.current.clear()
+    entryManualRef.current = Boolean(initialTrade)
+    filledForRef.current = null
+    stopManualRef.current = Boolean(initialTrade)
+    qtyManualRef.current = Boolean(initialTrade)
+    qtyFromMemoryRef.current = false
+    autoStopRef.current = null
     reset(formValues)
     if (editorRef.current) {
       editorRef.current.innerHTML = formValues.analysis ?? ''
@@ -181,6 +274,104 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
       )
     }
   }, [initialTrade, initialDate, reset])
+
+  const flash = (...names) => {
+    setFlashed((previous) => ({ ...previous, ...Object.fromEntries(names.map((name) => [name, (previous[name] ?? 0) + 1])) }))
+    clearTimeout(flashTimerRef.current)
+    flashTimerRef.current = setTimeout(() => setFlashed({}), 1700)
+  }
+
+  // Stop loss a few points away from the price, below it for a Long and above it for a Short
+  const applyAutoStop = (directionValue) => {
+    const base = autoStopRef.current
+    if (!base || stopManualRef.current) return
+    const stop = directionValue === 'Short' ? base.price + base.distance : base.price - base.distance
+    if (stop > 0) setValue('stopLoss', String(roundToTick(base.price, stop)), { shouldDirty: true, shouldValidate: true })
+  }
+
+  // New trade: the first live price for a symbol fills the entry price and a matching stop loss (once, so they
+  // don't drift while you write). Nothing the user typed is ever overwritten.
+  useEffect(() => {
+    if (initialTrade || !quote || entryManualRef.current || filledForRef.current === quote.symbol) return
+    filledForRef.current = quote.symbol
+    setValue('entry', String(quote.price), { shouldDirty: true, shouldValidate: true })
+    autoStopRef.current = quote.stopDistance ? { price: quote.price, distance: quote.stopDistance } : null
+    applyAutoStop(getValues('direction'))
+    flash('entry', autoStopRef.current ? 'stopLoss' : 'entry')
+  }, [quote, initialTrade, setValue, getValues]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Long <-> Short flips the automatic stop loss to the other side of the price
+  useEffect(() => {
+    applyAutoStop(direction)
+  }, [direction]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // the symbol changed: prices we filled in for the old one no longer apply
+  useEffect(() => {
+    if (!filledForRef.current || entryManualRef.current) return
+    filledForRef.current = null
+    setValue('entry', '')
+    if (autoStopRef.current && !stopManualRef.current) setValue('stopLoss', '')
+    autoStopRef.current = null
+  }, [typedSymbol, setValue])
+
+  // Risk amount + entry + stop loss -> quantity (until the user types a quantity of their own)
+  const riskValue = live.risk
+  const entryValue = live.entry
+  const stopValue = live.stopLoss
+  useEffect(() => {
+    if (qtyManualRef.current) return
+    const size = sizeFromRisk(riskValue, entryValue, stopValue)
+    if (size === null) return
+    qtyFromMemoryRef.current = false
+    setValue('quantity', String(size), { shouldDirty: true, shouldValidate: true })
+  }, [riskValue, entryValue, stopValue, setValue])
+
+  // Quantity you used last time for this symbol
+  useEffect(() => {
+    if (initialTrade || qtyManualRef.current) return
+    const remembered = readQuantityMemory()[typedSymbol]
+    if (remembered && !(Number(getValues('risk')) > 0)) {
+      qtyFromMemoryRef.current = true
+      setValue('quantity', String(remembered), { shouldDirty: true, shouldValidate: true })
+      flash('quantity')
+    } else if (!remembered && qtyFromMemoryRef.current) {
+      qtyFromMemoryRef.current = false
+      setValue('quantity', '')
+    }
+  }, [typedSymbol, initialTrade, setValue, getValues])
+
+  const focusQuantity = () => document.getElementById('trade-quantity')?.focus()
+
+  const pickSuggestion = (item) => {
+    setPicked({ display: item.display, symbol: item.symbol, exact: Boolean(item.exact) })
+    setValue('symbol', item.display, { shouldDirty: true, shouldValidate: true })
+    setSearchOpen(false)
+    setActiveSuggestion(-1)
+    focusQuantity() // entry fills itself, so the next thing to type is the quantity
+  }
+
+  const handleSymbolKeyDown = (event) => {
+    if (event.isComposing || event.ctrlKey || event.metaKey) return // Ctrl/Cmd+Enter still saves the form
+    if (event.key === 'ArrowDown' && suggestionsOpen) {
+      event.preventDefault()
+      setActiveSuggestion((index) => (index + 1) % suggestions.length)
+    } else if (event.key === 'ArrowUp' && suggestionsOpen) {
+      event.preventDefault()
+      setActiveSuggestion((index) => (index <= 0 ? suggestions.length - 1 : index - 1))
+    } else if (event.key === 'Enter') {
+      event.preventDefault() // Enter moves on instead of submitting a half-filled form
+      const item = suggestionsOpen ? suggestions[activeSuggestion] : undefined
+      if (item) {
+        pickSuggestion(item)
+      } else {
+        setSearchOpen(false)
+        focusQuantity()
+      }
+    } else if (event.key === 'Escape' && suggestionsOpen) {
+      event.preventDefault() // closes the list only, not the whole form
+      setSearchOpen(false)
+    }
+  }
 
   // close the "Add property" menu on outside click / Esc
   useEffect(() => {
@@ -231,7 +422,10 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
     }
   }, [])
 
-  useEffect(() => () => clearTimeout(closeTimerRef.current), [])
+  useEffect(() => () => {
+    clearTimeout(closeTimerRef.current)
+    clearTimeout(flashTimerRef.current)
+  }, [])
 
   useEffect(() => {
     const handlePointerMove = (event) => {
@@ -277,7 +471,11 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
   // Esc to close turns the browser's keyboard-focus ring on for it, and the card keeps its highlighted border.
   useEffect(() => {
     const form = formRef.current
-    if (form && !form.contains(document.activeElement)) form.focus({ preventScroll: true })
+    if (isNewTradeRef.current && symbolInputRef.current) {
+      symbolInputRef.current.focus({ preventScroll: true }) // a new trade starts with the cursor in the asset name
+    } else if (form && !form.contains(document.activeElement)) {
+      form.focus({ preventScroll: true })
+    }
   }, [])
 
   // Esc closes the form, Ctrl/Cmd + Enter saves it (both are off while it is already saving)
@@ -550,6 +748,7 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
 
       const payload = {
         ...values,
+        risk: undefined, // sizing helper only
         analysis,
         images,
         removedImages,
@@ -567,7 +766,7 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
         direction: values.direction,
         pnl: '$0',
         status: normalizedExit ? 'Closed' : 'Open',
-        date: values.date || new Date().toISOString().slice(0, 10)
+        date: values.date || todayKey()
       }
 
       // Runs in the background before the trade is sent: waits for screenshots that were still uploading and
@@ -610,6 +809,8 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
         }
       }
 
+      if (normalizedSymbol && Number(normalizedQuantity) > 0) rememberQuantity(normalizedSymbol, normalizedQuantity)
+
       submittedRef.current = true
       Promise.resolve(onSubmit(payload, { prepare })).catch(() => {}) // failures are shown on the trade card
       requestClose()
@@ -619,6 +820,15 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
       setIsSaving(false)
     }
   }
+
+  const symbolField = register('symbol', {
+    required: 'Asset name is required',
+    onChange: () => {
+      setPicked(null)
+      setSearchOpen(true)
+      setActiveSuggestion(-1)
+    }
+  })
 
   const slide = `transform ${duration}ms ${EASE}`
   const grow = `width ${duration}ms ${EASE}`
@@ -643,6 +853,11 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
         }}
         className="relative flex h-full max-w-full flex-col overflow-hidden rounded-xl border border-zinc-300 bg-white shadow-2xl outline-none dark:border-white/[0.14] dark:bg-panel"
       >
+        <style>{`
+          @keyframes tc-soft-flash { 0% { opacity: 0 } 30% { opacity: 1 } 100% { opacity: 0 } }
+          .tc-soft-flash { background: rgb(52 211 153 / 0.12); box-shadow: inset 0 0 0 1px rgb(52 211 153 / 0.3); animation: tc-soft-flash 1500ms cubic-bezier(0.4, 0, 0.2, 1) both }
+          @media (prefers-reduced-motion: reduce) { .tc-soft-flash { animation: none; opacity: 0 } }
+        `}</style>
         <h2 id="trade-form-title" className="sr-only">{initialTrade ? 'Review trade in' : 'Add to'} {journalName}</h2>
 
         <div
@@ -683,18 +898,65 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
         <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-color:#d4d4d8_transparent] [scrollbar-width:thin] dark:[scrollbar-color:#3f3f46_transparent]">
           <div className={`mx-auto w-full px-6 pb-16 pt-4 sm:px-10 ${expanded ? 'max-w-[1080px]' : 'max-w-[920px]'}`}>
             {/* title = asset name */}
-            <input
-              {...register('symbol', { required: 'Asset name is required' })}
-              aria-label="Asset name"
-              autoComplete="off"
-              placeholder="e.g. BTCUSD"
-              className="w-full rounded-md bg-transparent text-3xl font-bold uppercase leading-tight tracking-tight text-zinc-900 outline-none placeholder:font-bold placeholder:normal-case placeholder:text-zinc-500 sm:text-4xl sm:leading-tight dark:text-zinc-50 dark:placeholder:text-zinc-400"
-            />
+            <div className="flex items-start gap-4">
+              <div className="relative min-w-0 flex-1">
+                <input
+                  {...symbolField}
+                  ref={(element) => {
+                    symbolField.ref(element)
+                    symbolInputRef.current = element
+                  }}
+                  onBlur={(event) => {
+                    symbolField.onBlur(event)
+                    setSearchOpen(false)
+                  }}
+                  onKeyDown={handleSymbolKeyDown}
+                  role="combobox"
+                  aria-label="Asset name"
+                  aria-autocomplete="list"
+                  aria-expanded={suggestionsOpen}
+                  aria-controls="trade-symbol-options"
+                  aria-activedescendant={suggestionsOpen && activeSuggestion >= 0 ? `trade-symbol-options-${activeSuggestion}` : undefined}
+                  autoComplete="off"
+                  autoCapitalize="characters"
+                  spellCheck={false}
+                  placeholder="e.g. RELIANCE or EURUSD"
+                  className="w-full rounded-md bg-transparent text-2xl font-semibold uppercase leading-tight tracking-tight text-zinc-900 outline-none placeholder:font-semibold placeholder:normal-case placeholder:text-zinc-500 sm:text-3xl sm:leading-tight dark:text-zinc-50 dark:placeholder:text-zinc-400"
+                />
+                {suggestionsOpen && (
+                  <SymbolSuggestions id="trade-symbol-options" items={suggestions} activeIndex={activeSuggestion} onPick={pickSuggestion} />
+                )}
+              </div>
+              <div className="w-[9.5rem] shrink-0 pt-1 sm:pt-2">
+                <label htmlFor="trade-date" className="sr-only">Trade date</label>
+                <input id="trade-date" type="date" {...register('date')} className={dateInputClass} />
+              </div>
+            </div>
             {errors.symbol && <p className="mt-1 text-xs text-rose-500">{errors.symbol.message}</p>}
 
             {/* live status: Closed / P&L / R share one badge shape, h-6 with gap-2, and wrap as whole chips */}
-            <div className="mt-3 flex flex-wrap items-center gap-2" aria-live="polite">
-              <span className={`${badgeBase} ${isDraftClosed ? badgeTone.neutral : badgeTone.open}`}>
+            <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-2">
+              {/* small Long / Short switch: the stop loss follows it */}
+              <div role="radiogroup" aria-label="Direction" className="inline-flex items-center gap-0.5">
+                {directionOptions.map(({ value, icon, tone }) => (
+                  <label key={value} className="cursor-pointer">
+                    <input type="radio" value={value} {...register('direction')} className="peer sr-only" />
+                    <span
+                      className={`inline-flex h-6 items-center gap-1 rounded-md px-2 text-xs font-medium transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-zinc-400/50 ${
+                        direction === value
+                          ? tone
+                          : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-white/[0.06] dark:hover:text-zinc-100'
+                      }`}
+                    >
+                      <Icon name={icon} size={12} />
+                      {value}
+                    </span>
+                  </label>
+                ))}
+              </div>
+
+            <div className="flex flex-wrap items-center gap-2" aria-live="polite">
+              <span className="inline-flex items-center gap-1.5 px-1 text-xs text-zinc-500 dark:text-zinc-400">
                 <span aria-hidden="true" className={`h-1.5 w-1.5 shrink-0 rounded-full ${isDraftClosed ? dotTone.neutral : dotTone.open}`} />
                 {isDraftClosed ? 'Closed' : 'Open'}
               </span>
@@ -708,50 +970,43 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
                   {formatR(draftR)}
                 </span>
               )}
+              {draftRisk !== null && (
+                <span className={`${badgeBase} ${badgeTone.neutral}`}>
+                  Risk {formatMoney(draftRisk, { currency })}
+                </span>
+              )}
+            </div>
             </div>
 
             {/* properties: two columns when the drawer is wide enough */}
             <div className="@container mt-6">
               <div className="grid gap-x-12 gap-y-1 @2xl:grid-cols-2">
-                <PropertyRow icon="calendar" label="Date" htmlFor="trade-date">
-                  <input id="trade-date" type="date" {...register('date')} className={dateInputClass} />
-                </PropertyRow>
-
-                <PropertyRow icon="hash" label="Quantity" htmlFor="trade-quantity" error={errors.quantity?.message}>
-                  <input id="trade-quantity" type="number" min="0" step="any" {...register('quantity', { required: 'Quantity is required' })} placeholder="0.00" className={numberInputClass} />
-                </PropertyRow>
-
-                <PropertyRow icon="direction" label="Direction">
-                  <div role="radiogroup" aria-label="Direction" className="flex h-8 items-center gap-1">
-                    {directionOptions.map(({ value, icon, tone }) => (
-                      <label key={value} className="cursor-pointer">
-                        <input type="radio" value={value} {...register('direction')} className="peer sr-only" />
-                        <span
-                          className={`inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[13px] font-medium transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-zinc-400/50 ${
-                            direction === value
-                              ? tone
-                              : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-white/[0.06] dark:hover:text-zinc-100'
-                          }`}
-                        >
-                          <Icon name={icon} size={14} />
-                          {value}
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                </PropertyRow>
-
                 <PropertyRow icon="entry" label="Entry price" htmlFor="trade-entry" error={errors.entry?.message}>
-                  <input id="trade-entry" type="number" min="0" step="any" {...register('entry', { required: 'Entry price is required' })} placeholder="0.00" className={numberInputClass} />
+                  <Flash pulse={flashed.entry}>
+                  <input
+                    id="trade-entry"
+                    type="number"
+                    min="0"
+                    step="any"
+                    {...register('entry', {
+                      required: 'Entry price is required',
+                      onChange: () => { entryManualRef.current = true } // typed by hand: stop auto-filling
+                    })}
+                    placeholder={priceEnabled && !initialTrade && priceStatus === 'loading' ? 'Fetching price…' : '0.00'}
+                    className={numberInputClass}
+                  />
+                  </Flash>
                 </PropertyRow>
 
                 <PropertyRow icon="shield" label="Stop loss" hint="optional" htmlFor="trade-stop-loss" error={errors.stopLoss?.message}>
+                  <Flash pulse={flashed.stopLoss}>
                   <input
                     id="trade-stop-loss"
                     type="number"
                     min="0"
                     step="any"
                     {...register('stopLoss', {
+                      onChange: () => { stopManualRef.current = true }, // typed by hand: stop auto-filling
                       validate: (value, formValues) => {
                         const stop = Number(value)
                         const entry = Number(formValues.entry)
@@ -764,6 +1019,36 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
                     placeholder="Used for RRR"
                     className={numberInputClass}
                   />
+                  </Flash>
+                </PropertyRow>
+
+                <PropertyRow icon="risk" label="Risk" hint="optional" htmlFor="trade-risk">
+                  <input
+                    id="trade-risk"
+                    type="number"
+                    min="0"
+                    step="any"
+                    {...register('risk', { onChange: () => { qtyManualRef.current = false } })} // a new risk amount re-sizes the quantity
+                    placeholder="Sizes the quantity"
+                    className={numberInputClass}
+                  />
+                </PropertyRow>
+
+                <PropertyRow icon="hash" label="Quantity" htmlFor="trade-quantity" error={errors.quantity?.message}>
+                  <Flash pulse={flashed.quantity}>
+                    <input
+                      id="trade-quantity"
+                      type="number"
+                      min="0"
+                      step="any"
+                      {...register('quantity', {
+                        required: 'Quantity is required',
+                        onChange: () => { qtyManualRef.current = true } // typed by hand: stop auto-filling
+                      })}
+                      placeholder="0.00"
+                      className={numberInputClass}
+                    />
+                  </Flash>
                 </PropertyRow>
 
                 <PropertyRow icon="exit" label="Exit price" hint="optional" htmlFor="trade-exit">
