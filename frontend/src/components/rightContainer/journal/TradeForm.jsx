@@ -1052,7 +1052,26 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
                 </PropertyRow>
 
                 <PropertyRow icon="exit" label="Exit price" hint="optional" htmlFor="trade-exit">
-                  <input id="trade-exit" type="number" min="0" step="any" {...register('exit')} placeholder="Leave open" className={numberInputClass} />
+                  <Flash pulse={flashed.exit}>
+                    <input id="trade-exit" type="number" min="0" step="any" {...register('exit')} placeholder="Leave open" className={numberInputClass} />
+                  </Flash>
+                  {/* soft hint: only while the exit is empty and a stop loss is set */}
+                  {Number(stopValue) > 0 && String(live.exit ?? '').trim() === '' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setValue('exit', String(stopValue).trim(), { shouldDirty: true, shouldValidate: true })
+                        flash('exit')
+                      }}
+                      title="Use the stop loss price as the exit price"
+                      className="mt-1 ml-2 inline-flex cursor-pointer items-center gap-1 rounded text-[11px] text-zinc-500 transition-colors hover:text-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/40 motion-safe:animate-[fadeIn_150ms_ease-out] dark:text-zinc-400 dark:hover:text-zinc-100"
+                    >
+                      Stopped out?
+                      <span className="font-medium tabular-nums text-sky-700 underline decoration-sky-700/30 underline-offset-2 dark:text-sky-300 dark:decoration-sky-300/30">
+                        Use {String(stopValue).trim()}
+                      </span>
+                    </button>
+                  )}
                 </PropertyRow>
 
                 {customFields.map((field, index) => {
