@@ -9,7 +9,7 @@ import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { buildMentorPrompt, REVIEW_SCHEMA, sanitizeReview, SYSTEM_PROMPT } from "../utils/aiMentorPrompt.js";
-import { evaluateAccess, markUsageOk, releaseUsage, reserveUsage } from "../utils/aiQuota.js";
+import { evaluateAccess, getQuotaSnapshot, markUsageOk, releaseUsage, reserveUsage } from "../utils/aiQuota.js";
 import { isUserBusy, markUserBusy, releaseUser } from "../utils/aiJobGuard.js";
 import { generateJson } from "../utils/gemini.js";
 import { runQueued } from "../utils/geminiQueue.js";
@@ -203,4 +203,16 @@ export const createAiReview = asyncHandler(async (req, res) => {
   markUserBusy(ownerId, key);
 
   return respond(await job);
+});
+
+// GET /api/v1/journals/:journalId/ai-review/quota
+// The trader's allowance, shared by weekly and date-range reviews (a review written in either counts in both).
+// Never calls the AI. The mentor dialog reads it whenever you switch between Weekly and Date range.
+export const getAiQuota = asyncHandler(async (req, res) => {
+  const { journalId } = req.params;
+  if (!mongoose.isValidObjectId(journalId)) throw new ApiError(400, "A valid journal ID is required");
+  const journal = await Journal.findOne({ _id: journalId, owner: req.user._id }).select("_id").lean();
+  if (!journal) throw new ApiError(404, "Journal not found");
+  const quota = await getQuotaSnapshot(req.user._id);
+  return res.status(200).json(new ApiResponse(200, quota, "AI review allowance fetched"));
 });

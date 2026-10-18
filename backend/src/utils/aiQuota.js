@@ -1,4 +1,5 @@
 import { AiUsage } from "../models/aiUsage.models.js";
+import { isUserBusy } from "./aiJobGuard.js";
 
 // All limits can be tuned from environment variables without touching code.
 const int = (name, fallback) => {
@@ -31,12 +32,55 @@ const waitText = (until) => {
 const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
 
 /**
- * Decides whether a review may be generated for this journal-week right now, and explains why not.
+ * The trader's allowance, one number for every kind of review. Weekly and date-range reviews both write rows to the
+ * same AiUsage collection, so a review written in either one counts against the 1-a-day / 3-a-week caps of both.
+ * This is read by the weekly and the date-range access checks and by GET /ai-review/quota, so every screen shows
+ * the same answer. `blocked` is true while a new review of any kind is not allowed because of the trader's caps.
+ */
+export const getQuotaSnapshot = async (ownerId) => {
+  const limits = aiLimits();
+  const now = Date.now();
+
+  const mine = await AiUsage.find({ owner: ownerId, ok: true, createdAt: { $gte: new Date(now - 7 * DAY_MS) } })
+    .sort({ createdAt: 1 })
+    .select("createdAt")
+    .lean();
+  const lastDay = mine.filter((row) => new Date(row.createdAt).getTime() >= now - DAY_MS);
+
+  const usage = {
+    day: { used: lastDay.length, limit: limits.perDay },
+    week: { used: mine.length, limit: limits.perWeek },
+  };
+
+  const blockedUntil = [];
+  if (lastDay.length >= limits.perDay) blockedUntil.push(new Date(lastDay[lastDay.length - limits.perDay].createdAt).getTime() + DAY_MS);
+  if (mine.length >= limits.perWeek) blockedUntil.push(new Date(mine[mine.length - limits.perWeek].createdAt).getTime() + 7 * DAY_MS);
+
+  // one generation per trader at a time, whichever kind of review it is (see aiJobGuard.js)
+  const generating = isUserBusy(ownerId);
+
+  if (!blockedUntil.length) return { usage, blocked: false, reason: null, nextAvailableAt: null, message: "", generating };
+
+  const until = Math.max(...blockedUntil);
+  const weekly = mine.length >= limits.perWeek;
+  return {
+    usage,
+    blocked: true,
+    reason: weekly ? "weekly_limit" : "daily_limit",
+    nextAvailableAt: new Date(until).toISOString(),
+    message: `You've used your ${weekly ? `${plural(limits.perWeek, "review")} for this 7-day period` : `${plural(limits.perDay, "review")} for today`}. The next one is available ${waitText(until)}.`,
+    generating,
+  };
+};
+
+/**
+ * Decides whether a review may be generated for this journal-week (or date range) right now, and explains why not.
  * Order: nothing to do -> not unlocked yet (not enough new trades) -> the trader's own caps -> the global daily budget.
+ * `access.quota` is always included, even when nothing needs reviewing, so the client can keep the weekly and the
+ * date-range screens in step after either one uses the allowance.
  */
 export const evaluateAccess = async ({ week, saved, ownerId }) => {
   const limits = aiLimits();
-  const now = Date.now();
 
   const needsReview = !saved || saved.inputHash !== week.inputHash;
   const reviewedBefore = saved ? saved.reviewedTradeCount ?? 0 : 0;
@@ -46,18 +90,11 @@ export const evaluateAccess = async ({ week, saved, ownerId }) => {
   const threshold = week.isClosed && !week.strictMinimum ? 1 : saved ? limits.stepTrades : limits.firstTrades;
   const rulesRewritten = Boolean(saved?.contextHash) && saved.contextHash !== week.contextHash;
 
-  const mine = await AiUsage.find({ owner: ownerId, ok: true, createdAt: { $gte: new Date(now - 7 * DAY_MS) } })
-    .sort({ createdAt: 1 })
-    .select("createdAt")
-    .lean();
-  const lastDay = mine.filter((row) => new Date(row.createdAt).getTime() >= now - DAY_MS);
+  const quota = await getQuotaSnapshot(ownerId);
   const budgetUsed = await AiUsage.countDocuments({ day: pacificDayKey() });
 
-  const usage = {
-    day: { used: lastDay.length, limit: limits.perDay },
-    week: { used: mine.length, limit: limits.perWeek },
-  };
-  const base = { needsReview, newTrades, threshold, usage, nextAvailableAt: null };
+  const { usage } = quota;
+  const base = { needsReview, newTrades, threshold, usage, nextAvailableAt: null, quota };
 
   if (!needsReview) return { ...base, canGenerate: false, reason: "up_to_date", message: "" };
 
@@ -70,19 +107,8 @@ export const evaluateAccess = async ({ week, saved, ownerId }) => {
     return { ...base, canGenerate: false, reason: "not_enough_trades", message };
   }
 
-  const blockedUntil = [];
-  if (lastDay.length >= limits.perDay) blockedUntil.push(new Date(lastDay[lastDay.length - limits.perDay].createdAt).getTime() + DAY_MS);
-  if (mine.length >= limits.perWeek) blockedUntil.push(new Date(mine[mine.length - limits.perWeek].createdAt).getTime() + 7 * DAY_MS);
-  if (blockedUntil.length) {
-    const until = Math.max(...blockedUntil);
-    const weekly = mine.length >= limits.perWeek;
-    return {
-      ...base,
-      canGenerate: false,
-      reason: weekly ? "weekly_limit" : "daily_limit",
-      nextAvailableAt: new Date(until).toISOString(),
-      message: `You've used your ${weekly ? `${plural(limits.perWeek, "review")} for this 7-day period` : `${plural(limits.perDay, "review")} for today`}. The next one is available ${waitText(until)}.`,
-    };
+  if (quota.blocked) {
+    return { ...base, canGenerate: false, reason: quota.reason, nextAvailableAt: quota.nextAvailableAt, message: quota.message };
   }
 
   if (budgetUsed >= limits.dailyBudget) {

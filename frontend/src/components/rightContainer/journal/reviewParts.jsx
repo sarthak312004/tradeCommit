@@ -75,6 +75,30 @@ export const moneyTone = {
 export const buttonPrimary = `inline-flex h-9 cursor-pointer items-center justify-center rounded-md bg-zinc-900 px-3.5 text-[13px] font-medium text-white transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white ${focusRing}`
 export const buttonQuiet = `inline-flex h-9 cursor-pointer items-center justify-center rounded-md border border-zinc-300 px-3.5 text-[13px] font-medium text-zinc-700 transition-colors hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/[0.14] dark:text-zinc-200 dark:hover:bg-white/[0.07] ${focusRing}`
 
+/**
+ * One answer to "may a new review be written right now?", for the weekly and the date-range tab alike.
+ * A review of either kind counts against the same allowance (1 a day, 3 a week), so the tab being looked at also
+ * honours what the other tab (or another device) already used: `quota` is the shared, freshest copy from the
+ * dialog, `access` is what this tab's own request returned, `otherBusy` is true while the other tab is writing.
+ */
+export const resolveLock = (access, quota, otherBusy = false) => {
+  if (!access) return { locked: false, reason: null, message: '' }
+  if (access.needsReview === false) return { locked: true, reason: 'up_to_date', message: '' }
+  if (access.reason === 'not_enough_trades') return { locked: true, reason: access.reason, message: access.message }
+
+  const shared = quota ?? access.quota ?? null
+  const limitStillOn = Boolean(shared?.blocked) && (!shared.nextAvailableAt || new Date(shared.nextAvailableAt).getTime() > Date.now())
+  if (limitStillOn) return { locked: true, reason: shared.reason, message: shared.message }
+
+  if (otherBusy || shared?.generating) {
+    return { locked: true, reason: 'busy_other', message: 'Another review is still being written. It will count toward your allowance; try again when it finishes.' }
+  }
+  return { locked: !access.canGenerate, reason: access.reason, message: access.message }
+}
+
+/** "Reviews: 0/1 today - 1/3 this week", the allowance both tabs draw from. */
+export const usageLine = (usage) => (usage ? `Reviews: ${usage.day.used}/${usage.day.limit} today \u00b7 ${usage.week.used}/${usage.week.limit} this week` : '')
+
 /* ---------------------------- small pieces ---------------------------- */
 
 export function TradeChips({ trades }) {
@@ -102,11 +126,11 @@ export function WeekStats({ week, currency }) {
     { label: 'Avg RRR', value: formatR(week.avgRrr) }
   ]
   return (
-    <dl className="grid grid-cols-4 gap-3 rounded-xl border border-zinc-200 px-4 py-3 dark:border-white/[0.08]">
+    <dl className="grid grid-cols-2 gap-x-6 gap-y-4 rounded-xl border border-zinc-200 bg-zinc-50/70 px-5 py-4 sm:grid-cols-4 dark:border-white/[0.08] dark:bg-white/[0.03]">
       {items.map(({ label, value, tone = 'neutral' }) => (
         <div key={label} className="min-w-0">
           <dt className="text-[11px] text-zinc-500 dark:text-zinc-400">{label}</dt>
-          <dd className={`mt-0.5 truncate text-sm font-semibold tabular-nums ${moneyTone[tone]}`}>{value}</dd>
+          <dd className={`mt-1 truncate text-[15px] font-semibold tabular-nums ${moneyTone[tone]}`}>{value}</dd>
         </div>
       ))}
     </dl>
@@ -115,14 +139,14 @@ export function WeekStats({ week, currency }) {
 
 export function ReviewSkeleton({ message }) {
   return (
-    <div className={`space-y-5 ${stepEnter}`} role="status" aria-live="polite">
+    <div className={`space-y-6 ${stepEnter}`} role="status" aria-live="polite">
       <p className="text-sm text-zinc-600 dark:text-zinc-300">{message}</p>
       <div className="space-y-2.5">
         {[92, 100, 78, 60].map((width, index) => (
           <div key={index} className="h-3 animate-pulse rounded-full bg-zinc-200 dark:bg-white/[0.08]" style={{ width: `${width}%`, animationDelay: `${index * 120}ms` }} />
         ))}
       </div>
-      <div className="grid gap-2.5 pt-2">
+      <div className="grid gap-3 pt-2">
         {[0, 1, 2].map((index) => (
           <div key={index} className="h-12 animate-pulse rounded-lg bg-zinc-100 dark:bg-white/[0.05]" style={{ animationDelay: `${index * 150}ms` }} />
         ))}
@@ -133,10 +157,10 @@ export function ReviewSkeleton({ message }) {
 
 export function EmptyState({ title, children, action }) {
   return (
-    <div className={`flex min-h-[260px] flex-col items-center justify-center px-4 text-center ${stepEnter}`}>
+    <div className={`flex min-h-[300px] flex-col items-center justify-center px-6 py-6 text-center ${stepEnter}`}>
       <h3 className={`${SERIF} text-[22px] font-medium tracking-[-0.02em] text-zinc-900 dark:text-zinc-50`}>{title}</h3>
-      <p className="mt-2 max-w-sm text-sm leading-6 text-zinc-600 dark:text-zinc-400">{children}</p>
-      {action && <div className="mt-5 flex flex-wrap items-center justify-center gap-2">{action}</div>}
+      <p className="mt-3 max-w-md text-sm leading-7 text-zinc-600 dark:text-zinc-400">{children}</p>
+      {action && <div className="mt-6 flex flex-wrap items-center justify-center gap-2">{action}</div>}
     </div>
   )
 }
@@ -148,19 +172,19 @@ export function EmptyState({ title, children, action }) {
 /** Row that opens and closes its details. Rows without details render as plain rows. */
 export function Collapsible({ header, children, defaultOpen = false, hasBody = true }) {
   const [open, setOpen] = useState(defaultOpen)
-  if (!hasBody) return <div className="px-4 py-3">{header}</div>
+  if (!hasBody) return <div className="px-5 py-4">{header}</div>
   return (
     <div>
       <button
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
-        className={`flex w-full cursor-pointer items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-zinc-50 dark:hover:bg-white/[0.04] ${focusRing}`}
+        className={`flex w-full cursor-pointer items-start gap-3 px-5 py-4 text-left transition-colors hover:bg-zinc-50 dark:hover:bg-white/[0.04] ${focusRing}`}
       >
         <div className="min-w-0 flex-1">{header}</div>
         <ChevronDownIcon className={`mt-0.5 h-4 w-4 shrink-0 text-zinc-500 transition-transform dark:text-zinc-400 ${open ? 'rotate-180' : ''}`} />
       </button>
-      {open && <div className={`px-4 pb-3.5 ${stepEnter}`}>{children}</div>}
+      {open && <div className={`px-5 pb-5 ${stepEnter}`}>{children}</div>}
     </div>
   )
 }
@@ -178,7 +202,7 @@ export function Clamp({ children, className = '' }) {
     <div>
       <p className={`${className} ${isLong && !expanded ? 'line-clamp-3' : ''}`}>{children}</p>
       {isLong && (
-        <button type="button" onClick={() => setExpanded((value) => !value)} className={`mt-1 cursor-pointer rounded text-xs font-medium text-zinc-700 underline-offset-2 hover:underline dark:text-zinc-300 ${focusRing}`}>
+        <button type="button" onClick={() => setExpanded((value) => !value)} className={`mt-2 cursor-pointer rounded text-xs font-medium text-zinc-700 underline-offset-2 hover:underline dark:text-zinc-300 ${focusRing}`}>
           {expanded ? 'Show less' : 'Read more'}
         </button>
       )}
@@ -191,7 +215,7 @@ export function SnapshotCard({ label, onClick, children, note }) {
     <button
       type="button"
       onClick={onClick}
-      className={`flex min-w-0 cursor-pointer flex-col items-start gap-2 rounded-xl border border-zinc-200 p-3.5 text-left transition-colors hover:bg-zinc-50 dark:border-white/[0.08] dark:hover:bg-white/[0.04] ${focusRing}`}
+      className={`flex min-w-0 cursor-pointer flex-col items-start gap-2.5 rounded-xl border border-zinc-200 p-4 text-left transition-colors hover:bg-zinc-50 dark:border-white/[0.08] dark:hover:bg-white/[0.04] ${focusRing}`}
     >
       <span className="text-[11px] font-medium uppercase tracking-wider text-zinc-600 dark:text-zinc-400">{label}</span>
       {children}
@@ -203,11 +227,11 @@ export function SnapshotCard({ label, onClick, children, note }) {
 export function Highlight({ tone, label, text, onClick }) {
   const dot = tone === 'positive' ? 'bg-emerald-600 dark:bg-emerald-300' : 'bg-rose-600 dark:bg-rose-300'
   return (
-    <button type="button" onClick={onClick} className={`flex w-full cursor-pointer items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-zinc-50 dark:hover:bg-white/[0.04] ${focusRing}`}>
+    <button type="button" onClick={onClick} className={`flex w-full cursor-pointer items-start gap-3 px-5 py-4 text-left transition-colors hover:bg-zinc-50 dark:hover:bg-white/[0.04] ${focusRing}`}>
       <span aria-hidden="true" className={`mt-[7px] h-2 w-2 shrink-0 rounded-full ${dot}`} />
       <span className="min-w-0 flex-1">
         <span className="block text-[11px] font-medium uppercase tracking-wider text-zinc-600 dark:text-zinc-400">{label}</span>
-        <span className="mt-0.5 block text-sm font-medium text-zinc-900 dark:text-zinc-100">{text}</span>
+        <span className="mt-1 block text-sm font-medium leading-6 text-zinc-900 dark:text-zinc-100">{text}</span>
       </span>
       <ChevronRightIcon className="mt-1 h-4 w-4 shrink-0 text-zinc-500 dark:text-zinc-400" />
     </button>
@@ -223,15 +247,15 @@ export function OverviewTab({ review, discipline, strategy, goTo, words }) {
   const firstAction = review.nextWeek[0]
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-7">
       <div>
         <h2 className={`${SERIF} text-[26px] font-medium leading-[1.15] tracking-[-0.025em] text-zinc-900 dark:text-zinc-50`}>{review.headline}</h2>
-        <div className="mt-3">
-          <Clamp className="text-sm leading-6 text-zinc-700 dark:text-zinc-300">{review.summary}</Clamp>
+        <div className="mt-4">
+          <Clamp className="text-sm leading-7 text-zinc-700 dark:text-zinc-300">{review.summary}</Clamp>
         </div>
       </div>
 
-      <div className="grid gap-2.5 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-3">
         <SnapshotCard label="Discipline" onClick={() => goTo('rules')} note={review.discipline.score !== null ? `${review.discipline.score}% of checkable rules` : undefined}>
           <Pill tone={discipline.tone}>{discipline.label}</Pill>
         </SnapshotCard>
@@ -254,11 +278,11 @@ export function OverviewTab({ review, discipline, strategy, goTo, words }) {
           {strength && <Highlight tone="positive" label={`Best thing ${words.thisPeriod}`} text={strength.title} onClick={() => goTo('insights')} />}
           {issue && <Highlight tone="negative" label="Biggest thing to fix" text={issue.title} onClick={() => goTo('insights')} />}
           {firstAction && (
-            <button type="button" onClick={() => goTo('next')} className={`flex w-full cursor-pointer items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-zinc-50 dark:hover:bg-white/[0.04] ${focusRing}`}>
+            <button type="button" onClick={() => goTo('next')} className={`flex w-full cursor-pointer items-start gap-3 px-5 py-4 text-left transition-colors hover:bg-zinc-50 dark:hover:bg-white/[0.04] ${focusRing}`}>
               <span aria-hidden="true" className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-zinc-900 text-[11px] font-medium text-white dark:bg-zinc-100 dark:text-zinc-900">1</span>
               <span className="min-w-0 flex-1">
                 <span className="block text-[11px] font-medium uppercase tracking-wider text-zinc-600 dark:text-zinc-400">Do this first {words.nextLower}</span>
-                <span className="mt-0.5 block text-sm font-medium text-zinc-900 dark:text-zinc-100">{firstAction}</span>
+                <span className="mt-1 block text-sm font-medium leading-6 text-zinc-900 dark:text-zinc-100">{firstAction}</span>
               </span>
               <ChevronRightIcon className="mt-1 h-4 w-4 shrink-0 text-zinc-500 dark:text-zinc-400" />
             </button>
@@ -267,7 +291,7 @@ export function OverviewTab({ review, discipline, strategy, goTo, words }) {
       )}
 
       {review.mentorNote && (
-        <p className={`${SERIF} border-l-2 border-zinc-300 pl-4 text-[17px] italic leading-7 text-zinc-700 dark:border-white/20 dark:text-zinc-300`}>{review.mentorNote}</p>
+        <p className={`${SERIF} border-l-2 border-zinc-300 py-0.5 pl-5 text-[17px] italic leading-8 text-zinc-700 dark:border-white/20 dark:text-zinc-300`}>{review.mentorNote}</p>
       )}
     </div>
   )
@@ -293,8 +317,8 @@ export function RulesTab({ review, discipline }) {
     .sort((a, b) => (RULE_ORDER[a.status] ?? 1) - (RULE_ORDER[b.status] ?? 1))
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center gap-2.5">
         <Pill tone={discipline.tone}>{discipline.label}</Pill>
         {review.discipline.score !== null && <span className="text-xs tabular-nums text-zinc-600 dark:text-zinc-400">{review.discipline.score}% of checkable rules</span>}
       </div>
@@ -307,7 +331,7 @@ export function RulesTab({ review, discipline }) {
             <span className="bg-rose-600 dark:bg-rose-400" style={{ width: `${(counts.broken / checks.length) * 100}%` }} />
           </div>
 
-          <div role="group" aria-label="Filter rules" className="flex flex-wrap gap-1.5">
+          <div role="group" aria-label="Filter rules" className="flex flex-wrap gap-2">
             {RULE_FILTERS.map((item) => {
               const count = item.id === 'all' ? checks.length : counts[item.id]
               if (item.id !== 'all' && count === 0) return null
@@ -348,7 +372,7 @@ export function RulesTab({ review, discipline }) {
                     }
                   >
                     <div className="pl-5">
-                      {check.evidence && <p className="text-[13px] leading-5 text-zinc-600 dark:text-zinc-400">{check.evidence}</p>}
+                      {check.evidence && <p className="text-[13px] leading-6 text-zinc-600 dark:text-zinc-400">{check.evidence}</p>}
                       <TradeChips trades={check.trades} />
                     </div>
                   </Collapsible>
@@ -365,7 +389,7 @@ export function RulesTab({ review, discipline }) {
 export function PlanTab({ review }) {
   const plan = review.planAlignment
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {plan.summary && <Clamp className="text-sm leading-6 text-zinc-700 dark:text-zinc-300">{plan.summary}</Clamp>}
       {plan.days.length > 0 && (
         <ul className={listBox}>
@@ -382,7 +406,7 @@ export function PlanTab({ review }) {
                     </span>
                   }
                 >
-                  {day.detail && <p className="text-[13px] leading-5 text-zinc-600 dark:text-zinc-400">{day.detail}</p>}
+                  {day.detail && <p className="text-[13px] leading-6 text-zinc-600 dark:text-zinc-400">{day.detail}</p>}
                   <TradeChips trades={day.trades} />
                 </Collapsible>
               </li>
@@ -398,7 +422,7 @@ export function InsightGroup({ title, items, dot }) {
   if (!items.length) return null
   return (
     <div>
-      <h3 className="mb-2 flex items-center gap-2 text-[11px] font-medium uppercase tracking-wider text-zinc-600 dark:text-zinc-400">
+      <h3 className="mb-3 flex items-center gap-2 text-[11px] font-medium uppercase tracking-wider text-zinc-600 dark:text-zinc-400">
         <span aria-hidden="true" className={`h-2 w-2 rounded-full ${dot}`} />
         {title} <span className="tabular-nums">({items.length})</span>
       </h3>
@@ -422,7 +446,7 @@ export function InsightGroup({ title, items, dot }) {
 
 export function InsightsTab({ review }) {
   return (
-    <div className="space-y-5">
+    <div className="space-y-7">
       <InsightGroup title="What went well" items={review.strengths} dot="bg-emerald-600 dark:bg-emerald-300" />
       <InsightGroup title="Where to work" items={review.issues} dot="bg-rose-600 dark:bg-rose-300" />
     </div>
@@ -432,16 +456,16 @@ export function InsightsTab({ review }) {
 export function StrategyTab({ review, strategy }) {
   const { suggestedChanges, marketAdaptation, reasoning } = review.strategyFeedback
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <Pill tone={strategy.tone}>{strategy.label}</Pill>
       <Clamp className="text-sm leading-6 text-zinc-700 dark:text-zinc-300">{reasoning}</Clamp>
 
       {suggestedChanges.length > 0 && (
         <div>
-          <h3 className="mb-2 text-[11px] font-medium uppercase tracking-wider text-zinc-600 dark:text-zinc-400">Worth testing</h3>
-          <ul className="space-y-2">
+          <h3 className="mb-3 text-[11px] font-medium uppercase tracking-wider text-zinc-600 dark:text-zinc-400">Worth testing</h3>
+          <ul className="space-y-2.5">
             {suggestedChanges.map((change) => (
-              <li key={change} className="rounded-xl border border-zinc-200 px-4 py-3 text-sm leading-6 text-zinc-700 dark:border-white/[0.08] dark:text-zinc-300">
+              <li key={change} className="rounded-xl border border-zinc-200 px-5 py-4 text-sm leading-6 text-zinc-700 dark:border-white/[0.08] dark:text-zinc-300">
                 {change}
               </li>
             ))}
@@ -450,9 +474,9 @@ export function StrategyTab({ review, strategy }) {
       )}
 
       {marketAdaptation && (
-        <div className="rounded-xl bg-zinc-100 px-4 py-3 dark:bg-white/[0.05]">
+        <div className="rounded-xl bg-zinc-100 px-5 py-4 dark:bg-white/[0.05]">
           <h3 className="text-[11px] font-medium uppercase tracking-wider text-zinc-600 dark:text-zinc-400">Adapting to the market</h3>
-          <p className="mt-1 text-sm leading-6 text-zinc-700 dark:text-zinc-300">{marketAdaptation}</p>
+          <p className="mt-1.5 text-sm leading-6 text-zinc-700 dark:text-zinc-300">{marketAdaptation}</p>
         </div>
       )}
     </div>
@@ -471,9 +495,9 @@ export function NextWeekTab({ review }) {
     })
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <p className="text-xs tabular-nums text-zinc-600 dark:text-zinc-400">{done.size} of {review.nextWeek.length} ticked off</p>
-      <ul className="space-y-2">
+      <ul className="space-y-2.5">
         {review.nextWeek.map((action, index) => {
           const checked = done.has(index)
           return (
@@ -483,7 +507,7 @@ export function NextWeekTab({ review }) {
                 role="checkbox"
                 aria-checked={checked}
                 onClick={() => toggle(index)}
-                className={`flex w-full cursor-pointer items-start gap-3 rounded-xl border border-zinc-200 px-4 py-3 text-left transition-colors hover:bg-zinc-50 dark:border-white/[0.08] dark:hover:bg-white/[0.04] ${focusRing}`}
+                className={`flex w-full cursor-pointer items-start gap-3.5 rounded-xl border border-zinc-200 px-5 py-4 text-left transition-colors hover:bg-zinc-50 dark:border-white/[0.08] dark:hover:bg-white/[0.04] ${focusRing}`}
               >
                 <span aria-hidden="true" className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border transition-colors ${checked ? 'border-emerald-600 bg-emerald-600 text-white dark:border-emerald-400 dark:bg-emerald-400 dark:text-zinc-950' : 'border-zinc-400 dark:border-zinc-500'}`}>
                   {checked && <CheckIcon className="h-3.5 w-3.5" />}
@@ -530,8 +554,8 @@ export function Review({ review, period = 'week' }) {
   return (
     <div>
       {/* sticky inside the dialog's scroll area, so the tabs stay reachable while a long tab scrolls */}
-      <div className="sticky top-0 z-10 -mx-6 bg-white px-6 pb-3 dark:bg-panel">
-        <div role="tablist" aria-label="Review sections" onKeyDown={handleKeyDown} className="subtle-scrollbar flex gap-1 overflow-x-auto border-b border-zinc-200 dark:border-white/[0.08]">
+      <div className="sticky top-0 z-10 -mx-8 bg-white px-8 pb-4 pt-3 dark:bg-panel">
+        <div role="tablist" aria-label="Review sections" onKeyDown={handleKeyDown} className="no-scrollbar flex gap-1 overflow-x-auto overflow-y-hidden border-b border-zinc-200 dark:border-white/[0.08]">
           {tabs.map((item) => {
             const active = tab === item.id
             return (
@@ -544,7 +568,7 @@ export function Review({ review, period = 'week' }) {
                 aria-controls="review-panel"
                 tabIndex={active ? 0 : -1}
                 onClick={() => setTab(item.id)}
-                className={`-mb-px inline-flex h-9 shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap border-b-2 px-3 text-[13px] font-medium transition-colors ${focusRing} ${
+                className={`inline-flex h-10 shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap border-b-2 px-3 text-[13px] font-medium transition-colors ${focusRing} ${
                   active
                     ? 'border-zinc-900 text-zinc-900 dark:border-zinc-100 dark:text-zinc-50'
                     : 'border-transparent text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'
@@ -560,7 +584,7 @@ export function Review({ review, period = 'week' }) {
         </div>
       </div>
 
-      <div key={tab} id="review-panel" role="tabpanel" aria-labelledby={`review-tab-${tab}`} className={`pt-1 ${stepEnter}`}>
+      <div key={tab} id="review-panel" role="tabpanel" aria-labelledby={`review-tab-${tab}`} className={stepEnter}>
         {tab === 'overview' && <OverviewTab review={review} discipline={discipline} strategy={strategy} goTo={setTab} words={words} />}
         {tab === 'rules' && <RulesTab review={review} discipline={discipline} />}
         {tab === 'plan' && hasPlan && <PlanTab review={review} />}

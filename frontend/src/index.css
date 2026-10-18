@@ -108,6 +108,42 @@ body {
   background: rgba(113, 113, 122, 0.7);
 }
 
+/* Scrollbars that only appear when they are needed: tab rows never show one, and long content shows a thin
+   thumb only while the pointer is over it (Notion-style). */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.quiet-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.quiet-scrollbar:hover {
+  scrollbar-color: rgba(113, 113, 122, 0.4) transparent;
+}
+
+.quiet-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.quiet-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.quiet-scrollbar::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: transparent;
+}
+
+.quiet-scrollbar:hover::-webkit-scrollbar-thumb {
+  background: rgba(113, 113, 122, 0.4);
+}
+
 @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 
 /* Landing-page motion: intentionally slow, soft, and easy to ignore. */

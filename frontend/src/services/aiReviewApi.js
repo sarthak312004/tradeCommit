@@ -18,3 +18,10 @@ export const getAiReview = (journalId, weekStart) =>
  * explanation (403 not unlocked yet, 429 limit reached or mentor busy) when a new review is not allowed.
  */
 export const createAiReview = (journalId, weekStart) => requestJson(base(journalId), { method: 'POST', body: { weekStart } })
+
+/**
+ * The trader's allowance, shared by weekly and date-range reviews (a review written in either one counts in both).
+ * Resolves to { usage: { day: { used, limit }, week: { used, limit } }, blocked, reason, nextAvailableAt, message, generating }.
+ * Never calls the AI and never uses allowance.
+ */
+export const getAiQuota = (journalId) => requestJson(`${base(journalId)}/quota`, { cache: 'no-store' })

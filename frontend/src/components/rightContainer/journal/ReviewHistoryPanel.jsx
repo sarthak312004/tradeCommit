@@ -32,7 +32,7 @@ function HistoryRow({ item, currency, onOpen }) {
     <button
       type="button"
       onClick={onOpen}
-      className={`flex w-full cursor-pointer flex-col items-start gap-1.5 px-4 py-3 text-left transition-colors hover:bg-zinc-50 dark:hover:bg-white/[0.04] ${focusRing}`}
+      className={`flex w-full cursor-pointer flex-col items-start gap-2 px-5 py-4 text-left transition-colors hover:bg-zinc-50 dark:hover:bg-white/[0.04] ${focusRing}`}
     >
       <span className="flex w-full items-center gap-2">
         <KindBadge item={item} />
@@ -175,7 +175,7 @@ function ReviewHistoryPanel({ journalId, currency, onUpdate }) {
     const navButton = `flex h-8 items-center gap-1 rounded-lg border border-zinc-300 px-2.5 text-xs font-medium text-zinc-700 transition-colors enabled:cursor-pointer enabled:hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/[0.14] dark:text-zinc-200 dark:enabled:hover:bg-white/[0.07] ${focusRing}`
 
     return (
-      <div className="space-y-5">
+      <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <button type="button" onClick={closeItem} className={`${navButton} cursor-pointer`}>
             <ChevronLeftIcon className="h-3.5 w-3.5" />
@@ -220,10 +220,10 @@ function ReviewHistoryPanel({ journalId, currency, onUpdate }) {
         {detail.phase === 'ready' && data && !data.review && <EmptyState title="This review is no longer saved">Open the Weekly or Date range tab to write a new one.</EmptyState>}
 
         {detail.phase === 'ready' && data?.review && (
-          <div className="space-y-6">
+          <div className="space-y-7">
             {stats && <WeekStats week={stats} currency={currency} />}
             {data.stale && (
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-300/60 bg-amber-50 px-4 py-2.5 text-[13px] text-amber-900 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200">
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300/60 bg-amber-50 px-5 py-3.5 text-[13px] leading-6 text-amber-900 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200">
                 <span>Your trades, strategy or plans changed after this review was written.</span>
                 <button type="button" onClick={() => onUpdate(selected)} className="cursor-pointer font-medium underline-offset-2 hover:underline">
                   Open to update
@@ -242,8 +242,8 @@ function ReviewHistoryPanel({ journalId, currency, onUpdate }) {
   }
 
   return (
-    <div className="space-y-4">
-      <div role="group" aria-label="Filter feedback" className="flex flex-wrap gap-1.5">
+    <div className="space-y-5">
+      <div role="group" aria-label="Filter feedback" className="flex flex-wrap gap-2">
         {FILTERS.map((item) => {
           const active = filter === item.id
           const count = item.id === 'all' ? items.length : items.filter((entry) => entry.kind === item.id).length
@@ -266,7 +266,7 @@ function ReviewHistoryPanel({ journalId, currency, onUpdate }) {
       </div>
 
       {error && (
-        <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-2.5 text-[13px] text-rose-800 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-300">
+        <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-5 py-3.5 text-[13px] leading-6 text-rose-800 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-300">
           {error}
         </p>
       )}
