@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { CheckIcon, ChevronDownIcon } from '../../utils/Icons.jsx'
 import { focusRing } from './controlStyles'
 
@@ -21,21 +22,30 @@ function TextStyleMenu({ value, onChange }) {
   const [isOpen, setIsOpen] = useState(false)
   const [focusRows, setFocusRows] = useState(false)
   const rootRef = useRef(null)
+  const menuRef = useRef(null)
+  const [menuPosition, setMenuPosition] = useState(null)
   const listId = useId()
   const current = OPTIONS.find((option) => option.value === value) ?? OPTIONS[0]
 
   useEffect(() => {
     if (!isOpen) return undefined
     const handlePointerDown = (event) => {
-      if (!rootRef.current?.contains(event.target)) setIsOpen(false)
+      if (!rootRef.current?.contains(event.target) && !menuRef.current?.contains(event.target)) setIsOpen(false)
     }
     document.addEventListener('pointerdown', handlePointerDown)
-    return () => document.removeEventListener('pointerdown', handlePointerDown)
+    const closeOnViewportChange = () => setIsOpen(false)
+    window.addEventListener('resize', closeOnViewportChange)
+    window.addEventListener('scroll', closeOnViewportChange, true)
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      window.removeEventListener('resize', closeOnViewportChange)
+      window.removeEventListener('scroll', closeOnViewportChange, true)
+    }
   }, [isOpen])
 
   // only keyboard users move focus into the list
   useEffect(() => {
-    if (isOpen && focusRows) rootRef.current?.querySelector('[aria-selected="true"] button')?.focus({ preventScroll: true })
+    if (isOpen && focusRows) menuRef.current?.querySelector('[aria-selected="true"] button')?.focus({ preventScroll: true })
   }, [isOpen, focusRows])
 
   const close = () => {
@@ -45,7 +55,13 @@ function TextStyleMenu({ value, onChange }) {
 
   const handleTriggerClick = (event) => {
     setFocusRows(event.detail === 0) // detail 0 = opened with Enter / Space
-    setIsOpen((open) => !open)
+    if (isOpen) {
+      setIsOpen(false)
+      return
+    }
+    const rect = event.currentTarget.getBoundingClientRect()
+    setMenuPosition({ left: Math.min(rect.left, window.innerWidth - 200), top: rect.bottom + 6 })
+    setIsOpen(true)
   }
 
   const pick = (tag) => {
@@ -62,7 +78,7 @@ function TextStyleMenu({ value, onChange }) {
     }
     if (!isOpen || (event.key !== 'ArrowDown' && event.key !== 'ArrowUp')) return
     event.preventDefault()
-    const rows = [...rootRef.current.querySelectorAll('[role="option"] button')]
+    const rows = [...menuRef.current.querySelectorAll('[role="option"] button')]
     const index = rows.indexOf(document.activeElement)
     rows[event.key === 'ArrowDown' ? Math.min(rows.length - 1, index + 1) : Math.max(0, index - 1)]?.focus()
   }
@@ -84,12 +100,15 @@ function TextStyleMenu({ value, onChange }) {
         <ChevronDownIcon className={`h-3 w-3 shrink-0 opacity-60 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
-      {isOpen && (
+      {isOpen && menuPosition && createPortal(
         <ul
+          ref={menuRef}
           id={listId}
           role="listbox"
           aria-label="Text style"
-          className="absolute left-0 top-full z-30 mt-1.5 w-48 rounded-xl border border-zinc-200 bg-white p-1 shadow-lg shadow-zinc-900/10 dark:border-white/[0.12] dark:bg-panel dark:shadow-black/40"
+          style={{ position: 'fixed', left: menuPosition.left, top: menuPosition.top }}
+          onKeyDown={handleKeyDown}
+          className="z-[60] w-48 rounded-xl border border-zinc-200 bg-white p-1 shadow-lg shadow-zinc-900/10 dark:border-white/[0.12] dark:bg-panel dark:shadow-black/40"
         >
           {OPTIONS.map((option) => {
             const active = option.value === current.value
@@ -109,7 +128,8 @@ function TextStyleMenu({ value, onChange }) {
               </li>
             )
           })}
-        </ul>
+        </ul>,
+        document.body
       )}
     </div>
   )

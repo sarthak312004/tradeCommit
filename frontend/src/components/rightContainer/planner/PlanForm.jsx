@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form'
 import FormDrawer from '../../common/FormDrawer'
 import PropertyRow from '../../common/PropertyRow'
 import ShortcutHint from '../../common/ShortcutHint'
-import RichTextEditor from '../../common/RichTextEditor'
+import TiptapEditor from '../../common/tiptap/TiptapEditor'
 import { dateInputClass, ghostFooterButton, primaryFooterButton } from '../../common/formStyles'
 import { CalendarIcon } from '../../../utils/Icons.jsx'
 import { formatLongDate, todayKey } from '../../../utils/calendar'
@@ -31,20 +31,23 @@ function PlanForm({ plannerName, plannerType, initialEntry = null, initialDate, 
   })
   const drawerRef = useRef(null)
   const editorRef = useRef(null)
-  const [isUploading, setIsUploading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false)
   const [submitError, setSubmitError] = useState('')
 
   const date = watch('date')
-  const isBusy = isSaving // uploads run in the background; Save just waits for them
+  const isBusy = isSaving
 
   const handleFormSubmit = async (values) => {
     setSubmitError('')
     setIsSaving(true)
     try {
-      const { html, images, removedImages } = await editorRef.current.getContent()
-      await onSubmit({ title: values.title.trim(), date: values.date || todayKey(), content: html, images, removedImages })
+      const draft = await editorRef.current.getDraft()
+      editorRef.current.markSubmitted()
+      onSubmit(
+        { title: values.title.trim(), date: values.date || todayKey(), content: draft.html, images: draft.images, removedImages: draft.removedImages },
+        draft.prepare
+      )
       drawerRef.current?.close()
     } catch (error) {
       setSubmitError(error.message || 'Could not save this plan. Please try again.')
@@ -99,7 +102,7 @@ function PlanForm({ plannerName, plannerType, initialEntry = null, initialDate, 
         <ShortcutHint className="mr-2 hidden md:block" />
         <button type="button" onClick={() => drawerRef.current?.close()} className={ghostFooterButton}>Cancel</button>
         <button type="submit" disabled={isBusy} title={`Save (${MOD_LABEL}+Enter)`} className={primaryFooterButton}>
-          {isBusy ? (isUploading ? 'Uploading...' : 'Saving...') : initialEntry ? 'Save plan' : 'Create plan'}
+          {isBusy ? 'Saving...' : initialEntry ? 'Save plan' : 'Create plan'}
         </button>
       </div>
     </>
@@ -146,14 +149,13 @@ function PlanForm({ plannerName, plannerType, initialEntry = null, initialDate, 
 
       <hr className="my-6 border-zinc-300 dark:border-white/[0.12]" />
 
-      <RichTextEditor
+      <TiptapEditor
         ref={editorRef}
         id="plan-content"
         label="Trade plan"
         initialHtml={initialEntry?.content ?? ''}
         placeholder="Levels, setups, entry & exit rules, risk, what would invalidate the idea…"
         onUploadImage={onUploadImage}
-        onBusyChange={setIsUploading}
       />
     </FormDrawer>
   )

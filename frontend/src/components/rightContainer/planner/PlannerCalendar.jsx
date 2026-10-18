@@ -13,12 +13,13 @@ function EntryChip({ entry, onOpen }) {
   return (
     <button
       type="button"
+      disabled={entry.syncState === 'saving'}
       onClick={(event) => {
         event.stopPropagation()
         onOpen(entry)
       }}
-      title={entry.title}
-      className={`flex h-6 w-full min-w-0 cursor-pointer items-center gap-1.5 overflow-hidden rounded-md bg-zinc-900/[0.06] px-2 text-left text-[11px] font-medium leading-none text-zinc-800 transition-colors hover:bg-zinc-900/[0.1] hover:text-zinc-900 dark:bg-white/[0.08] dark:text-zinc-200 dark:hover:bg-white/[0.13] dark:hover:text-zinc-50 ${focusRing}`}
+      title={entry.syncState === 'saving' ? 'Saving plan…' : entry.title}
+      className={`flex h-6 w-full min-w-0 cursor-pointer items-center gap-1.5 overflow-hidden rounded-md bg-zinc-900/[0.06] px-2 text-left text-[11px] font-medium leading-none text-zinc-800 transition-colors hover:bg-zinc-900/[0.1] hover:text-zinc-900 disabled:cursor-wait disabled:opacity-70 dark:bg-white/[0.08] dark:text-zinc-200 dark:hover:bg-white/[0.13] dark:hover:text-zinc-50 ${focusRing}`}
     >
       <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-sky-700 dark:bg-sky-400" />
       <span className="min-w-0 flex-1 truncate">{entry.title}</span>

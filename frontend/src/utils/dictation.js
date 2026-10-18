@@ -1,7 +1,8 @@
 import { correctTrading } from './tradingVocabulary'
 
-// Turns a speech-recognition transcript into clean text inside the trade analysis editor.
-// parseDictation() is pure (no DOM) so it is easy to test; the insert/interim helpers below touch the DOM.
+// Turns a speech-recognition transcript into clean text for the rich text editor.
+// Everything here is pure (no DOM, no editor) so it is easy to test. Putting the text into the Tiptap editor
+// (caret, grey preview, "scratch that") lives in ./tiptapDictation.js.
 
 // ---------- vocabulary ----------
 
@@ -123,12 +124,11 @@ export const isEchoOf = (text, previous, ageMs) => {
   return shared / smaller >= 0.8
 }
 
-// ---------- DOM helpers ----------
+// ---------- spacing and capitals around the caret ----------
 
 const SENTENCE_END = /[.!?]\s*$/
 const LEADING_PUNCTUATION = /^[.,;:!?)%]/
 const ENDS_BEFORE_SPACE = /[\s.,;:!?)]/
-const INLINE_TAGS = /^(B|I|U|EM|STRONG|SPAN|A)$/
 // words that keep their capital even in the middle of a sentence
 const KEEP_CAPITAL = /^(?:I|I'm|I'll|I've|I'd|Nifty|Sensex|Nasdaq|Bank|Fin|Dow|Fed|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|January|February|March|April|May|June|July|August|September|October|November|December)$/
 const lowerIfMidSentence = (text) => {
@@ -136,154 +136,22 @@ const lowerIfMidSentence = (text) => {
   return /^[A-Z][a-z']*$/.test(first) && !KEEP_CAPITAL.test(first) ? first.toLowerCase() + text.slice(first.length) : text
 }
 
-const INTERIM_ATTR = 'data-dictation-interim'
-
-// the text node (or inline element) a boundary point sits next to, as plain text
-const adjacentText = (node) => {
-  if (!node) return ''
-  if (node.nodeType === Node.TEXT_NODE) return node.data
-  if (node.nodeType !== Node.ELEMENT_NODE || node.hasAttribute?.(INTERIM_ATTR)) return ''
-  return INLINE_TAGS.test(node.nodeName) ? node.textContent : ''
-}
-
-// '' means the caret is at the start of a line / block
-const charBefore = (range) => {
-  const { startContainer: node, startOffset: offset } = range
-  if (node.nodeType === Node.TEXT_NODE) return offset > 0 ? node.data[offset - 1] : ''
-  return adjacentText(node.childNodes[offset - 1]).slice(-1)
-}
-
-const charAfter = (range) => {
-  const { endContainer: node, endOffset: offset } = range
-  if (node.nodeType === Node.TEXT_NODE) return offset < node.length ? node.data[offset] : ''
-  return adjacentText(node.childNodes[offset]).charAt(0)
-}
-
-const textBefore = (editor, range) => {
-  const probe = document.createRange()
-  probe.selectNodeContents(editor)
-  probe.setEnd(range.startContainer, range.startOffset)
-  return probe.toString()
-}
-
-const endOfEditor = (editor) => {
-  // an emptied contenteditable can keep a lone <br>; text after it would start on a blank line
-  if (editor.childNodes.length === 1 && editor.firstChild.nodeName === 'BR') editor.replaceChildren()
-  const range = document.createRange()
-  range.selectNodeContents(editor)
-  range.collapse(false)
-  return range
-}
-
-const caretRange = (editor, savedRange) => {
-  const range = savedRange && editor.contains(savedRange.startContainer) ? savedRange.cloneRange() : endOfEditor(editor)
-  range.collapse(false) // never replace text the user selected earlier
-  return range
-}
-
-/** The editor's HTML without the grey "still being heard" preview text. Always use this when saving. */
-export const getCleanHtml = (editor) => {
-  if (!editor) return ''
-  if (!editor.querySelector(`[${INTERIM_ATTR}]`)) return editor.innerHTML
-  const copy = editor.cloneNode(true)
-  copy.querySelectorAll(`[${INTERIM_ATTR}]`).forEach((node) => node.remove())
-  return copy.innerHTML
-}
-
-export const clearInterim = (editor) => {
-  editor?.querySelectorAll(`[${INTERIM_ATTR}]`).forEach((node) => node.remove())
-}
-
 /**
- * Shows the phrase that is still being heard as grey text at the caret, so words appear the moment they are
- * spoken instead of after the engine finishes. It is replaced by the real text (or removed) on the next call.
- */
-export const showInterimText = (editor, savedRange, text) => {
-  if (!editor) return
-  const preview = String(text ?? '').trim()
-  let span = editor.querySelector(`[${INTERIM_ATTR}]`)
-  if (!preview) {
-    span?.remove()
-    return
-  }
-  if (!span) {
-    span = document.createElement('span')
-    span.setAttribute(INTERIM_ATTR, 'true')
-    span.setAttribute('contenteditable', 'false')
-    span.className = 'text-zinc-400 dark:text-zinc-500'
-    const range = caretRange(editor, savedRange)
-    const before = charBefore(range)
-    span.dataset.lead = before && !/\s/.test(before) ? ' ' : ''
-    range.insertNode(span)
-  }
-  span.textContent = `${span.dataset.lead ?? ''}${preview}`
-}
-
-/**
- * Inserts dictated text at `savedRange` (the last caret position inside `editor`), or at the end when there
- * is none. Adds the missing space, capitalises sentence starts and understands "new line" / "full stop" / "bullet point".
- * Works on the DOM directly, so it never moves focus away from whatever field the user is typing in.
+ * Final wording of one dictated phrase at the caret: adds the missing space, capitalises sentence starts,
+ * lowercases a stray capital in the middle of a sentence and fixes "0 75" -> "0.75".
  *
- * Returns { range, undo } - `range` is the caret after the inserted text (store it as the new saved range) and
- * `undo()` removes exactly what was inserted (returns the caret range from before it). Returns null if nothing was inserted.
+ * @param {{ text: string }} token       a { text } token from parseDictation()
+ * @param {object} context
+ * @param {string} context.before        character right before the caret ('' at the start of a line)
+ * @param {string} context.after         character right after the caret ('' at the end of a line)
+ * @param {string} context.textBefore    all text before the caret (to know whether a sentence just ended)
  */
-export const insertDictatedText = (editor, savedRange, tokens) => {
-  const textTokens = tokens.filter((token) => token.text || token.breaks)
-  if (!editor || !textTokens.length) return null
-  clearInterim(editor)
-
-  const range = caretRange(editor, savedRange)
-  const startRange = range.cloneRange()
-  const inserted = []
-
-  for (const token of textTokens) {
-    if (token.breaks) {
-      for (let i = 0; i < token.breaks; i += 1) {
-        const lineBreak = document.createElement('br')
-        range.insertNode(lineBreak)
-        range.setStartAfter(lineBreak)
-        range.collapse(true)
-        inserted.push(lineBreak)
-      }
-      continue
-    }
-
-    const before = charBefore(range)
-    const startsSentence = !token.bullet && (before === '' || SENTENCE_END.test(textBefore(editor, range)))
-    let text = token.text
-    if (/^\d{2,}/.test(text) && /(?:^|\s)0$/.test(textBefore(editor, range))) text = `.${text}`
-    if (startsSentence) text = text.charAt(0).toUpperCase() + text.slice(1)
-    else if (!token.bullet) text = lowerIfMidSentence(text)
-    if (before && !/\s/.test(before) && !LEADING_PUNCTUATION.test(text)) text = ` ${text}`
-    if (token.bullet) text = `${text} `
-    const after = charAfter(range)
-    if (after && !token.bullet && !ENDS_BEFORE_SPACE.test(after)) text = `${text} `
-
-    const node = document.createTextNode(text)
-    range.insertNode(node)
-    range.setStart(node, node.length)
-    range.collapse(true)
-    inserted.push(node)
-  }
-
-  // if the editor has the caret, move it past the new text (otherwise typing would land before it)
-  if (document.activeElement === editor) {
-    const selection = window.getSelection()
-    selection?.removeAllRanges()
-    selection?.addRange(range.cloneRange())
-  }
-
-  const undo = () => {
-    const anchor = inserted[0]
-    const parent = anchor?.parentNode
-    const index = parent ? Array.prototype.indexOf.call(parent.childNodes, anchor) : -1
-    inserted.forEach((node) => node.parentNode?.removeChild(node))
-    if (!parent || !editor.contains(parent)) return startRange
-    const restored = document.createRange()
-    restored.setStart(parent, Math.min(index, parent.childNodes.length))
-    restored.collapse(true)
-    return restored
-  }
-
-  return { range, undo }
+export const shapeDictatedText = (token, { before = '', after = '', textBefore = '' }) => {
+  let text = token.text
+  if (/^\d{2,}/.test(text) && /(?:^|\s)0$/.test(textBefore)) text = `.${text}`
+  if (before === '' || SENTENCE_END.test(textBefore)) text = text.charAt(0).toUpperCase() + text.slice(1)
+  else text = lowerIfMidSentence(text)
+  if (before && !/\s/.test(before) && !LEADING_PUNCTUATION.test(text)) text = ` ${text}`
+  if (after && !ENDS_BEFORE_SPACE.test(after)) text = `${text} `
+  return text
 }

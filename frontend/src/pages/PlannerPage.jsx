@@ -14,8 +14,8 @@ function PlannerWorkspace({ planner }) {
   // null = drawer closed, { entry: null, date } = new plan, { entry } = editing
   const [formState, setFormState] = useState(null)
 
-  const handleSubmit = (values) =>
-    formState.entry ? updateEntry(formState.entry.id, values) : addEntry(values)
+  const handleSubmit = (values, prepare) =>
+    formState.entry ? updateEntry(formState.entry.id, values, prepare) : addEntry(values, prepare)
 
   return (
     <>

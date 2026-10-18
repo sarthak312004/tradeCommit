@@ -93,7 +93,7 @@ export const footerClass = [
 /* ---- rich-text toolbar -------------------------------------------------- */
 
 export const toolbarClass = [
-  'sticky top-0 z-10 flex flex-wrap items-center gap-1',
+  'sticky top-0 z-10 flex flex-nowrap items-center gap-1 overflow-visible whitespace-nowrap [&>*]:shrink-0',
   'rounded-xl border border-zinc-200',
   'bg-zinc-50/95 p-1',
   'shadow-sm shadow-zinc-900/[0.02]',

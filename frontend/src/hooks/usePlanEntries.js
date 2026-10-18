@@ -21,17 +21,33 @@ export function usePlanEntries(plannerId) {
     }
   }, [plannerId])
 
-  const addEntry = useCallback(async (entry) => {
-    const created = await plannerApi.createEntry(plannerId, entry)
-    setEntries((current) => [...current, created])
-    return created
+  const addEntry = useCallback((entry, prepare = async () => entry) => {
+    const pendingId = `pending-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    setError('')
+    setEntries((current) => [...current, { ...entry, id: pendingId, syncState: 'saving' }])
+    Promise.resolve()
+      .then(prepare)
+      .then((ready) => plannerApi.createEntry(plannerId, { ...entry, ...ready }))
+      .then((created) => setEntries((current) => current.map((item) => (item.id === pendingId ? created : item))))
+      .catch((saveError) => {
+        setEntries((current) => current.filter((item) => item.id !== pendingId))
+        setError(saveError.message || 'Could not save plan')
+      })
   }, [plannerId])
 
-  const updateEntry = useCallback(async (entryId, entry) => {
-    const updated = await plannerApi.updateEntry(plannerId, entryId, entry)
-    setEntries((current) => current.map((item) => (item.id === entryId ? updated : item)))
-    return updated
-  }, [plannerId])
+  const updateEntry = useCallback((entryId, entry, prepare = async () => entry) => {
+    const previous = entries.find((item) => item.id === entryId)
+    setError('')
+    setEntries((current) => current.map((item) => (item.id === entryId ? { ...item, ...entry, syncState: 'saving' } : item)))
+    Promise.resolve()
+      .then(prepare)
+      .then((ready) => plannerApi.updateEntry(plannerId, entryId, { ...entry, ...ready }))
+      .then((updated) => setEntries((current) => current.map((item) => (item.id === entryId ? updated : item))))
+      .catch((saveError) => {
+        if (previous) setEntries((current) => current.map((item) => (item.id === entryId ? previous : item)))
+        setError(saveError.message || 'Could not save plan')
+      })
+  }, [entries, plannerId])
 
   const removeEntry = useCallback(async (entryId) => {
     await plannerApi.removeEntry(plannerId, entryId)

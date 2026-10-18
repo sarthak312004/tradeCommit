@@ -1,21 +1,16 @@
 import { badgeBase, badgeTone, dotTone } from '../../common/controlStyles'
-import { dateInputClass, editorClass, footerClass, ghostFooterButton, iconButtonClass, inputClass, numberInputClass, primaryFooterButton, toolbarClass, toolbarDivider, toolbarIconButton, toolbarTextButton } from '../../common/formStyles'
-import { useActiveFormats } from '../../../hooks/useActiveFormats'
+import { dateInputClass, footerClass, ghostFooterButton, iconButtonClass, inputClass, numberInputClass, primaryFooterButton } from '../../common/formStyles'
 import { useEffect, useRef, useState } from 'react'
 import { useFieldArray, useForm } from 'react-hook-form'
 import { formatMoney, formatR, getTradePnl, getTradeR, toneOf } from '../../../utils/tradeAnalytics'
 import { DEFAULT_CURRENCY } from '../../../utils/currencies'
-import { isLocalPreview, preloadImage, prepareImage } from '../../../utils/imageUpload'
 import { FIELD_TYPES, MAX_CUSTOM_FIELDS, makeFieldKey, toFormField } from '../../../utils/customFields'
-import { clearInterim, getCleanHtml, insertDictatedText, parseDictation, showInterimText } from '../../../utils/dictation'
-import { SHORTCUT_LABEL, useDictationShortcut, useVoiceDictation } from '../../../hooks/useVoiceDictation'
 import { MOD_LABEL, useFormShortcuts } from '../../../hooks/useFormShortcuts'
 import { todayKey } from '../../../utils/calendar'
 import { useLivePrice } from '../../../hooks/useLivePrice'
 import { useSymbolSearch } from '../../../hooks/useSymbolSearch'
 import ShortcutHint from '../../common/ShortcutHint'
-import TextStyleMenu from '../../common/TextStyleMenu'
-import VoiceLevel from './VoiceLevel'
+import TiptapEditor from '../../common/tiptap/TiptapEditor'
 import SymbolSuggestions from './SymbolSuggestions'
 
 // built when the form opens, in local time (UTC would show yesterday for Indian users before 5:30 am)
@@ -122,9 +117,6 @@ const directionOptions = [
 
 // P&L badge colours come from badgeTone, so every status chip in the app uses the same AA-checked pairs
 
-// keep the text selection inside the editor when a toolbar button is pressed
-const keepSelection = (event) => event.preventDefault()
-
 /* ---------- small building blocks ---------- */
 function PropertyRow({ icon, label, hint, htmlFor, error, children }) {
   const Label = htmlFor ? 'label' : 'div'
@@ -156,47 +148,25 @@ function Flash({ pulse, children }) {
   )
 }
 
-function ToolbarButton({ title, icon, onClick, active }) {
-  return (
-    <button type="button" title={title} aria-label={title} aria-pressed={active === undefined ? undefined : active} onMouseDown={keepSelection} onClick={onClick} className={toolbarIconButton(active)}>
-      <Icon name={icon} size={16} />
-    </button>
-  )
-}
-
 //---------------------Main Form-------------
 function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = [], initialTrade = null, initialDate = null, onSubmit, onClose, onUploadImage, respectReducedMotion = false }) {
   const [drawerWidth, setDrawerWidth] = useState(DEFAULT_WIDTH)
   const [expanded, setExpanded] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [visible, setVisible] = useState(false)
-  const [pendingUploads, setPendingUploads] = useState(0) // screenshots still uploading in the background
   const [isSaving, setIsSaving] = useState(false)
   const [submitError, setSubmitError] = useState('')
-  const [imageUploadError, setImageUploadError] = useState('')
-  const [hoverImage, setHoverImage] = useState(null)
   const [addMenuOpen, setAddMenuOpen] = useState(false)
   const [picked, setPicked] = useState(null) // suggestion chosen from the asset-name dropdown
   const [searchOpen, setSearchOpen] = useState(false)
   const [activeSuggestion, setActiveSuggestion] = useState(-1)
   const [flashed, setFlashed] = useState({}) // fields that were just auto-filled
   const [reduceMotion] = useState(() => respectReducedMotion && typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)
-  const editorRef = useRef(null)
-  const formats = useActiveFormats(editorRef)
-  const removedImagesRef = useRef(new Set())
-  const pendingUploadsRef = useRef(new Set()) // promises of in-flight screenshot uploads
+  const editorRef = useRef(null) // the TiptapEditor (text, screenshots, dictation all live inside it)
   const isSavingRef = useRef(false) // blocks a second submit (e.g. Enter key) while saving
-  const currentImageUrlsRef = useRef(new Set())
-  const imageResizeRef = useRef(null)
-  const syncFormFromEditorRef = useRef(null)
-  const editorSelectionRef = useRef(null)
-  const imageInputRef = useRef(null)
   const isResizingRef = useRef(false)
   const closeTimerRef = useRef(null)
   const formRef = useRef(null)
-  const submittedRef = useRef(false) // true once the form has handed its trade over and is closing
-  const uploadedRef = useRef(new Map()) // local preview URL (or data: URL) -> hosted URL
-  const sourceFilesRef = useRef(new Map()) // local preview URL -> original file, so a failed upload can be retried after the form closed
   const addMenuRef = useRef(null)
   const pendingFocusKeyRef = useRef(null)
   const symbolInputRef = useRef(null)
@@ -239,15 +209,6 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
   const suggestions = useSymbolSearch({ query: typedSymbol, enabled: searchOpen && !pickedMatches, prefer })
   const suggestionsOpen = searchOpen && suggestions.length > 0
 
-  // hide the remove button whenever the editor content changes (typing, delete key, reset)
-  useEffect(() => {
-    const editor = editorRef.current
-    if (!editor) return undefined
-    const observer = new MutationObserver(() => setHoverImage(null))
-    observer.observe(editor, { childList: true, subtree: true })
-    return () => observer.disconnect()
-  }, [])
-
   useEffect(() => {
     const formValues = initialTrade
       ? {
@@ -259,7 +220,6 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
         }
       : { ...getDefaultValues(), ...(initialDate ? { date: initialDate } : {}), customFields: templateRef.current.map(toFormField) }
 
-    removedImagesRef.current.clear()
     entryManualRef.current = Boolean(initialTrade)
     filledForRef.current = null
     stopManualRef.current = Boolean(initialTrade)
@@ -267,12 +227,6 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
     qtyFromMemoryRef.current = false
     autoStopRef.current = null
     reset(formValues)
-    if (editorRef.current) {
-      editorRef.current.innerHTML = formValues.analysis ?? ''
-      currentImageUrlsRef.current = new Set(
-        [...editorRef.current.querySelectorAll('img')].map((image) => image.src)
-      )
-    }
   }, [initialTrade, initialDate, reset])
 
   const flash = (...names) => {
@@ -481,239 +435,6 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
   // Esc closes the form, Ctrl/Cmd + Enter saves it (both are off while it is already saving)
   useFormShortcuts({ formRef, onEscape: requestClose, canClose: !isSaving, canSubmit: !isSaving })
 
-  const runEditorCommand = (command, value = null) => {
-    editorRef.current?.focus()
-    document.execCommand(command, false, value)
-    setValue('analysis', getCleanHtml(editorRef.current), { shouldDirty: true })
-  }
-
-  const handleEditorInput = () => syncFormFromEditor()
-
-  const saveEditorSelection = () => {
-    const selection = window.getSelection()
-    if (selection?.rangeCount && editorRef.current?.contains(selection.anchorNode)) {
-      editorSelectionRef.current = selection.getRangeAt(0).cloneRange()
-    }
-  }
-
-  const syncFormFromEditor = () => {
-    const editor = editorRef.current
-    const imageUrls = [...(editor?.querySelectorAll('img') ?? [])].map((image) => image.src)
-    const nextImageUrls = new Set(imageUrls)
-    for (const imageUrl of currentImageUrlsRef.current) {
-      if (!nextImageUrls.has(imageUrl) && !isLocalPreview(imageUrl)) removedImagesRef.current.add(imageUrl)
-    }
-    currentImageUrlsRef.current = nextImageUrls
-    setValue('images', imageUrls, { shouldDirty: true })
-    setValue('analysis', getCleanHtml(editor), { shouldDirty: true })
-  }
-
-  syncFormFromEditorRef.current = syncFormFromEditor
-
-  // voice dictation: words show up grey as they are heard, then become real text at the caret of the analysis editor
-  const dictationRef = useRef(null)
-  const dictationUndoRef = useRef([]) // one undo() per inserted phrase, for "scratch that"
-
-  const handleDictatedText = (text) => {
-    const editor = editorRef.current
-    clearInterim(editor)
-    const tokens = parseDictation(text)
-
-    const inserted = insertDictatedText(editor, editorSelectionRef.current, tokens)
-    if (inserted) {
-      editorSelectionRef.current = inserted.range
-      dictationUndoRef.current.push(inserted.undo)
-      if (dictationUndoRef.current.length > 30) dictationUndoRef.current.shift()
-      syncFormFromEditor()
-    }
-
-    for (const token of tokens) {
-      if (token.command === 'undo') {
-        const undo = dictationUndoRef.current.pop()
-        if (undo) {
-          editorSelectionRef.current = undo()
-          syncFormFromEditor()
-        }
-      } else if (token.command === 'stop') {
-        dictationRef.current?.stop()
-      }
-    }
-  }
-  const handleInterimText = (text) => showInterimText(editorRef.current, editorSelectionRef.current, text)
-
-  const dictation = useVoiceDictation({ onFinalText: handleDictatedText, onInterim: handleInterimText })
-  dictationRef.current = dictation
-  useDictationShortcut(dictation.toggle, { enabled: dictation.isSupported })
-
-  useEffect(() => {
-    const updateImageWidth = (event) => {
-      const activeResize = imageResizeRef.current
-      const editor = editorRef.current
-      if (!activeResize || !editor || event.pointerId !== activeResize.pointerId) return
-
-      const maxWidth = Math.max(120, editor.clientWidth - activeResize.image.offsetLeft)
-      const width = Math.min(maxWidth, Math.max(120, activeResize.startWidth + event.clientX - activeResize.startX))
-      activeResize.image.style.width = `${width}px`
-      activeResize.image.style.height = 'auto'
-      setHoverImage({
-        index: activeResize.index,
-        top: activeResize.image.offsetTop,
-        left: activeResize.image.offsetLeft,
-        width: activeResize.image.offsetWidth,
-        height: activeResize.image.offsetHeight
-      })
-    }
-
-    const finishResize = (event) => {
-      const activeResize = imageResizeRef.current
-      if (!activeResize || event.pointerId !== activeResize.pointerId) return
-      updateImageWidth(event)
-      imageResizeRef.current = null
-      document.body.style.cursor = ''
-      document.body.style.userSelect = ''
-      syncFormFromEditorRef.current?.()
-    }
-
-    window.addEventListener('pointermove', updateImageWidth)
-    window.addEventListener('pointerup', finishResize)
-    window.addEventListener('pointercancel', finishResize)
-    return () => {
-      window.removeEventListener('pointermove', updateImageWidth)
-      window.removeEventListener('pointerup', finishResize)
-      window.removeEventListener('pointercancel', finishResize)
-      if (imageResizeRef.current) {
-        imageResizeRef.current = null
-        document.body.style.cursor = ''
-        document.body.style.userSelect = ''
-      }
-    }
-  }, [])
-
-  // The screenshot shows up in the editor immediately from a local preview; compressing and uploading
-  // it happens in the background and the preview is swapped for the hosted URL when that finishes.
-  const insertImagePreview = (previewUrl) => {
-    document.execCommand('insertImage', false, previewUrl)
-    document.execCommand('insertParagraph', false, null)
-  }
-
-  const replacePreview = (previewUrl, finalUrl) => {
-    if (!editorRef.current) return // the form already closed; the saved trade picks the hosted URL up from uploadedRef
-    const previews = [...(editorRef.current?.querySelectorAll('img') ?? [])].filter((image) => image.src === previewUrl)
-    if (!previews.length) {
-      // the screenshot was removed while it uploaded: queue the hosted copy for deletion
-      removedImagesRef.current.add(finalUrl)
-      return
-    }
-    previews.forEach((image) => { image.src = finalUrl })
-    syncFormFromEditorRef.current?.()
-  }
-
-  const removePreview = (previewUrl) => {
-    if (!editorRef.current) return
-    ;[...(editorRef.current?.querySelectorAll('img') ?? [])]
-      .filter((image) => image.src === previewUrl)
-      .forEach((image) => image.remove())
-    syncFormFromEditorRef.current?.()
-  }
-
-  const trackUpload = (file, previewUrl) => {
-    setPendingUploads((count) => count + 1)
-    sourceFilesRef.current.set(previewUrl, file)
-    const task = prepareImage(file)
-      .then((smallFile) => onUploadImage(smallFile))
-      .then(async (finalUrl) => {
-        uploadedRef.current.set(previewUrl, finalUrl)
-        await preloadImage(finalUrl) // swap only once the browser has it, so there's no flicker
-        replacePreview(previewUrl, finalUrl)
-      })
-      .catch((error) => {
-        removePreview(previewUrl)
-        setImageUploadError(error.message || 'Image upload failed. Please try again.')
-      })
-      .finally(() => {
-        // after saving, the trade card may still show this local preview until the hosted copy replaces it
-        if (!submittedRef.current) URL.revokeObjectURL(previewUrl)
-        pendingUploadsRef.current.delete(task)
-        setPendingUploads((count) => count - 1)
-      })
-    pendingUploadsRef.current.add(task)
-  }
-
-  const addImageFiles = (files) => {
-    const imageFiles = files.filter((file) => file.type.startsWith('image/'))
-    if (!imageFiles.length) return
-
-    setImageUploadError('')
-    editorRef.current?.focus()
-    const selection = window.getSelection()
-    const savedRange = editorSelectionRef.current
-    if (savedRange && editorRef.current?.contains(savedRange.startContainer)) {
-      selection?.removeAllRanges()
-      selection?.addRange(savedRange)
-    }
-
-    for (const file of imageFiles) {
-      const previewUrl = URL.createObjectURL(file)
-      insertImagePreview(previewUrl)
-      trackUpload(file, previewUrl)
-    }
-    syncFormFromEditor()
-    saveEditorSelection()
-  }
-
-  const handleImageUpload = (event) => {
-    const files = [...(event.target.files ?? [])]
-    event.target.value = ''
-    addImageFiles(files)
-  }
-
-  // screenshots are usually on the clipboard, so let Ctrl/Cmd+V work directly
-  const handleEditorPaste = (event) => {
-    const files = [...(event.clipboardData?.files ?? [])].filter((file) => file.type.startsWith('image/'))
-    if (!files.length) return
-    event.preventDefault()
-    saveEditorSelection()
-    addImageFiles(files)
-  }
-
-  /* ---------- hover a screenshot to reveal its remove button ---------- */
-  const showRemoveFor = (image) => {
-    const index = [...(editorRef.current?.querySelectorAll('img') ?? [])].indexOf(image)
-    if (index === -1) return
-    const next = { index, top: image.offsetTop, left: image.offsetLeft, width: image.offsetWidth, height: image.offsetHeight }
-    setHoverImage((prev) => (prev && prev.index === next.index && prev.top === next.top && prev.left === next.left && prev.width === next.width && prev.height === next.height ? prev : next))
-  }
-
-  const startImageResize = (event) => {
-    event.preventDefault()
-    event.stopPropagation()
-    const image = editorRef.current?.querySelectorAll('img')[hoverImage?.index]
-    if (!image) return
-    imageResizeRef.current = { image, index: hoverImage.index, pointerId: event.pointerId, startX: event.clientX, startWidth: image.offsetWidth }
-    document.body.style.cursor = 'nwse-resize'
-    document.body.style.userSelect = 'none'
-  }
-
-  const handleEditorMouseMove = (event) => {
-    const { target } = event
-    if (target instanceof HTMLImageElement) showRemoveFor(target)
-    else if (!(target instanceof Element && target.closest('[data-image-control]'))) setHoverImage(null)
-  }
-
-  // tapping an image reveals the button on touch screens, where there is no hover
-  const handleEditorClick = (event) => {
-    if (event.target instanceof HTMLImageElement) showRemoveFor(event.target)
-  }
-
-  const removeImage = (index) => {
-    const image = editorRef.current?.querySelectorAll('img')[index]
-    if (!image) return
-    if (!isLocalPreview(image.src)) removedImagesRef.current.add(image.src)
-    image.remove()
-    setHoverImage(null)
-    syncFormFromEditor()
-  }
-
   // The form closes the moment you save. The card appears in the journal right away and the rest (finishing
   // screenshot uploads, then sending the trade) continues in the background; see addTrade / updateTrade in
   // journalContextProvider. Everything is read from the editor here, because the editor goes away with the form.
@@ -727,17 +448,11 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
     const normalizedStopLoss = String(values.stopLoss ?? '').trim()
     const normalizedSymbol = String(values.symbol ?? '').trim().toUpperCase()
 
-    setImageUploadError('')
     setSubmitError('')
     setIsSaving(true)
     try {
-      await dictation.stopAndFlush() // don't lose the last spoken phrase (returns at once when the mic is off)
-
-      const editor = editorRef.current
-      const analysis = editor ? getCleanHtml(editor) : values.analysis ?? ''
-      const images = [...(editor?.querySelectorAll('img') ?? [])].map((image) => image.src)
-      const inFlightUploads = [...pendingUploadsRef.current]
-      const removedImages = [...removedImagesRef.current].filter((url) => !images.includes(url) && !isLocalPreview(url))
+      // text + screenshots as they are right now (local previews included). `draft.prepare()` finishes the uploads later.
+      const draft = await editorRef.current.getDraft()
 
       const cleanCustomFields = (values.customFields ?? []).map((field) => ({
         key: field.key,
@@ -749,9 +464,9 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
       const payload = {
         ...values,
         risk: undefined, // sizing helper only
-        analysis,
-        images,
-        removedImages,
+        analysis: draft.html,
+        images: draft.images,
+        removedImages: draft.removedImages,
         customFields: cleanCustomFields,
         symbol: normalizedSymbol,
         assetName: normalizedSymbol,
@@ -773,45 +488,13 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
       // swaps their local previews for hosted URLs. Safe to run again on "Retry" (finished uploads are reused,
       // failed ones are uploaded again from the original file).
       const prepare = async () => {
-        await Promise.all(inFlightUploads)
-
-        const holder = document.createElement('div')
-        holder.innerHTML = analysis
-        for (const image of holder.querySelectorAll('img')) {
-          const source = image.getAttribute('src') ?? ''
-          const isPreview = isLocalPreview(source)
-          if (!isPreview && !source.startsWith('data:image/')) continue
-
-          let hostedUrl = uploadedRef.current.get(source)
-          if (!hostedUrl) {
-            // data: images were dropped in without going through the button / paste path
-            const file = isPreview
-              ? sourceFilesRef.current.get(source)
-              : await fetch(source)
-                  .then((response) => response.blob())
-                  .then((blob) => new File([blob], `trade-image-${Date.now()}.${blob.type.split('/')[1]?.split('+')[0] || 'png'}`, { type: blob.type }))
-            if (!file) {
-              image.remove()
-              continue
-            }
-            hostedUrl = await onUploadImage(await prepareImage(file))
-            uploadedRef.current.set(source, hostedUrl)
-          }
-          image.setAttribute('src', hostedUrl)
-        }
-
-        const finalImages = [...holder.querySelectorAll('img')].map((image) => image.getAttribute('src'))
-        return {
-          ...payload,
-          analysis: holder.innerHTML,
-          images: finalImages,
-          removedImages: removedImages.filter((url) => !finalImages.includes(url))
-        }
+        const finished = await draft.prepare()
+        return { ...payload, analysis: finished.html, images: finished.images, removedImages: finished.removedImages }
       }
 
       if (normalizedSymbol && Number(normalizedQuantity) > 0) rememberQuantity(normalizedSymbol, normalizedQuantity)
 
-      submittedRef.current = true
+      editorRef.current.markSubmitted() // the card may show a local preview until the hosted copy replaces it
       Promise.resolve(onSubmit(payload, { prepare })).catch(() => {}) // failures are shown on the trade card
       requestClose()
     } catch (error) {
@@ -1169,115 +852,14 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
             <hr className="my-6 border-zinc-300 dark:border-white/[0.12]" />
 
             {/* analysis */}
-            <section className="group">
-              <div className="mb-2 flex items-baseline justify-between gap-3">
-                <span id="trade-analysis-label" className="text-[13px] font-semibold text-zinc-800 dark:text-zinc-200">Trade analysis</span>
-                <span className="hidden text-[11px] text-zinc-600 sm:block dark:text-zinc-400">Tip: paste screenshots straight in with Ctrl/⌘ + V</span>
-              </div>
-
-              {/* toolbar: every control is h-8, 16px icons, 4px gap; Bold/Italic/lists show a real pressed state */}
-              <div role="toolbar" aria-label="Formatting" className={toolbarClass}>
-                <ToolbarButton title="Bold" icon="bold" active={formats.bold} onClick={() => runEditorCommand('bold')} />
-                <ToolbarButton title="Italic" icon="italic" active={formats.italic} onClick={() => runEditorCommand('italic')} />
-                <TextStyleMenu value={formats.block} onChange={(tag) => runEditorCommand('formatBlock', tag)} />
-                <span aria-hidden="true" className={toolbarDivider} />
-                <ToolbarButton title="Bulleted list" icon="list" active={formats.insertUnorderedList} onClick={() => runEditorCommand('insertUnorderedList')} />
-                <ToolbarButton title="Numbered list" icon="listOrdered" active={formats.insertOrderedList} onClick={() => runEditorCommand('insertOrderedList')} />
-                <ToolbarButton title="Pointer" icon="pointer" onClick={() => runEditorCommand('formatBlock', 'p')} />
-                <ToolbarButton title="Quote" icon="quote" active={formats.block === 'blockquote'} onClick={() => runEditorCommand('formatBlock', 'blockquote')} />
-                <span aria-hidden="true" className={toolbarDivider} />
-                <button
-                  type="button"
-                  onMouseDown={keepSelection}
-                  onClick={() => imageInputRef.current?.click()}
-                  className={toolbarTextButton()}
-                >
-                  <Icon name="image" size={16} />
-                  {pendingUploads > 0 ? `Uploading ${pendingUploads}...` : 'Add screenshot'}
-                </button>
-                <input ref={imageInputRef} type="file" accept="image/*" multiple onChange={handleImageUpload} className="hidden" />
-                <button
-                  type="button"
-                  onMouseDown={keepSelection}
-                  onClick={dictation.toggle}
-                  disabled={!dictation.isSupported}
-                  aria-pressed={dictation.isListening}
-                  title={dictation.isSupported ? `${dictation.isListening ? 'Stop dictation' : 'Dictate your analysis'} (${SHORTCUT_LABEL})` : "Voice input isn't supported in this browser. Try Chrome, Edge or Safari."}
-                  className={toolbarTextButton(dictation.isListening)}
-                >
-                  <Icon name="mic" size={16} />
-                  {dictation.isListening ? 'Stop' : 'Dictate'}
-                  <kbd className="hidden rounded border border-current/30 px-1 text-[10px] font-normal opacity-80 md:inline">{SHORTCUT_LABEL}</kbd>
-                </button>
-              </div>
-
-              {(dictation.isListening || dictation.error || dictation.notice) && (
-                <div aria-live="polite" className="flex min-h-8 items-center gap-2 border-b border-zinc-200 px-1 py-1.5 text-xs dark:border-white/[0.08]">
-                  {dictation.error ? (
-                    <span role="alert" className="text-rose-500">{dictation.error}</span>
-                  ) : dictation.isListening ? (
-                    <>
-                      <VoiceLevel levelRef={dictation.levelRef} active />
-                      <span className="truncate text-zinc-500 dark:text-zinc-400">
-                        Listening… say &quot;full stop&quot;, &quot;new line&quot;, &quot;bullet point&quot;, &quot;scratch that&quot; or &quot;stop listening&quot;
-                      </span>
-                    </>
-                  ) : (
-                    <span className="text-zinc-500 dark:text-zinc-400">{dictation.notice}</span>
-                  )}
-                </div>
-              )}
-
-              <div className="relative" onMouseMove={handleEditorMouseMove} onMouseLeave={() => setHoverImage(null)}>
-                <div
-                  ref={editorRef}
-                  id="trade-analysis"
-                  contentEditable
-                  role="textbox"
-                  aria-multiline="true"
-                  aria-labelledby="trade-analysis-label"
-                  data-placeholder="What did you see? What did you do? What would you change next time?"
-                  onInput={handleEditorInput}
-                  onClick={handleEditorClick}
-                  onPaste={handleEditorPaste}
-                  onMouseUp={saveEditorSelection}
-                  onKeyUp={saveEditorSelection}
-                  className={editorClass}
-                />
-
-                {hoverImage && (
-                  <button
-                    type="button"
-                    data-image-remove
-                    data-image-control
-                    onMouseDown={keepSelection}
-                    onClick={() => removeImage(hoverImage.index)}
-                    title="Remove screenshot"
-                    aria-label="Remove screenshot"
-                    className="absolute flex h-6 w-6 items-center justify-center rounded-full bg-zinc-900/80 text-white shadow-sm transition-colors hover:bg-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
-                    style={{ top: hoverImage.top + 8, left: hoverImage.left + hoverImage.width - 32 }}
-                  >
-                    <Icon name="x" size={13} />
-                  </button>
-                )}
-                {hoverImage && (
-                  <button
-                    type="button"
-                    data-image-control
-                    onPointerDown={startImageResize}
-                    title="Drag to resize screenshot"
-                    aria-label="Resize screenshot"
-                    className="absolute flex h-6 w-6 touch-none items-center justify-center rounded-full bg-zinc-900/80 text-white shadow-sm cursor-nwse-resize focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
-                    style={{ top: hoverImage.top + hoverImage.height - 12, left: hoverImage.left + hoverImage.width - 12 }}
-                  >
-                    <Icon name="maximize" size={12} />
-                  </button>
-                )}
-              </div>
-              {imageUploadError && <p role="alert" className="mt-2 text-xs text-rose-500">{imageUploadError}</p>}
-              <input type="hidden" {...register('analysis')} />
-              <input type="hidden" {...register('images')} />
-            </section>
+            <TiptapEditor
+              ref={editorRef}
+              id="trade-analysis"
+              label="Trade analysis"
+              initialHtml={initialTrade?.analysis ?? ''}
+              placeholder="What did you see? What did you do? What would you change next time?"
+              onUploadImage={onUploadImage}
+            />
           </div>
         </div>
 

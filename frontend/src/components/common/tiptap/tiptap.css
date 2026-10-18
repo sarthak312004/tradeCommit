@@ -1,0 +1,111 @@
+/* Extra styling for the Tiptap editor (the base typography comes from editorClass in common/formStyles.js).
+   Colours are the same zinc / sky steps the rest of the forms use. */
+
+/* placeholder (Tiptap Placeholder extension) */
+.tc-editor p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+  color: #71717a;
+}
+.dark .tc-editor p.is-editor-empty:first-child::before {
+  color: #a1a1aa;
+}
+
+/* words still being heard while dictating */
+.tc-editor .tc-dictation-interim {
+  color: #a1a1aa;
+  pointer-events: none;
+}
+.dark .tc-editor .tc-dictation-interim {
+  color: #71717a;
+}
+
+/* inline code */
+.tc-editor code {
+  border-radius: 6px;
+  background: #f4f4f5;
+  padding: 0.12em 0.4em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.88em;
+  color: #27272a;
+}
+.dark .tc-editor code {
+  background: rgb(255 255 255 / 0.08);
+  color: #e4e4e7;
+}
+
+/* links */
+.tc-editor a {
+  color: #0369a1;
+  text-decoration: underline;
+  text-decoration-color: rgb(3 105 161 / 0.35);
+  text-underline-offset: 3px;
+  cursor: pointer;
+  transition: text-decoration-color 150ms;
+}
+.tc-editor a:hover {
+  text-decoration-color: currentColor;
+}
+.dark .tc-editor a {
+  color: #7dd3fc;
+  text-decoration-color: rgb(125 211 252 / 0.35);
+}
+
+/* divider */
+.tc-editor hr {
+  margin: 1.5rem 0;
+  border: 0;
+  border-top: 1px solid #d4d4d8;
+}
+.dark .tc-editor hr {
+  border-top-color: rgb(255 255 255 / 0.14);
+}
+.tc-editor hr.ProseMirror-selectednode {
+  border-top-color: #71717a;
+}
+
+/* checklists */
+.tc-editor ul[data-type='taskList'] {
+  list-style: none;
+  padding-left: 0;
+}
+.tc-editor ul[data-type='taskList'] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding-left: 0;
+}
+.tc-editor ul[data-type='taskList'] li > label {
+  flex: none;
+  display: flex;
+  align-items: center;
+  height: 1.75rem; /* one line (leading-7) so the box lines up with the first line of text */
+  user-select: none;
+}
+.tc-editor ul[data-type='taskList'] li > div {
+  flex: 1;
+  min-width: 0;
+}
+.tc-editor ul[data-type='taskList'] input[type='checkbox'] {
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  cursor: pointer;
+  accent-color: #18181b;
+}
+.dark .tc-editor ul[data-type='taskList'] input[type='checkbox'] {
+  accent-color: #e4e4e7;
+}
+.tc-editor ul[data-type='taskList'] li[data-checked='true'] > div {
+  color: #71717a;
+  text-decoration: line-through;
+  text-decoration-color: #a1a1aa;
+}
+.dark .tc-editor ul[data-type='taskList'] li[data-checked='true'] > div {
+  color: #a1a1aa;
+}
+.tc-editor ul[data-type='taskList'] ul[data-type='taskList'] {
+  margin-top: 0.15rem;
+}
