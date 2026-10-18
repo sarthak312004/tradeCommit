@@ -8,6 +8,8 @@ import { ALL_TIME, describeRangeInline, isRangeActive } from '../../../utils/dat
 import { filterTradesByDate, sortTradesNewestFirst, toDateKey } from '../../../utils/tradeAnalytics'
 import { DEFAULT_CURRENCY } from '../../../utils/currencies'
 import { buildTemplateFields, hasJournalContext } from '../../../utils/customFields'
+import { buildFieldChoices, collectCustomFieldOptions, resolveCardFields } from '../../../utils/tradeCardFields'
+import { useTradeCardFields } from '../../../hooks/useTradeCardFields'
 import { SlidersIcon } from '../../../utils/Icons.jsx'
 
 // loaded on demand so the first paint ships less JavaScript
@@ -48,6 +50,13 @@ function TradeJournal({ view = 'trades', journal, onAddTrade, onUpdateTrade, onD
   // new trades start with the journal's default properties, plus any extras from the most recent trade
   const journalContext = journal?.context
   const templateFields = useMemo(() => buildTemplateFields(journalContext, allTrades ?? []), [journalContext, allTrades])
+
+  // the details (max 3) a trade chip shows when hovered: edited with the pencil on the chip, remembered in this browser
+  const [cardFieldIds, setCardFieldIds] = useTradeCardFields()
+  const customFieldOptions = useMemo(() => collectCustomFieldOptions(allTrades ?? [], journalContext?.attributes ?? []), [allTrades, journalContext])
+  const cardFields = useMemo(() => resolveCardFields(cardFieldIds, customFieldOptions), [cardFieldIds, customFieldOptions])
+  // everything the trade form has, offered by the pencil on every chip (one shared choice for all of them)
+  const fieldChoices = useMemo(() => buildFieldChoices(customFieldOptions), [customFieldOptions])
 
   const handleOpenNewTrade = (date = null) => {
     setEditingTrade(null)
@@ -214,12 +223,18 @@ function TradeJournal({ view = 'trades', journal, onAddTrade, onUpdateTrade, onD
           />
         </Suspense>
       ) : (
-        // auto-fill grid: as many >=272px columns as fit, so it reflows with the sidebar and window by itself; rows stretch to equal height
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(17rem,1fr))] gap-4">
+        // auto-fill grid of chips: as many >=24rem columns as fit. items-start keeps every chip at its own height,
+        // because the hover panel floats over the chips below instead of pushing them down
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,24rem),1fr))] items-start gap-3">
           {visibleTrades.map((currentTrade) => (
             <TradeCard
               key={currentTrade.id}
               trade={currentTrade}
+              currency={currency}
+              detailFields={cardFields}
+              fieldIds={cardFieldIds}
+              fieldChoices={fieldChoices}
+              onFieldsChange={setCardFieldIds}
               onSelect={handleOpenEditTrade}
               onDelete={(tradeId) => onDeleteTrade(journal.id, tradeId)}
               onRetry={onRetryTrade}
