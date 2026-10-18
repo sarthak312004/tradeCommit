@@ -362,3 +362,26 @@ body {
   .tc-session-in, .tc-session-text, .tc-session-breathe { animation: none; }
   .tc-session-line { animation: none; left: 33%; }
 }
+/* Mentor orb: a soft clay glow that slowly orbits the disc. Static for people who prefer reduced motion. */
+.mentor-orb-halo {
+  background: conic-gradient(from 0deg, transparent 0%, rgba(217, 119, 87, 0.6) 16%, rgba(238, 196, 160, 0.4) 30%, transparent 46%, transparent 100%);
+  filter: blur(7px);
+  opacity: 0.85;
+  animation: mentor-orbit 9s linear infinite;
+}
+
+html.dark .mentor-orb-halo {
+  opacity: 0.6;
+}
+
+@keyframes mentor-orbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mentor-orb-halo {
+    animation: none;
+  }
+}

@@ -85,8 +85,8 @@ export const TOURS = {
       target: at('journal-views'),
       placement: 'bottom',
       title: 'Trades and Analysis',
-      body: 'Trades lists every entry. Analysis turns them into an equity curve, win rate, profit factor and drawdown, and it is where your weekly AI mentor review lives.',
-      tip: 'The mentor review needs a strategy and a few trades.',
+      body: 'Trades lists every entry. Analysis turns them into an equity curve, win rate, profit factor and drawdown. Your AI mentor is the glowing orb in the bottom-right corner, on every tab.',
+      tip: 'Hover the orb to open Mentor review. It needs a strategy and a few trades.',
     },
     {
       id: 'more',

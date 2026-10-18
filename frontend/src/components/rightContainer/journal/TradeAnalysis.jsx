@@ -1,11 +1,6 @@
-import { Suspense, lazy, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import EquityCurve from './EquityCurve'
-import SparklesIcon from './SparklesIcon'
-import { controlNeutral } from '../../common/controlStyles'
 import { computeAnalytics, formatMoney, formatPercent, formatR, formatRatio, toneOf } from '../../../utils/tradeAnalytics'
-
-// loaded only when the mentor is opened
-const AiMentorDialog = lazy(() => import('./AiMentorDialog'))
 
 const toneClass = {
   positive: 'text-emerald-600 dark:text-emerald-400',
@@ -44,8 +39,7 @@ function MetricList({ title, rows }) {
   )
 }
 
-function TradeAnalysis({ trades, currency, rangeLabel, range = null, journalId, journalName, onOpenContext }) {
-  const [isMentorOpen, setIsMentorOpen] = useState(false)
+function TradeAnalysis({ trades, currency, rangeLabel }) {
   const money = (value, options) => formatMoney(value, { currency, ...options })
   const stats = useMemo(() => computeAnalytics(trades), [trades])
   const hasClosed = stats.closedTrades > 0
@@ -70,7 +64,7 @@ function TradeAnalysis({ trades, currency, rangeLabel, range = null, journalId, 
 
   return (
     <div className="rounded-2xl border border-zinc-300 bg-white shadow-card dark:border-white/[0.12] dark:bg-panel dark:shadow-none">
-      <div className="flex items-start justify-between gap-4 p-5 pb-3 sm:p-6 sm:pb-4">
+      <div className="p-5 pb-3 sm:p-6 sm:pb-4">
         <div className="min-w-0">
           <p className="text-xs text-zinc-600 dark:text-zinc-300">Net P&amp;L</p>
           <p className={`mt-1 text-3xl font-semibold tracking-tight tabular-nums ${toneClass[toneOf(stats.netPnl)]}`}>
@@ -79,12 +73,6 @@ function TradeAnalysis({ trades, currency, rangeLabel, range = null, journalId, 
           <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">{plural(stats.closedTrades, 'closed trade')}{rangeLabel ? ` in ${rangeLabel}` : ''}</p>
         </div>
 
-        {journalId && (
-          <button type="button" onClick={() => setIsMentorOpen(true)} title="Feedback from an AI mentor on a week or any date range, checked against your strategy" className={controlNeutral}>
-            <SparklesIcon className="h-3.5 w-3.5" />
-            Mentor review
-          </button>
-        )}
       </div>
 
       <div className="px-3 pb-4 sm:px-4">
@@ -117,25 +105,6 @@ function TradeAnalysis({ trades, currency, rangeLabel, range = null, journalId, 
         <MetricList title="Performance" rows={performanceRows} />
         <MetricList title="Risk and consistency" rows={consistencyRows} />
       </div>
-
-      {isMentorOpen && (
-        <Suspense fallback={null}>
-          <AiMentorDialog
-            journalId={journalId}
-            journalName={journalName}
-            currency={currency}
-            initialRange={range}
-            onClose={() => setIsMentorOpen(false)}
-            onOpenContext={
-              onOpenContext &&
-              (() => {
-                setIsMentorOpen(false)
-                onOpenContext()
-              })
-            }
-          />
-        </Suspense>
-      )}
     </div>
   )
 }

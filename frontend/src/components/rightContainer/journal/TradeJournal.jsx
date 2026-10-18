@@ -4,6 +4,7 @@ import JournalCalendar from './JournalCalendar'
 import TradeCard from './TradeCard'
 import DateRangeFilter from './DateRangeFilter'
 import JournalActionsMenu from './JournalActionsMenu'
+import MentorOrb from './MentorOrb'
 import { ALL_TIME, describeRangeInline, isRangeActive } from '../../../utils/dateRange'
 import { filterTradesByDate, sortTradesNewestFirst, toDateKey } from '../../../utils/tradeAnalytics'
 import { DEFAULT_CURRENCY } from '../../../utils/currencies'
@@ -18,6 +19,9 @@ const TradeForm = lazy(loadTradeForm)
 const TradeAnalysis = lazy(() => import('./TradeAnalysis'))
 const JournalContextDialog = lazy(() => import('./JournalContextDialog'))
 const ExportJournalDialog = lazy(() => import('./ExportJournalDialog'))
+// the mentor is reachable from every tab, so its code is warmed up when the orb is hovered or focused
+const loadAiMentor = () => import('./AiMentorDialog')
+const AiMentorDialog = lazy(loadAiMentor)
 
 const VIEWS = [
   { id: 'trades', label: 'Trades', path: '/' },
@@ -34,6 +38,7 @@ function TradeJournal({ view = 'trades', journal, onAddTrade, onUpdateTrade, onD
   const [range, setRange] = useState(ALL_TIME)
   const [isContextOpen, setIsContextOpen] = useState(false)
   const [isExportOpen, setIsExportOpen] = useState(false)
+  const [isMentorOpen, setIsMentorOpen] = useState(false)
 
   // fetch the form's code while the browser is idle so the drawer opens instantly on the first click
   useEffect(() => {
@@ -99,7 +104,7 @@ function TradeJournal({ view = 'trades', journal, onAddTrade, onUpdateTrade, onD
     : `Trades in ${journal.name} (${currency})`
 
   return (
-    <section>
+    <section className="pb-20">
       <div className="mb-5 flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
         <div className="min-w-0">
           <h2 className="text-xl font-semibold tracking-[-0.05em]">{view === 'analysis' ? 'Analysis' : view === 'calendar' ? 'Trade calendar' : 'Recent trades'}</h2>
@@ -165,6 +170,22 @@ function TradeJournal({ view = 'trades', journal, onAddTrade, onUpdateTrade, onD
         </Suspense>
       )}
 
+      {isMentorOpen && (
+        <Suspense fallback={null}>
+          <AiMentorDialog
+            journalId={journal.id}
+            journalName={journal.name}
+            currency={currency}
+            initialRange={isFiltered ? range : null}
+            onClose={() => setIsMentorOpen(false)}
+            onOpenContext={() => {
+              setIsMentorOpen(false)
+              setIsContextOpen(true)
+            }}
+          />
+        </Suspense>
+      )}
+
       {isExportOpen && (
         <Suspense fallback={null}>
           <ExportJournalDialog journal={journal} onClose={() => setIsExportOpen(false)} />
@@ -216,10 +237,6 @@ function TradeJournal({ view = 'trades', journal, onAddTrade, onUpdateTrade, onD
             trades={visibleTrades}
             currency={currency}
             rangeLabel={isFiltered ? describeRangeInline(range) : null}
-            range={isFiltered ? range : null}
-            journalId={journal.id}
-            journalName={journal.name}
-            onOpenContext={() => setIsContextOpen(true)}
           />
         </Suspense>
       ) : (
@@ -243,6 +260,8 @@ function TradeJournal({ view = 'trades', journal, onAddTrade, onUpdateTrade, onD
           ))}
         </div>
       )}
+
+      {!isMentorOpen && <MentorOrb onOpen={() => setIsMentorOpen(true)} onWarm={loadAiMentor} />}
     </section>
   )
 }
