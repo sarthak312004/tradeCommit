@@ -102,24 +102,22 @@ function Home() {
   }
 
   return (
-    <div>
-      <div className="min-h-screen bg-canvas text-zinc-900 transition-colors duration-200 dark:bg-night dark:text-zinc-100">
-        <div className="flex h-screen overflow-hidden">
-          <Sidebar
-            isSidebarOpen={isSidebarOpen}
-            setIsSidebarOpen={setIsSidebarOpen}
-            openFormSection={openFormSection}
-            setOpenFormSection={setOpenFormSection}
-          />
+    <>
+      <div className="fixed inset-0 flex overflow-hidden bg-canvas text-zinc-900 transition-colors duration-200 dark:bg-night dark:text-zinc-100">
+        <Sidebar
+          isSidebarOpen={isSidebarOpen}
+          setIsSidebarOpen={setIsSidebarOpen}
+          openFormSection={openFormSection}
+          setOpenFormSection={setOpenFormSection}
+        />
 
-          <main className="tc-ambient flex flex-1 flex-col overflow-hidden">
-            <Outlet context={{ isSidebarOpen, openCreateForm }} />
-          </main>
-        </div>
+        <main className="tc-ambient flex min-h-0 flex-1 flex-col overflow-hidden">
+          <Outlet context={{ isSidebarOpen, openCreateForm }} />
+        </main>
       </div>
 
       <ProductTour isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} onTourEnd={handleTourEnd} />
-    </div>
+    </>
   )
 }
 
