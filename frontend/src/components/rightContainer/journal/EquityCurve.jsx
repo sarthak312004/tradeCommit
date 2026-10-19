@@ -56,10 +56,15 @@ const buildTicks = (min, max) => {
   const magnitude = 10 ** Math.floor(Math.log10(rawStep))
   const normalised = rawStep / magnitude
   const step = (normalised <= 1 ? 1 : normalised <= 2 ? 2 : normalised <= 5 ? 5 : 10) * magnitude
-  const start = Math.floor(min / step) * step
-  const end = Math.ceil(max / step) * step
+  let start = Math.floor(min / step) * step
+  let end = Math.ceil(max / step) * step
+  // every trade breakeven: min = max = 0 would give a single tick and draw the line on the bottom edge
+  if (start === end) {
+    start -= step
+    end += step
+  }
   const ticks = []
-  for (let value = start; value <= end + step / 2; value += step) ticks.push(Math.abs(value) < step / 1000 ? 0 : value)
+  for (let value = start; value <= end + step / 2; value += step) ticks.push(Math.abs(value) < step / 1000 ? 0 : Number(value.toPrecision(12)))
   return ticks
 }
 

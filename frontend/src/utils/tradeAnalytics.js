@@ -197,12 +197,20 @@ const getFormatter = (currency, compact) => {
 export const formatMoney = (value, { signed = false, compact = false, currency = DEFAULT_CURRENCY } = {}) => {
   if (value === null || value === undefined || Number.isNaN(value)) return '-'
   const text = getFormatter(currency, compact).format(Math.abs(value))
-  // an amount that rounds to zero is shown without a sign
-  if (value < 0 && /[1-9]/.test(text)) return `-${text}`
-  return signed && value > 0 ? `+${text}` : text
+  // an amount that rounds to zero is shown without a sign (either way: no "-$0.00" and no "+$0.00")
+  const isZeroText = !/[1-9]/.test(text)
+  if (value < 0 && !isZeroText) return `-${text}`
+  return signed && value > 0 && !isZeroText ? `+${text}` : text
 }
 
-export const formatPercent = (value) => (value === null || value === undefined ? '-' : `${Math.round(value * 100)}%`)
+export const formatPercent = (value) => {
+  if (value === null || value === undefined) return '-'
+  const rounded = Math.round(value * 100)
+  // 99.6% must not read as 100% (and 0.4% not as 0%) while there are still losses (or wins)
+  if (value < 1 && rounded >= 100) return '99%'
+  if (value > 0 && rounded <= 0) return '1%'
+  return `${rounded}%`
+}
 
 export const formatRatio = (value) => {
   if (value === null || value === undefined) return '-'

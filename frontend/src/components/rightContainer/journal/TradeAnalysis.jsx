@@ -41,7 +41,8 @@ function MetricList({ title, rows }) {
 
 function TradeAnalysis({ trades, currency, rangeLabel }) {
   const money = (value, options) => formatMoney(value, { currency, ...options })
-  const stats = useMemo(() => computeAnalytics(trades), [trades])
+  // a trade that failed to save (shown with Retry / Discard) isn't in the journal yet, so it stays out of the numbers
+  const stats = useMemo(() => computeAnalytics(trades.filter((trade) => trade.syncState !== 'failed')), [trades])
   const hasClosed = stats.closedTrades > 0
 
   const sideNote = (side) => (side.count ? `${plural(side.count, 'trade')}, ${formatPercent(side.winRate)} win` : 'no trades')
