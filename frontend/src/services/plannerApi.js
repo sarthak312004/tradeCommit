@@ -2,6 +2,13 @@ import { readJson, requestJson } from '../utils/http'
 import { DEFAULT_PLANNER_TYPE } from '../utils/plannerTypes'
 
 const API_BASE = '/api/v1/planners'
+const entriesCache = new Map()
+const entriesRequests = new Map()
+
+const updateCachedEntries = (plannerId, update) => {
+  const current = entriesCache.get(plannerId)
+  if (current) entriesCache.set(plannerId, update(current))
+}
 
 export const normalizePlanner = (planner) => ({
   id: planner.id ?? planner._id,
@@ -43,19 +50,35 @@ export const plannerApi = {
   },
 
   async listEntries(plannerId) {
-    return (await requestJson(`${API_BASE}/${plannerId}/entries`) ?? []).map(normalizeEntry)
+    if (entriesCache.has(plannerId)) return entriesCache.get(plannerId)
+    if (entriesRequests.has(plannerId)) return entriesRequests.get(plannerId)
+
+    const request = requestJson(`${API_BASE}/${plannerId}/entries`)
+      .then((rows) => {
+        const entries = (rows ?? []).map(normalizeEntry)
+        entriesCache.set(plannerId, entries)
+        return entries
+      })
+      .finally(() => entriesRequests.delete(plannerId))
+    entriesRequests.set(plannerId, request)
+    return request
   },
 
   async createEntry(plannerId, entry) {
-    return normalizeEntry(await requestJson(`${API_BASE}/${plannerId}/entries`, { method: 'POST', body: entry }))
+    const created = normalizeEntry(await requestJson(`${API_BASE}/${plannerId}/entries`, { method: 'POST', body: entry }))
+    updateCachedEntries(plannerId, (entries) => [...entries, created])
+    return created
   },
 
   async updateEntry(plannerId, entryId, entry) {
-    return normalizeEntry(await requestJson(`${API_BASE}/${plannerId}/entries/${entryId}`, { method: 'PATCH', body: entry }))
+    const updated = normalizeEntry(await requestJson(`${API_BASE}/${plannerId}/entries/${entryId}`, { method: 'PATCH', body: entry }))
+    updateCachedEntries(plannerId, (entries) => entries.map((item) => item.id === entryId ? updated : item))
+    return updated
   },
 
   async removeEntry(plannerId, entryId) {
     await requestJson(`${API_BASE}/${plannerId}/entries/${entryId}`, { method: 'DELETE' })
+    updateCachedEntries(plannerId, (entries) => entries.filter((item) => item.id !== entryId))
   },
 
   async uploadImage(plannerId, file) {

@@ -1,15 +1,16 @@
-import { useContext, useState } from 'react'
+import { lazy, Suspense, useContext, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { plannerContext } from '../context/Context'
 import { usePlanEntries } from '../hooks/usePlanEntries'
 import TopBar from '../components/rightContainer/TopBar'
 import PlannerCalendar from '../components/rightContainer/planner/PlannerCalendar'
-import PlanForm from '../components/rightContainer/planner/PlanForm'
 import PlannerJournalLink from '../components/rightContainer/planner/PlannerJournalLink'
 import { todayKey } from '../utils/calendar'
 import { CalendarIcon } from '../utils/Icons.jsx'
 
-const pageBody = 'subtle-scrollbar flex-1 overflow-y-auto p-6 md:p-8'
+const PlanForm = lazy(() => import('../components/rightContainer/planner/PlanForm'))
+
+const pageBody = 'subtle-scrollbar min-h-0 flex-1 overflow-y-auto p-6 md:p-8'
 
 function PlannerWorkspace({ planner }) {
   const { entries, isLoading, error, addEntry, updateEntry, removeEntry, uploadImage } = usePlanEntries(planner.id)
@@ -40,30 +41,29 @@ function PlannerWorkspace({ planner }) {
           )}
         </div>
         {error && <p role="alert" className="mb-4 text-sm text-rose-500">{error}</p>}
-        {isLoading ? (
-          <p className="text-sm text-zinc-600 dark:text-zinc-300">Loading plans…</p>
-        ) : (
-          <PlannerCalendar
-            entries={entries}
-            selectedDate={formState?.entry?.date ?? formState?.date ?? null}
-            onCreateForDate={(date) => setFormState({ entry: null, date })}
-            onOpenEntry={(entry) => setFormState({ entry })}
-          />
-        )}
+        {isLoading && <p role="status" className="mb-2 text-xs text-zinc-500 dark:text-zinc-400">Loading plans…</p>}
+        <PlannerCalendar
+          entries={entries}
+          selectedDate={formState?.entry?.date ?? formState?.date ?? null}
+          onCreateForDate={(date) => setFormState({ entry: null, date })}
+          onOpenEntry={(entry) => setFormState({ entry })}
+        />
       </div>
 
       {formState && (
-        <PlanForm
-          key={formState.entry?.id ?? `new-${formState.date}`}
-          plannerName={planner.name}
-          plannerType={planner.type}
-          initialEntry={formState.entry}
-          initialDate={formState.date}
-          onSubmit={handleSubmit}
-          onDelete={formState.entry ? () => removeEntry(formState.entry.id) : undefined}
-          onClose={() => setFormState(null)}
-          onUploadImage={uploadImage}
-        />
+        <Suspense fallback={null}>
+          <PlanForm
+            key={formState.entry?.id ?? `new-${formState.date}`}
+            plannerName={planner.name}
+            plannerType={planner.type}
+            initialEntry={formState.entry}
+            initialDate={formState.date}
+            onSubmit={handleSubmit}
+            onDelete={formState.entry ? () => removeEntry(formState.entry.id) : undefined}
+            onClose={() => setFormState(null)}
+            onUploadImage={uploadImage}
+          />
+        </Suspense>
       )}
     </>
   )

@@ -12,6 +12,8 @@ import { ThemeCycleButton, ThemeSegmented } from "./ThemeToggle"
 import { useFeedbackPrompt } from "../../hooks/useFeedbackPrompt"
 import { useTheme } from "../../hooks/useTheme"
 import { CalendarIcon, ChevronsLeftIcon, FileIcon, LogoutIcon, MessageSquareIcon, PlusIcon } from "../../utils/Icons.jsx"
+import { plannerApi } from "../../services/plannerApi"
+import { preloadPlannerPage } from "../../utils/plannerPageLoader"
 import { EASE, FADE_BASE, fade, focusRing, ghostBtn } from "./sidebarStyles"
 
 function Sidebar({ isSidebarOpen, setIsSidebarOpen, openFormSection, setOpenFormSection }) {
@@ -80,7 +82,11 @@ function Sidebar({ isSidebarOpen, setIsSidebarOpen, openFormSection, setOpenForm
     id: planner.id,
     label: planner.name,
     isSelected: activePlannerId === planner.id,
-    onSelect: () => navigate(`/planner/${planner.id}`),
+    onSelect: () => {
+      preloadPlannerPage().catch(() => {})
+      plannerApi.listEntries(planner.id).catch(() => {})
+      navigate(`/planner/${planner.id}`)
+    },
   }))
 
   return (
