@@ -9,6 +9,7 @@ import AuthPage from './pages/AuthPage.jsx'
 import LazyPlannerPage from './pages/LazyPlannerPage.jsx'
 import OnboardingPage from './pages/OnboardingPage.jsx'
 import { PlannerContextProvider } from './context/plannerContextProvider.jsx'
+import { Analytics } from '@vercel/analytics/react'
 
 const router = createBrowserRouter([
   {
@@ -53,5 +54,6 @@ createRoot(document.getElementById('root')).render(
         <RouterProvider router={router}/>
       </PlannerContextProvider>
     </JournalContextProvider>
+    <Analytics />
   </StrictMode>,
 )
