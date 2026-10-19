@@ -3,6 +3,8 @@ import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { sendOtpEmail } from "../utils/mailer.js";
+import { deleteImagesFromCloudinary, uploadOnCloudinary } from "../utils/cloudinary.js";
+import { HEADER_SCENE_IDS, headerBackdropFolder } from "../constants/headerBackdrop.js";
 import {
   OTP_LENGTH,
   OTP_MAX_ATTEMPTS,
@@ -24,6 +26,65 @@ const MAX_PASSWORD_LENGTH = 72; // bcrypt ignores everything after 72 bytes
 
 const SESSION_EXPIRED = "Your verification expired. Please start again.";
 
+// What the client gets for the header picture: always a complete, valid object.
+const toHeaderBackdrop = (user) => {
+  const saved = user?.headerBackdrop;
+  if (saved?.mode === "scene" && HEADER_SCENE_IDS.includes(saved.scene)) return { mode: "scene", scene: saved.scene, imageUrl: null };
+  if (saved?.mode === "image" && saved.imageUrl) return { mode: "image", scene: null, imageUrl: saved.imageUrl };
+  return { mode: "none", scene: null, imageUrl: null };
+};
+
+// the old picture is only removed after the new choice is saved, and a failed delete never fails the request
+const discardHeaderImage = (imageUrl, userId) => {
+  if (imageUrl) void deleteImagesFromCloudinary([imageUrl], headerBackdropFolder(userId));
+};
+
+// PUT /api/v1/auth/header-backdrop   { mode: "none" } | { mode: "scene", scene }
+// (a picture goes through POST /header-backdrop/image instead)
+export const setHeaderBackdrop = asyncHandler(async (req, res) => {
+  const mode = req.body?.mode;
+  let next;
+  if (mode === "none") {
+    next = { mode: "none", scene: null, imageUrl: null };
+  } else if (mode === "scene") {
+    if (!HEADER_SCENE_IDS.includes(req.body?.scene)) throw new ApiError(400, "Choose one of the available scenes");
+    next = { mode: "scene", scene: req.body.scene, imageUrl: null };
+  } else {
+    throw new ApiError(400, "Choose a scene, or remove the background");
+  }
+
+  const user = await User.findById(req.user._id).select("headerBackdrop");
+  if (!user) throw new ApiError(404, "User not found");
+  const previousImage = user.headerBackdrop?.imageUrl;
+
+  await User.updateOne({ _id: user._id }, { $set: { headerBackdrop: next } });
+  discardHeaderImage(previousImage, user._id);
+
+  return res.status(200).json(new ApiResponse(200, { headerBackdrop: next }, "Header background saved"));
+});
+
+// POST /api/v1/auth/header-backdrop/image   multipart, field "image"
+export const uploadHeaderBackdropImage = asyncHandler(async (req, res) => {
+  if (!req.file) throw new ApiError(400, "Choose an image to upload");
+
+  const user = await User.findById(req.user._id).select("headerBackdrop");
+  if (!user) throw new ApiError(404, "User not found");
+  const previousImage = user.headerBackdrop?.imageUrl;
+
+  const uploaded = await uploadOnCloudinary(req.file.buffer, headerBackdropFolder(user._id));
+  const next = { mode: "image", scene: null, imageUrl: uploaded.secure_url };
+
+  try {
+    await User.updateOne({ _id: user._id }, { $set: { headerBackdrop: next } });
+  } catch (error) {
+    discardHeaderImage(uploaded.secure_url, user._id); // don't leave an orphan behind
+    throw error;
+  }
+  discardHeaderImage(previousImage, user._id);
+
+  return res.status(201).json(new ApiResponse(201, { headerBackdrop: next }, "Header picture saved"));
+});
+
 // GET /api/v1/auth/profile
 export const getProfile = asyncHandler(async (req, res) => {
   const user = await User.findById(req.user._id).select("+password");
@@ -40,6 +101,7 @@ export const getProfile = asyncHandler(async (req, res) => {
         onboardingCompleted: user.onboardingCompleted !== false,
         onboardingTradingStyle: user.onboardingTradingStyle ?? null,
         createdAt: user.createdAt,
+        headerBackdrop: toHeaderBackdrop(user),
       },
       "Profile fetched"
     )

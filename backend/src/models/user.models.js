@@ -2,6 +2,7 @@ import 'dotenv/config'
 import mongoose, {model} from 'mongoose'
 import bcrypt from 'bcrypt'
 import jwt from 'jsonwebtoken'
+import { HEADER_BACKDROP_MODES } from '../constants/headerBackdrop.js'
 
 const otpSchema = new mongoose.Schema(
     {
@@ -92,6 +93,13 @@ const userSchema = new mongoose.Schema(
         feedbackPromptHandled:{
             type:Boolean,
             default:false
+        },
+        // Picture behind the page header: nothing, one of the built-in SVG scenes, or the user's own image
+        // (a Cloudinary URL, see profile.controller.js). Only the fields of the active mode are filled.
+        headerBackdrop:{
+            mode:{ type:String, enum:HEADER_BACKDROP_MODES, default:"none" },
+            scene:{ type:String, default:null },
+            imageUrl:{ type:String, default:null }
         },
         refreshToken:{
             type: String

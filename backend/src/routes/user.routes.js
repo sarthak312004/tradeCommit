@@ -2,6 +2,8 @@ import { Router } from "express";
 import {
   getProfile,
   completeOnboarding,
+  setHeaderBackdrop,
+  uploadHeaderBackdropImage,
   resetPassword,
   sendPasswordResetOtp,
   verifyPasswordResetOtp,
@@ -23,6 +25,7 @@ import {
   verifySignupOtp,
 } from "../controllers/user.controller.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
+import { upload } from "../middlewares/multer.middleware.js";
 
 const router = Router()
 
@@ -46,6 +49,9 @@ router.post("/forgot-password/reset", resetForgottenPassword)
 // profile + password change (logged-in users only)
 router.get("/profile", verifyJWT, getProfile)
 router.post("/onboarding/complete", verifyJWT, completeOnboarding)
+// header background: a built-in scene / none (JSON), or the user's own picture (multipart)
+router.put("/header-backdrop", verifyJWT, setHeaderBackdrop)
+router.post("/header-backdrop/image", verifyJWT, upload.single("image"), uploadHeaderBackdropImage)
 router.post("/password/send-otp", verifyJWT, sendPasswordResetOtp)
 router.post("/password/verify-otp", verifyJWT, verifyPasswordResetOtp)
 router.post("/password/reset", verifyJWT, resetPassword)
