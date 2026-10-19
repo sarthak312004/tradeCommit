@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useContext, useEffect, useState } from 'react'
 import Sidebar from './components/sidebar/Sidebar'
 import { Navigate, Outlet } from 'react-router'
 import { fetchPrefetched } from './utils/prefetch'
 import { SessionError, SessionLoading } from './components/common/SessionScreen'
 import ProductTour from './components/tour/ProductTour'
+import { journalContext } from './context/Context'
 
 const AUTH_CHECK_TIMEOUT_MS = 60_000
 
@@ -18,6 +19,10 @@ const withTimeout = (promise) => {
 
 function Home() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
+  // which sidebar create form is open ('journals' | 'planners' | null); lifted here so the big "create" buttons
+  // on the empty pages can open the same forms the sidebar's + buttons do
+  const [openFormSection, setOpenFormSection] = useState(null)
+  const { journals } = useContext(journalContext)
   const [isCheckingAuth, setIsCheckingAuth] = useState(true)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [needsOnboarding, setNeedsOnboarding] = useState(false)
@@ -62,6 +67,16 @@ function Home() {
     }
   }, [authCheckAttempt])
 
+  const openCreateForm = useCallback((section) => {
+    setIsSidebarOpen(true)
+    setOpenFormSection(section)
+  }, [])
+
+  // a new user who just finished (or skipped) the tour lands straight in the "new journal" form instead of an empty page
+  const handleTourEnd = () => {
+    if (journals.length === 0) openCreateForm('journals')
+  }
+
   const retryAuthCheck = () => {
     setAuthError(false)
     setIsCheckingAuth(true)
@@ -90,15 +105,20 @@ function Home() {
     <div>
       <div className="min-h-screen bg-canvas text-zinc-900 transition-colors duration-200 dark:bg-night dark:text-zinc-100">
         <div className="flex h-screen overflow-hidden">
-          <Sidebar isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} />
+          <Sidebar
+            isSidebarOpen={isSidebarOpen}
+            setIsSidebarOpen={setIsSidebarOpen}
+            openFormSection={openFormSection}
+            setOpenFormSection={setOpenFormSection}
+          />
 
           <main className="flex flex-1 flex-col overflow-hidden">
-            <Outlet context={{ isSidebarOpen }} />
+            <Outlet context={{ isSidebarOpen, openCreateForm }} />
           </main>
         </div>
       </div>
 
-      <ProductTour isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} />
+      <ProductTour isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} onTourEnd={handleTourEnd} />
     </div>
   )
 }

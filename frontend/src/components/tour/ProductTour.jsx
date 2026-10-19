@@ -131,7 +131,7 @@ function TourSession({ tourId, hasJournal, username, name, isSidebarOpen, setIsS
  *   journal  the first time a journal is on screen (a new account has none until it creates one)
  *   planner  the first time a planner is opened
  */
-function ProductTour({ isSidebarOpen, setIsSidebarOpen }) {
+function ProductTour({ isSidebarOpen, setIsSidebarOpen, onTourEnd }) {
   const { pathname } = useLocation()
   const { profile } = useProfile()
   const { selectedJournal } = useContext(journalContext)
@@ -177,7 +177,12 @@ function ProductTour({ isSidebarOpen, setIsSidebarOpen }) {
       name={name}
       isSidebarOpen={isSidebarOpen}
       setIsSidebarOpen={setIsSidebarOpen}
-      onEnd={() => setActiveTour(null)}
+      onEnd={() => {
+        const endedTour = activeTour
+        setActiveTour(null)
+        // after the first-run tour, hand the user to the next action (Home opens the "new journal" form)
+        if (endedTour === 'main') onTourEnd?.()
+      }}
     />
   )
 }

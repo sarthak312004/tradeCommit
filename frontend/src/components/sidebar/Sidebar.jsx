@@ -11,10 +11,10 @@ import SidebarSection from "./SidebarSection"
 import { ThemeCycleButton, ThemeSegmented } from "./ThemeToggle"
 import { useFeedbackPrompt } from "../../hooks/useFeedbackPrompt"
 import { useTheme } from "../../hooks/useTheme"
-import { CalendarIcon, ChevronsLeftIcon, FileIcon, LogoutIcon, MessageSquareIcon } from "../../utils/Icons.jsx"
-import { EASE, FADE_BASE, fade, ghostBtn } from "./sidebarStyles"
+import { CalendarIcon, ChevronsLeftIcon, FileIcon, LogoutIcon, MessageSquareIcon, PlusIcon } from "../../utils/Icons.jsx"
+import { EASE, FADE_BASE, fade, focusRing, ghostBtn } from "./sidebarStyles"
 
-function Sidebar({ isSidebarOpen, setIsSidebarOpen }) {
+function Sidebar({ isSidebarOpen, setIsSidebarOpen, openFormSection, setOpenFormSection }) {
   const { journals, selectedJournal, selectJournal } = useContext(journalContext)
   const { planners } = useContext(plannerContext)
   const { theme, setTheme } = useTheme()
@@ -33,7 +33,6 @@ function Sidebar({ isSidebarOpen, setIsSidebarOpen }) {
   // pops the feedback dialog up by itself once, after the user's first 10 trades
   const tradeCount = journals.reduce((total, journal) => total + (journal.trades?.length ?? 0), 0)
   const { isPromptOpen, closePrompt } = useFeedbackPrompt(tradeCount)
-  const [openFormSection, setOpenFormSection] = useState(null)
 
   useEffect(() => {
     if (!isLogoutConfirmOpen) return
@@ -62,6 +61,10 @@ function Sidebar({ isSidebarOpen, setIsSidebarOpen }) {
       navigate("/auth", { replace: true })
     }
   }
+
+  // a nudge that shows only until the first planner exists, and only once the user has a journal with trades
+  const hasLoggedTrades = journals.some((journal) => (journal.trades?.length ?? 0) > 0)
+  const showCreatePlannerCta = hasLoggedTrades && planners.length === 0 && openFormSection !== "planners"
 
   const journalRailItems = journals.map((journal) => ({
     id: journal.id,
@@ -155,6 +158,18 @@ function Sidebar({ isSidebarOpen, setIsSidebarOpen }) {
           railItems={plannerRailItems}
           isEmpty={planners.length === 0}
           emptyText="No planners yet."
+          footer={
+            showCreatePlannerCta && (
+              <button
+                type="button"
+                onClick={() => setOpenFormSection("planners")}
+                className={`mb-1 mt-1 flex h-9 w-full items-center justify-center gap-2 rounded-md border border-sky-600/40 bg-sky-50 text-[13px] font-medium text-sky-800 transition-colors hover:bg-sky-100 dark:border-sky-400/30 dark:bg-sky-400/10 dark:text-sky-200 dark:hover:bg-sky-400/15 ${focusRing}`}
+              >
+                <PlusIcon className="h-4 w-4" />
+                Create planner
+              </button>
+            )
+          }
         >
           {planners.map((planner) => (
             <PlannerCard key={planner.id} planner={planner} isSelected={activePlannerId === planner.id} />

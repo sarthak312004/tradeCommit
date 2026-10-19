@@ -5,6 +5,7 @@ import TradeCard from './TradeCard'
 import DateRangeFilter from './DateRangeFilter'
 import JournalActionsMenu from './JournalActionsMenu'
 import MentorOrb from './MentorOrb'
+import { CalendarNudge, EmptyWorkspace, FirstTradeCard } from '../../onboarding/GetStarted'
 import { ALL_TIME, describeRangeInline, isRangeActive } from '../../../utils/dateRange'
 import { filterTradesByDate, sortTradesNewestFirst, toDateKey } from '../../../utils/tradeAnalytics'
 import { DEFAULT_CURRENCY } from '../../../utils/currencies'
@@ -29,7 +30,7 @@ const VIEWS = [
   { id: 'analysis', label: 'Analysis', path: '/analysis' }
 ]
 
-function TradeJournal({ view = 'trades', journal, onAddTrade, onUpdateTrade, onDeleteTrade, onUploadTradeImage, onSaveContext, onRetryTrade, onDiscardTrade }) {
+function TradeJournal({ view = 'trades', journal, onAddTrade, onUpdateTrade, onDeleteTrade, onUploadTradeImage, onSaveContext, onRetryTrade, onDiscardTrade, onOpenCreateForm }) {
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [editingTrade, setEditingTrade] = useState(null)
   const navigate = useNavigate()
@@ -90,11 +91,7 @@ function TradeJournal({ view = 'trades', journal, onAddTrade, onUpdateTrade, onD
   )
 
   if (!journal) {
-    return (
-      <section className="rounded-lg border border-dashed border-zinc-400/60 bg-white/50 p-10 text-center dark:border-white/[0.14] dark:bg-transparent">
-        <p className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Create or select a journal to view trades.</p>
-      </section>
-    )
+    return <EmptyWorkspace onCreate={onOpenCreateForm} />
   }
 
   const currency = journal.currency ?? DEFAULT_CURRENCY
@@ -209,17 +206,22 @@ function TradeJournal({ view = 'trades', journal, onAddTrade, onUpdateTrade, onD
 
       {view === 'calendar' ? (
         // always shown, even with no trades, so any day can be clicked to log one
-        <JournalCalendar
-          trades={visibleTrades}
-          selectedDate={isFormOpen ? (editingTrade ? toDateKey(editingTrade.date) : newTradeDate) : null}
-          onCreateForDate={handleOpenNewTrade}
-          onOpenTrade={handleOpenEditTrade}
-        />
+        <>
+          {journal.trades.length === 0 && <CalendarNudge />}
+          <JournalCalendar
+            trades={visibleTrades}
+            selectedDate={isFormOpen ? (editingTrade ? toDateKey(editingTrade.date) : newTradeDate) : null}
+            onCreateForDate={handleOpenNewTrade}
+            onOpenTrade={handleOpenEditTrade}
+          />
+        </>
       ) : journal.trades.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-zinc-400/60 bg-white/50 p-10 text-center dark:border-white/[0.14] dark:bg-transparent">
-          <p className="text-sm font-medium text-zinc-600 dark:text-zinc-300">No trades in this journal yet.</p>
-          <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">Add your first trade to start tracking this journal.</p>
-        </div>
+        <FirstTradeCard
+          journalName={journal.name}
+          onAddTrade={handleOpenNewTrade}
+          onOpenContext={() => setIsContextOpen(true)}
+          onCreate={onOpenCreateForm}
+        />
       ) : visibleTrades.length === 0 ? (
         <div className="rounded-lg border border-dashed border-zinc-400/60 bg-white/50 p-10 text-center dark:border-white/[0.14] dark:bg-transparent">
           <p className="text-sm font-medium text-zinc-600 dark:text-zinc-300">No trades in {describeRangeInline(range)}.</p>

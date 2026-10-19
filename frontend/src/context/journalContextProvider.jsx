@@ -110,6 +110,8 @@ const readJson = async (response) => {
 function JournalContextProvider({children}){
     const [journals, setJournals] = useState([])
     const [selectedJournalId, setSelectedJournalId] = useState(null)
+    // true until the first journals request has answered, so empty states don't flash for returning users
+    const [isLoading, setIsLoading] = useState(true)
     // retry / discard handlers of trades whose save is running or failed, by trade id
     const tradeSyncRef = useRef(new Map())
 
@@ -140,6 +142,8 @@ function JournalContextProvider({children}){
                     setJournals([])
                     setSelectedJournalId(null)
                 }
+            } finally {
+                if (loadId === latestLoad) setIsLoading(false)
             }
         }
 
@@ -375,6 +379,7 @@ function JournalContextProvider({children}){
     return (
         <journalContext.Provider value={{
             journals,
+            isLoading,
             selectedJournal,
             createJournal,
             updateJournal,

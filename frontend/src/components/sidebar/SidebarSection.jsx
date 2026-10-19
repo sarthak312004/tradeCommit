@@ -19,6 +19,7 @@ import { EASE, FADE_BASE, fade, focusRing, ghostBtn } from "./sidebarStyles"
  * @param {boolean}   isEmpty
  * @param {string}    emptyText
  * @param {ReactNode} children         expanded list rows
+ * @param {ReactNode} [footer]         optional extra content under the list (expanded sidebar only)
  */
 function SidebarSection({
   title,
@@ -33,6 +34,7 @@ function SidebarSection({
   railItems,
   isEmpty,
   emptyText,
+  footer,
   children,
 }) {
   const showForm = isSidebarOpen && isFormOpen
@@ -100,6 +102,7 @@ function SidebarSection({
           ) : (
             <div className="space-y-px">{children}</div>
           )}
+          {footer}
         </div>
       ) : (
         <div className="flex min-h-0 w-[56px] flex-1 flex-col items-center gap-1 overflow-y-auto overscroll-contain pb-2 pt-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">

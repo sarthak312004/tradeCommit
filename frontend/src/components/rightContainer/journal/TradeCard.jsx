@@ -274,7 +274,7 @@ function TradeCard({ trade, currency = DEFAULT_CURRENCY, detailFields = [], fiel
           ) : (
             <div className="flex items-start gap-2">
               {details.length > 0 ? (
-                <dl className="grid min-w-0 flex-1 grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
+                <dl className="grid min-w-0 flex-1 grid-cols-3 gap-x-4 gap-y-3">
                   {details.map((detail) => (
                     <Detail key={detail.id} label={detail.label} value={detail.text} tone={detail.tone} wide={detail.wide} />
                   ))}
