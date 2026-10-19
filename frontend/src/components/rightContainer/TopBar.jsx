@@ -23,10 +23,18 @@ function TopBar({ label = 'Journal', title }) {
       {/* backdrop layer: clipped on its own so the profile and picker popovers can still open below the header */}
       {(hasImage || hasScene) && (
         <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
-          {hasScene && <HeaderScene sceneId={backdrop.scene} dark={dark} />}
+          {hasScene && <HeaderScene sceneId={backdrop.scene} dark={dark} fixedScale />}
           {hasImage && (
             <>
-              <img src={backdrop.image} alt="" className="h-full w-full object-cover" draggable="false" />
+              {/* sized by the window (not the header) and pinned to the header's right edge: collapsing the sidebar
+                  reveals more of the picture on the left instead of zooming it, and nothing shifts while the sidebar animates */}
+              <img
+                src={backdrop.image}
+                alt=""
+                draggable="false"
+                className="absolute right-0 top-1/2 max-w-none -translate-y-1/2 object-cover"
+                style={{ width: '100vw', minHeight: '100%' }}
+              />
               <div className="absolute inset-0 bg-gradient-to-r from-black/55 via-black/25 to-black/10" />
             </>
           )}

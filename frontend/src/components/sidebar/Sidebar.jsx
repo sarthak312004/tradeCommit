@@ -94,7 +94,7 @@ function Sidebar({ isSidebarOpen, setIsSidebarOpen, openFormSection, setOpenForm
       aria-label="Sidebar"
       className={`${
         isSidebarOpen ? "w-[260px]" : "w-[56px]"
-      } relative flex shrink-0 flex-col overflow-hidden border-r border-zinc-300 bg-sidebar transition-[width] duration-300 ${EASE} will-change-[width] motion-reduce:transition-none dark:border-white/[0.10] dark:bg-side`}
+      } relative flex shrink-0 flex-col overflow-hidden border-r border-zinc-600/40 bg-sidebar transition-[width] duration-300 ${EASE} will-change-[width] motion-reduce:transition-none dark:border-white/[0.10] dark:bg-side`}
     >
       {/* ------------------------------ Header ------------------------------ */}
       <div className="flex h-12 shrink-0 items-center">

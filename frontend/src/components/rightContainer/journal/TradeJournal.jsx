@@ -260,7 +260,7 @@ function TradeJournal({ view = 'trades', journal, onAddTrade, onUpdateTrade, onD
         </div>
       )}
 
-      {!isMentorOpen && <MentorOrb onOpen={() => setIsMentorOpen(true)} onWarm={loadAiMentor} />}
+      {!isMentorOpen && !isFormOpen && <MentorOrb onOpen={() => setIsMentorOpen(true)} onWarm={loadAiMentor} />}
     </section>
   )
 }
