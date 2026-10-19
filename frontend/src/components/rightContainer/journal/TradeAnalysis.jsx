@@ -63,7 +63,7 @@ function TradeAnalysis({ trades, currency, rangeLabel }) {
   ]
 
   return (
-    <div className="rounded-2xl border border-zinc-300 bg-white shadow-card dark:border-white/[0.12] dark:bg-panel dark:shadow-none">
+    <div className="tc-surface rounded-2xl border border-zinc-300 bg-white shadow-card dark:border-white/[0.12] dark:bg-panel dark:shadow-none">
       <div className="p-5 pb-3 sm:p-6 sm:pb-4">
         <div className="min-w-0">
           <p className="text-xs text-zinc-600 dark:text-zinc-300">Net P&amp;L</p>

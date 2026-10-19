@@ -30,7 +30,7 @@ function TradeChip({ trade, onOpen }) {
       }}
       title={isFailed ? `${label} (not saved)` : label}
       aria-busy={isSaving}
-      className={`flex h-6 w-full min-w-0 cursor-pointer items-center gap-1.5 overflow-hidden rounded-md bg-zinc-900/[0.06] px-2 text-left text-[11px] font-medium leading-none text-zinc-800 transition-colors hover:bg-zinc-900/[0.1] hover:text-zinc-900 dark:bg-white/[0.08] dark:text-zinc-200 dark:hover:bg-white/[0.13] dark:hover:text-zinc-50 ${focusRing}`}
+      className={`flex h-6 w-full min-w-0 cursor-pointer items-center gap-1.5 overflow-hidden rounded-md border border-zinc-200 bg-zinc-100 px-2 text-left text-[11px] font-medium leading-none text-zinc-800 transition-colors hover:border-zinc-300 hover:bg-zinc-200 hover:text-zinc-900 dark:border-transparent dark:bg-white/[0.08] dark:text-zinc-200 dark:hover:border-transparent dark:hover:bg-white/[0.13] dark:hover:text-zinc-50 ${focusRing}`}
     >
       {isSaving ? (
         <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0 animate-spin rounded-full border-[1.5px] border-zinc-300 border-t-zinc-600 dark:border-zinc-600 dark:border-t-zinc-300" />
@@ -131,7 +131,7 @@ function DayCell({ day, trades, isToday, isSelected, isExpanded, onToggleExpand,
  * @param {Function} onCreateForDate (dateKey) => void
  * @param {Function} onOpenTrade     (trade) => void
  */
-function JournalCalendar({ trades, selectedDate = null, onCreateForDate, onOpenTrade }) {
+function JournalCalendar({ trades, selectedDate = null, onCreateForDate, onOpenTrade, headerHint }) {
   const [month, setMonth] = useState(() => startOfMonth(new Date()))
   const [expandedDay, setExpandedDay] = useState(null)
 
@@ -160,10 +160,13 @@ function JournalCalendar({ trades, selectedDate = null, onCreateForDate, onOpenT
   return (
     <section
       aria-label="Journal calendar"
-      className="rounded-2xl border border-zinc-200 bg-white/70 p-4 shadow-card sm:p-5 dark:border-zinc-800 dark:bg-white/[0.035] dark:shadow-none"
+      className="tc-surface rounded-2xl border border-zinc-200 bg-white/70 p-4 shadow-card sm:p-5 dark:border-zinc-800 dark:bg-white/[0.035] dark:shadow-none"
     >
       <div className="mb-4 flex min-h-8 flex-wrap items-center justify-between gap-3">
-        <h2 aria-live="polite" className="text-lg font-semibold leading-8 tracking-tight text-zinc-900 dark:text-zinc-50">{formatMonthTitle(month)}</h2>
+        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
+          <h2 aria-live="polite" className="text-lg font-semibold leading-8 tracking-tight text-zinc-900 dark:text-zinc-50">{formatMonthTitle(month)}</h2>
+          {headerHint}
+        </div>
         <div role="group" aria-label="Change month" className={segmentedGroup}>
           <button type="button" onClick={() => goToMonth(addMonths(month, -1))} aria-label="Previous month" title="Previous month" className={`${navItem} w-9`}>
             <ChevronLeftIcon className="h-4 w-4" />

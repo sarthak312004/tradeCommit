@@ -120,7 +120,7 @@ function TradeCard({ trade, currency = DEFAULT_CURRENCY, detailFields = [], fiel
         onClick={() => onSelect(trade)}
         onKeyDown={handleCardKeyDown}
         aria-busy={isSaving}
-        className={`relative flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-zinc-200 bg-white px-4 py-3 text-left shadow-card transition-[box-shadow,border-color,background-color,border-radius] hover:border-zinc-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-600 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas dark:border-zinc-800 dark:bg-panel dark:shadow-none dark:hover:border-zinc-700 dark:hover:bg-panel-hi dark:focus-visible:ring-sky-400 dark:focus-visible:ring-offset-night ${
+        className={`tc-surface tc-trade-card relative flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-zinc-200 bg-white px-4 py-3 text-left shadow-card transition-[box-shadow,border-color,background-color,border-radius] hover:border-zinc-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-600 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas dark:border-zinc-800 dark:bg-panel dark:shadow-none dark:hover:border-zinc-700 dark:hover:bg-panel-hi dark:focus-visible:ring-sky-400 dark:focus-visible:ring-offset-night ${
           hasDetails ? 'group-hover/chip:rounded-b-none group-has-[:focus-visible]/chip:rounded-b-none' : ''
         } ${open ? 'rounded-b-none border-zinc-300 dark:border-zinc-700 dark:bg-panel-hi' : ''}`}
       >

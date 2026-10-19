@@ -111,8 +111,16 @@ export const computeAnalytics = (trades) => {
       dateKey: toDateKey(trade.date) ?? ''
     }))
     .filter((item) => item.pnl !== null)
-    // chronological; ties keep the order the trades were logged in
-    .sort((a, b) => (a.dateKey === b.dateKey ? a.index - b.index : a.dateKey < b.dateKey ? -1 : 1))
+    // Date is day-only; use creation time to order trades made on the same day.
+    .sort((a, b) => {
+      if (a.dateKey !== b.dateKey) return a.dateKey < b.dateKey ? -1 : 1
+      const aCreatedAt = Date.parse(a.trade.createdAt ?? '')
+      const bCreatedAt = Date.parse(b.trade.createdAt ?? '')
+      if (Number.isFinite(aCreatedAt) && Number.isFinite(bCreatedAt) && aCreatedAt !== bCreatedAt) {
+        return aCreatedAt - bCreatedAt
+      }
+      return a.index - b.index
+    })
 
   const pnls = closed.map((item) => item.pnl)
   const wins = pnls.filter((value) => value > 0)

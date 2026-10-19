@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import { formatDateKey, formatMoney, toneOf } from '../../../utils/tradeAnalytics'
+import { formatDateKey, formatMoney } from '../../../utils/tradeAnalytics'
 
 const HEIGHT = 260
 const MARGIN = { top: 14, right: 12, bottom: 26, left: 56 }
@@ -191,14 +191,10 @@ function EquityCurve({ points, currency }) {
           style={{ left: flip ? undefined : activeX + 12, right: flip ? width - activeX + 12 : undefined }}
         >
           <p className="text-zinc-600 dark:text-zinc-300">{active.trade ? formatDateKey(active.label, { withYear: true }) : 'Start'}</p>
-          <p className="mt-0.5 text-sm font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">{money(active.value)}</p>
+          <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">Net P&amp;L</p>
+          <p className="text-sm font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">{money(active.value, { signed: true })}</p>
           {active.trade && (
-            <p className="mt-1 flex items-center justify-between gap-4 text-zinc-600 dark:text-zinc-300">
-              <span>{active.trade.symbol}</span>
-              <span className={`tabular-nums ${toneOf(active.pnl) === 'negative' ? 'text-rose-500 dark:text-rose-400' : toneOf(active.pnl) === 'positive' ? 'text-emerald-600 dark:text-emerald-400' : ''}`}>
-                {money(active.pnl, { signed: true })}
-              </span>
-            </p>
+            <p className="mt-1 text-zinc-600 dark:text-zinc-300">{active.trade.symbol}</p>
           )}
         </div>
       )}

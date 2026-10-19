@@ -23,16 +23,16 @@ function PlannerWorkspace({ planner }) {
     <>
       <TopBar label={`Trade planner · ${planner.type}`} title={planner.name} />
       <div className={pageBody}>
-        <div className="mb-4 flex flex-wrap items-center gap-3">
+        <div className="mb-4 flex flex-wrap items-center gap-2">
           <PlannerJournalLink planner={planner} />
-          {!isLoading && entries.length === 0 && (
-            <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-zinc-200 bg-white/80 py-1 pl-3 pr-1.5 text-xs text-zinc-600 shadow-sm dark:border-white/[0.10] dark:bg-white/[0.03] dark:text-zinc-300">
+          {!isLoading && (
+            <div className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-zinc-200 bg-white/80 py-1 pl-2.5 pr-1 text-xs text-zinc-600 shadow-sm dark:border-white/[0.10] dark:bg-white/[0.03] dark:text-zinc-300">
               <CalendarIcon aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-sky-600 dark:text-sky-400" />
-              <span>Click any date to add a plan</span>
+              <span>Click a date to plan</span>
               <button
                 type="button"
                 onClick={() => setFormState({ entry: null, date: todayKey() })}
-                className="ml-1 shrink-0 rounded-full bg-sky-600/10 px-2.5 py-1 font-medium text-sky-800 transition-colors hover:bg-sky-600/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-600 dark:bg-sky-400/10 dark:text-sky-300 dark:hover:bg-sky-400/15 dark:focus-visible:ring-sky-400"
+                className="shrink-0 rounded-full bg-sky-600/10 px-2 py-1 font-medium text-sky-800 transition-colors hover:bg-sky-600/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-600 dark:bg-sky-400/10 dark:text-sky-300 dark:hover:bg-sky-400/15 dark:focus-visible:ring-sky-400"
               >
                 Plan today
               </button>

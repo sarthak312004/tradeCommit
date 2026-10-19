@@ -112,7 +112,7 @@ function Home() {
             setOpenFormSection={setOpenFormSection}
           />
 
-          <main className="flex flex-1 flex-col overflow-hidden">
+          <main className="tc-ambient flex flex-1 flex-col overflow-hidden">
             <Outlet context={{ isSidebarOpen, openCreateForm }} />
           </main>
         </div>

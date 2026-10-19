@@ -3,10 +3,10 @@ import { journalContext, plannerContext } from '../../context/Context'
 import { CalendarIcon, CheckIcon, FileIcon, PlusIcon } from '../../utils/Icons.jsx'
 
 const panel =
-  'rounded-xl border border-zinc-300 bg-white p-6 shadow-sm md:p-8 dark:border-white/[0.14] dark:bg-panel dark:shadow-none'
+  'tc-surface rounded-xl border border-zinc-300 bg-white p-6 shadow-sm md:p-8 dark:border-white/[0.14] dark:bg-panel dark:shadow-none'
 
 const bigPrimary =
-  'inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-lg bg-sky-600 px-5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-sky-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-panel'
+  'tc-btn-primary inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-lg bg-sky-600 px-5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-sky-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-panel'
 
 const bigSecondary =
   'inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-lg border border-zinc-300 bg-white px-5 text-sm font-semibold text-zinc-800 shadow-sm transition-colors hover:bg-zinc-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 dark:border-white/[0.16] dark:bg-white/[0.04] dark:text-zinc-100 dark:shadow-none dark:hover:bg-white/[0.08]'
@@ -163,11 +163,20 @@ export function FirstTradeCard({ journalName, onAddTrade, onOpenContext, onCreat
   )
 }
 
-/** Slim nudge above the (always visible) calendar while the journal has no trades. */
-export function CalendarNudge() {
+/** Compact hint and shortcut above the journal calendar. */
+export function CalendarNudge({ onAddTrade }) {
   return (
-    <p className="mb-4 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-[13px] text-sky-900 dark:border-sky-400/20 dark:bg-sky-400/10 dark:text-sky-200">
-      Click any day to log your first trade. Past trades count too.
-    </p>
+    <div className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-zinc-200 bg-white/80 py-1 pl-2.5 pr-1 text-xs text-zinc-600 shadow-sm dark:border-white/[0.10] dark:bg-white/[0.03] dark:text-zinc-300">
+      <CalendarIcon aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-sky-600 dark:text-sky-400" />
+      <span>Click a date to log</span>
+      <button
+        type="button"
+        onClick={onAddTrade}
+        aria-label="Add trade for today"
+        className="shrink-0 rounded-full bg-sky-600/10 px-2 py-1 font-medium text-sky-800 transition-colors hover:bg-sky-600/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-600 dark:bg-sky-400/10 dark:text-sky-300 dark:hover:bg-sky-400/15 dark:focus-visible:ring-sky-400"
+      >
+        Trade today
+      </button>
+    </div>
   )
 }

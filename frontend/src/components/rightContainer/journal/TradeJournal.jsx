@@ -146,7 +146,7 @@ function TradeJournal({ view = 'trades', journal, onAddTrade, onUpdateTrade, onD
             type="button"
             onClick={isFormOpen ? handleCloseForm : () => handleOpenNewTrade()}
             data-tour="add-trade"
-            className="h-8 cursor-pointer rounded-lg bg-sky-600 px-3 text-xs font-semibold text-white transition hover:bg-sky-600"
+            className="tc-btn-primary h-8 cursor-pointer rounded-lg bg-sky-600 px-3 text-xs font-semibold text-white transition hover:bg-sky-600"
           >
             + Add trade
           </button>
@@ -205,16 +205,13 @@ function TradeJournal({ view = 'trades', journal, onAddTrade, onUpdateTrade, onD
       )}
 
       {view === 'calendar' ? (
-        // always shown, even with no trades, so any day can be clicked to log one
-        <>
-          {journal.trades.length === 0 && <CalendarNudge />}
-          <JournalCalendar
-            trades={visibleTrades}
-            selectedDate={isFormOpen ? (editingTrade ? toDateKey(editingTrade.date) : newTradeDate) : null}
-            onCreateForDate={handleOpenNewTrade}
-            onOpenTrade={handleOpenEditTrade}
-          />
-        </>
+        <JournalCalendar
+          trades={visibleTrades}
+          selectedDate={isFormOpen ? (editingTrade ? toDateKey(editingTrade.date) : newTradeDate) : null}
+          onCreateForDate={handleOpenNewTrade}
+          onOpenTrade={handleOpenEditTrade}
+          headerHint={<CalendarNudge onAddTrade={() => handleOpenNewTrade()} />}
+        />
       ) : journal.trades.length === 0 ? (
         <FirstTradeCard
           journalName={journal.name}

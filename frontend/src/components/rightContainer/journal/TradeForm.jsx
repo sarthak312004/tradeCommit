@@ -199,7 +199,7 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
   const prefer = currency === 'INR' ? 'IN' : 'GLOBAL'
   const typedSymbol = String(live.symbol ?? '').trim().toUpperCase()
   const pickedMatches = picked !== null && picked.display.toUpperCase() === typedSymbol
-  const priceEnabled = initialTrade ? !isDraftClosed : live.date === todayKey()
+  const priceEnabled = initialTrade ? !isDraftClosed : true
   const { quote, status: priceStatus } = useLivePrice({
     symbol: pickedMatches ? picked.symbol : typedSymbol,
     exact: pickedMatches && picked.exact,
