@@ -6,6 +6,7 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { isGoogleAuthConfigured, verifyGoogleCredential } from "../utils/googleAuth.js";
 import { sendOtpEmail } from "../utils/mailer.js";
 import { clearAuthCookies, setAuthCookies } from "../utils/authCookies.js";
+import { DEFAULT_HEADER_SCENE } from "../constants/headerBackdrop.js";
 import {
   OTP_LENGTH,
   OTP_MAX_ATTEMPTS,
@@ -184,6 +185,7 @@ export const registerUser = asyncHandler(async (req, res) => {
       password,
       emailVerified: true,
       onboardingCompleted: false,
+      headerBackdrop: { mode: "scene", scene: DEFAULT_HEADER_SCENE, imageUrl: null },
     });
   } catch (error) {
     if (error?.code === 11000) {

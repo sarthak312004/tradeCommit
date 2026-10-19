@@ -169,9 +169,9 @@ function Sidebar({ isSidebarOpen, setIsSidebarOpen, openFormSection, setOpenForm
               <button
                 type="button"
                 onClick={() => setOpenFormSection("planners")}
-                className={`mb-1 mt-1 flex h-9 w-full items-center justify-center gap-2 rounded-md border border-sky-600/40 bg-sky-50 text-[13px] font-medium text-sky-800 transition-colors hover:bg-sky-100 dark:border-sky-400/30 dark:bg-sky-400/10 dark:text-sky-200 dark:hover:bg-sky-400/15 ${focusRing}`}
+                className={`mb-1 mt-1 flex h-8 w-full items-center gap-2 rounded-lg border border-zinc-500/55 bg-white/80 px-2.5 text-xs font-semibold text-zinc-800 shadow-[0_1px_3px_rgb(28_25_23/0.12)] transition-colors hover:border-[#c4623f]/55 hover:bg-white hover:text-zinc-950 dark:border-white/[0.16] dark:bg-white/[0.05] dark:text-zinc-200 dark:hover:border-[#e08a68]/40 dark:hover:bg-white/[0.09] dark:hover:text-zinc-50 ${focusRing}`}
               >
-                <PlusIcon className="h-4 w-4" />
+                <PlusIcon className="h-3.5 w-3.5 text-[#b95b3b] dark:text-[#e08a68]" />
                 Create planner
               </button>
             )
