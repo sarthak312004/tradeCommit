@@ -13,9 +13,9 @@ import { buildTemplateFields, hasJournalContext } from '../../../utils/customFie
 import { buildFieldChoices, collectCustomFieldOptions, resolveCardFields } from '../../../utils/tradeCardFields'
 import { useTradeCardFields } from '../../../hooks/useTradeCardFields'
 import { SlidersIcon } from '../../../utils/Icons.jsx'
+import { loadTradeForm, preloadTradeForm, runWhenIdle } from '../../../utils/formLoaders'
 
 // loaded on demand so the first paint ships less JavaScript
-const loadTradeForm = () => import('./TradeForm')
 const TradeForm = lazy(loadTradeForm)
 const TradeAnalysis = lazy(() => import('./TradeAnalysis'))
 const JournalContextDialog = lazy(() => import('./JournalContextDialog'))
@@ -42,12 +42,7 @@ function TradeJournal({ view = 'trades', journal, onAddTrade, onUpdateTrade, onD
   const [isMentorOpen, setIsMentorOpen] = useState(false)
 
   // fetch the form's code while the browser is idle so the drawer opens instantly on the first click
-  useEffect(() => {
-    const idle = window.requestIdleCallback ?? ((callback) => setTimeout(callback, 1500))
-    const cancel = window.cancelIdleCallback ?? clearTimeout
-    const handle = idle(loadTradeForm)
-    return () => cancel(handle)
-  }, [])
+  useEffect(() => runWhenIdle(preloadTradeForm), [])
 
   const allTrades = journal?.trades
   // newest first, so a trade you just logged is the first card
@@ -159,6 +154,8 @@ function TradeJournal({ view = 'trades', journal, onAddTrade, onUpdateTrade, onD
           <button
             type="button"
             onClick={isFormOpen ? handleCloseForm : () => handleOpenNewTrade()}
+            onPointerEnter={preloadTradeForm}
+            onFocus={preloadTradeForm}
             data-tour="add-trade"
             className="tc-btn-primary h-8 cursor-pointer rounded-lg bg-sky-600 px-3 text-xs font-semibold text-white transition hover:bg-sky-600"
           >

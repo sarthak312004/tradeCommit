@@ -1,4 +1,4 @@
-import { lazy, Suspense, useContext, useState } from 'react'
+import { lazy, Suspense, useContext, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { plannerContext } from '../context/Context'
 import { usePlanEntries } from '../hooks/usePlanEntries'
@@ -7,14 +7,18 @@ import PlannerCalendar from '../components/rightContainer/planner/PlannerCalenda
 import PlannerJournalLink from '../components/rightContainer/planner/PlannerJournalLink'
 import { todayKey } from '../utils/calendar'
 import { CalendarIcon } from '../utils/Icons.jsx'
+import { loadPlanForm, preloadPlanForm, runWhenIdle } from '../utils/formLoaders'
 
 const pageBody = 'subtle-scrollbar min-h-0 flex-1 overflow-y-auto p-6 md:p-8'
-const PlanForm = lazy(() => import('../components/rightContainer/planner/PlanForm'))
+const PlanForm = lazy(loadPlanForm)
 
 function PlannerWorkspace({ planner }) {
   const { entries, isLoading, error, addEntry, updateEntry, removeEntry, uploadImage } = usePlanEntries(planner.id)
   // null = drawer closed, { entry: null, date } = new plan, { entry } = editing
   const [formState, setFormState] = useState(null)
+
+  // fetch the form's code while the browser is idle so the drawer opens instantly on the first click
+  useEffect(() => runWhenIdle(preloadPlanForm), [])
 
   const handleSubmit = (values, prepare) =>
     formState.entry ? updateEntry(formState.entry.id, values, prepare) : addEntry(values, prepare)
@@ -32,6 +36,8 @@ function PlannerWorkspace({ planner }) {
               <button
                 type="button"
                 onClick={() => setFormState({ entry: null, date: todayKey() })}
+                onPointerEnter={preloadPlanForm}
+                onFocus={preloadPlanForm}
                 className="shrink-0 rounded-full bg-sky-600/10 px-2 py-1 font-medium text-sky-800 transition-colors hover:bg-sky-600/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-600 dark:bg-sky-400/10 dark:text-sky-300 dark:hover:bg-sky-400/15 dark:focus-visible:ring-sky-400"
               >
                 Plan today

@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form'
 import FormDrawer from '../../common/FormDrawer'
 import PropertyRow from '../../common/PropertyRow'
 import ShortcutHint from '../../common/ShortcutHint'
-import TiptapEditor from '../../common/tiptap/TiptapEditor'
+import DeferredEditor from '../../common/DeferredEditor'
 import { dateInputClass, ghostFooterButton, primaryFooterButton } from '../../common/formStyles'
 import { CalendarIcon } from '../../../utils/Icons.jsx'
 import { formatLongDate, todayKey } from '../../../utils/calendar'
@@ -149,7 +149,7 @@ function PlanForm({ plannerName, plannerType, initialEntry = null, initialDate, 
 
       <hr className="my-6 border-zinc-300 dark:border-white/[0.12]" />
 
-      <TiptapEditor
+      <DeferredEditor
         ref={editorRef}
         id="plan-content"
         label="Trade plan"

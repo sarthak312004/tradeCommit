@@ -10,7 +10,8 @@ import { todayKey } from '../../../utils/calendar'
 import { useLivePrice } from '../../../hooks/useLivePrice'
 import { useSymbolSearch } from '../../../hooks/useSymbolSearch'
 import ShortcutHint from '../../common/ShortcutHint'
-import TiptapEditor from '../../common/tiptap/TiptapEditor'
+import DeferredEditor from '../../common/DeferredEditor'
+import { useDrawerMotion } from '../../common/useDrawerMotion'
 import SymbolSuggestions from './SymbolSuggestions'
 
 // built when the form opens, in local time (UTC would show yesterday for Indian users before 5:30 am)
@@ -153,7 +154,6 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
   const [drawerWidth, setDrawerWidth] = useState(DEFAULT_WIDTH)
   const [expanded, setExpanded] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
-  const [visible, setVisible] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [submitError, setSubmitError] = useState('')
   const [addMenuOpen, setAddMenuOpen] = useState(false)
@@ -167,6 +167,7 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
   const isResizingRef = useRef(false)
   const closeTimerRef = useRef(null)
   const formRef = useRef(null)
+  const overlayRef = useRef(null)
   const addMenuRef = useRef(null)
   const pendingFocusKeyRef = useRef(null)
   const symbolInputRef = useRef(null)
@@ -183,6 +184,8 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
   const { fields: customFields, append: appendCustomField, remove: removeCustomField } = useFieldArray({ control, name: 'customFields' })
 
   const duration = reduceMotion ? 0 : DURATION
+  // slide-in starts before the first paint (no 2-frame wait, no extra render of this big form); see useDrawerMotion
+  const { slideOut } = useDrawerMotion({ overlayRef, panelRef: formRef, duration })
   const live = watch()
   const direction = live.direction
   const draftPnl = getTradePnl(live)
@@ -364,18 +367,6 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
     setAddMenuOpen(false)
   }
 
-  // slide-in on mount (two frames so the browser paints the starting position first)
-  useEffect(() => {
-    let inner
-    const outer = requestAnimationFrame(() => {
-      inner = requestAnimationFrame(() => setVisible(true))
-    })
-    return () => {
-      cancelAnimationFrame(outer)
-      cancelAnimationFrame(inner)
-    }
-  }, [])
-
   useEffect(() => () => {
     clearTimeout(closeTimerRef.current)
     clearTimeout(flashTimerRef.current)
@@ -414,7 +405,7 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
   // slide-out, then let the parent unmount the form
   const requestClose = () => {
     if (closeTimerRef.current) return
-    setVisible(false)
+    slideOut()
     closeTimerRef.current = setTimeout(() => {
       closeTimerRef.current = null
       onClose?.()
@@ -513,13 +504,12 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
     }
   })
 
-  const slide = `transform ${duration}ms ${EASE}`
   const grow = `width ${duration}ms ${EASE}`
 
   return (
     <div
+      ref={overlayRef}
       className="fixed inset-0 z-50 flex justify-end overflow-hidden bg-black/30 p-2 backdrop-blur-[2px] md:p-3"
-      style={{ opacity: visible ? 1 : 0, transition: `opacity ${duration}ms ${EASE}` }}
       role="dialog"
       aria-modal="true"
       aria-labelledby="trade-form-title"
@@ -530,9 +520,8 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
         onSubmit={handleSubmit(handleFormSubmit)}
         style={{
           width: `${expanded ? EXPANDED_WIDTH : drawerWidth}px`,
-          transform: visible ? 'translateX(0)' : 'translateX(calc(100% + 2rem))',
           // no width easing while the user drags the edge, otherwise it feels laggy
-          transition: isDragging ? slide : `${grow}, ${slide}`
+          transition: isDragging ? 'none' : grow
         }}
         className="relative flex h-full max-w-full flex-col overflow-hidden rounded-xl border border-zinc-300 bg-white shadow-2xl outline-none dark:border-white/[0.14] dark:bg-panel"
       >
@@ -852,7 +841,7 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
             <hr className="my-6 border-zinc-300 dark:border-white/[0.12]" />
 
             {/* analysis */}
-            <TiptapEditor
+            <DeferredEditor
               ref={editorRef}
               id="trade-analysis"
               label="Trade analysis"

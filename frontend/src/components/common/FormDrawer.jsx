@@ -2,6 +2,7 @@ import { useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { CloseIcon, MaximizeIcon, MinimizeIcon } from '../../utils/Icons.jsx'
 import { footerClass, iconButtonClass } from './formStyles'
 import { useFormShortcuts } from '../../hooks/useFormShortcuts'
+import { useDrawerMotion } from './useDrawerMotion'
 
 /* ---------- motion + layout constants (identical to TradeForm) ---------- */
 const EASE = 'cubic-bezier(0.4, 0, 0.2, 1)'
@@ -25,22 +26,13 @@ function FormDrawer({ ref, ariaTitle, breadcrumb, onSubmit, onClose, footer, chi
   const [drawerWidth, setDrawerWidth] = useState(DEFAULT_WIDTH)
   const [expanded, setExpanded] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
-  const [visible, setVisible] = useState(false)
   const isResizingRef = useRef(false)
   const closeTimerRef = useRef(null)
   const formRef = useRef(null)
+  const overlayRef = useRef(null)
 
-  // slide-in on mount (two frames so the browser paints the starting position first)
-  useEffect(() => {
-    let inner
-    const outer = requestAnimationFrame(() => {
-      inner = requestAnimationFrame(() => setVisible(true))
-    })
-    return () => {
-      cancelAnimationFrame(outer)
-      cancelAnimationFrame(inner)
-    }
-  }, [])
+  // slide-in starts before the first paint and slide-out runs on the compositor: no state, no extra render
+  const { slideOut } = useDrawerMotion({ overlayRef, panelRef: formRef, duration: DURATION })
 
   useEffect(() => () => clearTimeout(closeTimerRef.current), [])
 
@@ -76,7 +68,7 @@ function FormDrawer({ ref, ariaTitle, breadcrumb, onSubmit, onClose, footer, chi
   // slide-out, then let the parent unmount the drawer
   const requestClose = () => {
     if (closeTimerRef.current) return
-    setVisible(false)
+    slideOut()
     closeTimerRef.current = setTimeout(() => {
       closeTimerRef.current = null
       onClose?.()
@@ -92,12 +84,11 @@ function FormDrawer({ ref, ariaTitle, breadcrumb, onSubmit, onClose, footer, chi
   useImperativeHandle(ref, () => ({ close: requestClose }))
   useFormShortcuts({ formRef, onEscape: requestClose, canClose, canSubmit })
 
-  const slide = `transform ${DURATION}ms ${EASE}`
   const grow = `width ${DURATION}ms ${EASE}`
   return (
     <div
+      ref={overlayRef}
       className="fixed inset-0 z-50 flex justify-end overflow-hidden bg-black/30 p-2 backdrop-blur-[2px] md:p-3"
-      style={{ opacity: visible ? 1 : 0, transition: `opacity ${DURATION}ms ${EASE}` }}
       role="dialog"
       aria-modal="true"
       aria-label={ariaTitle}
@@ -108,9 +99,8 @@ function FormDrawer({ ref, ariaTitle, breadcrumb, onSubmit, onClose, footer, chi
         onSubmit={onSubmit}
         style={{
           width: `${expanded ? EXPANDED_WIDTH : drawerWidth}px`,
-          transform: visible ? 'translateX(0)' : 'translateX(calc(100% + 2rem))',
           // no width easing while the user drags the edge, otherwise it feels laggy
-          transition: isDragging ? slide : `${grow}, ${slide}`
+          transition: isDragging ? 'none' : grow
         }}
         className="relative flex h-full max-w-full flex-col overflow-hidden rounded-xl border border-zinc-300 bg-white shadow-2xl outline-none dark:border-white/[0.14] dark:bg-panel"
       >
