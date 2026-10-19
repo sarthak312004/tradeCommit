@@ -127,7 +127,7 @@ function TourSession({ tourId, hasJournal, username, name, isSidebarOpen, setIsS
  * flags), and again whenever "Take the product tour" is chosen in the profile menu. Rendered by Home so the sidebar and
  * every page are already on screen behind it.
  *
- *   main     first visit: sidebar, feedback, and what to do first
+ *   main     first visit: welcome, create one focused journal, and start logging
  *   journal  the first time a journal is on screen (a new account has none until it creates one)
  *   planner  the first time a planner is opened
  */

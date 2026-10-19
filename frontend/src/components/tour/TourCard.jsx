@@ -99,6 +99,7 @@ function TourCard({ step, index, total, rect, name, onNext, onBack, onSkip }) {
   }
 
   const primaryLabel = step.primary ?? (isLast ? 'Finish' : 'Next')
+  const progress = ((index + 1) / total) * 100
 
   return (
     <div
@@ -109,15 +110,18 @@ function TourCard({ step, index, total, rect, name, onNext, onBack, onSkip }) {
       aria-describedby="tour-body"
       tabIndex={-1}
       style={{ left: x, top: y, width }}
-      className={`fixed z-[91] max-w-[calc(100vw-24px)] animate-[fadeIn_.2s_ease-out] rounded-xl border border-zinc-300 bg-white p-4 text-left shadow-[0_16px_48px_-12px_rgba(0,0,0,0.35)] outline-none dark:border-white/[0.13] dark:bg-panel-hi ${
+      className={`fixed z-[91] max-w-[calc(100vw-24px)] animate-[fadeIn_.2s_ease-out] overflow-hidden rounded-2xl border border-zinc-200 bg-white p-5 text-left shadow-[0_24px_80px_-20px_rgba(0,0,0,0.5)] outline-none dark:border-white/[0.12] dark:bg-panel-hi ${
         hasSettled ? 'transition-[left,top] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none' : ''
       }`}
     >
       {arrow}
+      <div className="absolute inset-x-0 top-0 h-1 bg-zinc-100 dark:bg-white/[0.06]" aria-hidden="true">
+        <div className="h-full rounded-r-full bg-sky-500 transition-[width] duration-300 dark:bg-sky-400" style={{ width: `${progress}%` }} />
+      </div>
 
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-600 dark:text-zinc-400">
-          Step {index + 1} of {total}
+      <div className="flex items-center justify-between gap-3 pt-1">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500 dark:text-zinc-400">
+          {step.eyebrow ?? `Step ${index + 1} of ${total}`}
         </p>
         <div aria-hidden="true" className="flex items-center gap-1">
           {Array.from({ length: total }, (_, dot) => (
@@ -126,17 +130,25 @@ function TourCard({ step, index, total, rect, name, onNext, onBack, onSkip }) {
         </div>
       </div>
 
-      {isFirst && isCentered && <img src="/favicon.svg" alt="" className="mt-3 h-9 w-9" />}
+      {isFirst && isCentered && (
+        <div className="mt-4 flex items-center gap-3">
+          <img src="/favicon.svg" alt="" className="h-10 w-10 rounded-xl border border-zinc-200 bg-zinc-50 p-1.5 dark:border-white/[0.10] dark:bg-white/[0.04]" />
+          <div>
+            <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">TradeCommit</p>
+            <p className="mt-0.5 text-[11px] text-zinc-500 dark:text-zinc-400">A journal for better decisions</p>
+          </div>
+        </div>
+      )}
 
-      <h2 id="tour-title" className="mt-2.5 text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+      <h2 id="tour-title" className="mt-3 text-base font-semibold tracking-[-0.025em] text-zinc-900 dark:text-zinc-50">
         {fill(step.title, name)}
       </h2>
-      <p id="tour-body" className="mt-1.5 text-[13px] leading-snug text-zinc-600 dark:text-zinc-300">
+      <p id="tour-body" className="mt-2 text-[13px] leading-relaxed text-zinc-600 dark:text-zinc-300">
         {fill(step.body, name)}
       </p>
 
       {step.checklist && (
-        <ol className="mt-3 space-y-2">
+        <ol className="mt-4 space-y-2.5 rounded-xl border border-zinc-200/80 bg-zinc-50/80 p-3 dark:border-white/[0.08] dark:bg-white/[0.025]">
           {step.checklist.map((item, itemIndex) => (
             <li key={item} className="flex items-start gap-2.5 text-[13px] leading-snug text-zinc-800 dark:text-zinc-200">
               <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-zinc-900 text-[11px] font-semibold text-white dark:bg-zinc-100 dark:text-zinc-900">{itemIndex + 1}</span>
@@ -153,7 +165,7 @@ function TourCard({ step, index, total, rect, name, onNext, onBack, onSkip }) {
         </div>
       )}
 
-      <div className="mt-4 flex items-center justify-between gap-3 border-t border-zinc-200 pt-3 dark:border-white/[0.10]">
+      <div className="mt-5 flex items-center justify-between gap-3 border-t border-zinc-200 pt-4 dark:border-white/[0.10]">
         {isLast ? (
           <span />
         ) : (
