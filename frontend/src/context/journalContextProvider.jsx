@@ -120,6 +120,7 @@ function JournalContextProvider({children}){
 
         const loadJournals = async () => {
             const loadId = ++latestLoad
+            setIsLoading(true)
             try {
                 // No separate auth pre-flight: the journals request itself answers 401 when logged out.
                 // On first load this reuses the request index.html started before the bundle arrived.

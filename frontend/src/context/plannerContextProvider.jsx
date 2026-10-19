@@ -14,6 +14,7 @@ function PlannerContextProvider({ children }) {
 
     const loadPlanners = async () => {
       const loadId = ++latestLoad
+      setIsLoading(true)
       try {
         // No separate auth pre-flight: a 401 just means "logged out". On first load this reuses the
         // request index.html started before the bundle arrived.
