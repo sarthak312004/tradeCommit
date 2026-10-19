@@ -21,6 +21,7 @@ function JournalCard({ journal, isSelected }) {
 			label={journal.name}
 			noun="journal"
 			Icon={FileIcon}
+			badge={journal.syncState === "saving" ? "Creating…" : undefined}
 			isSelected={isSelected}
 			onSelect={handleSelect}
 			onRename={(name) => updateJournal(journal.id, name)}

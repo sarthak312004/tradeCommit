@@ -8,9 +8,8 @@ import PlannerJournalLink from '../components/rightContainer/planner/PlannerJour
 import { todayKey } from '../utils/calendar'
 import { CalendarIcon } from '../utils/Icons.jsx'
 
-const PlanForm = lazy(() => import('../components/rightContainer/planner/PlanForm'))
-
 const pageBody = 'subtle-scrollbar min-h-0 flex-1 overflow-y-auto p-6 md:p-8'
+const PlanForm = lazy(() => import('../components/rightContainer/planner/PlanForm'))
 
 function PlannerWorkspace({ planner }) {
   const { entries, isLoading, error, addEntry, updateEntry, removeEntry, uploadImage } = usePlanEntries(planner.id)

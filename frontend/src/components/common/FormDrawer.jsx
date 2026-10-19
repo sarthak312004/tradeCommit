@@ -4,8 +4,8 @@ import { footerClass, iconButtonClass } from './formStyles'
 import { useFormShortcuts } from '../../hooks/useFormShortcuts'
 
 /* ---------- motion + layout constants (identical to TradeForm) ---------- */
-const EASE = 'cubic-bezier(0.32, 0.72, 0.0, 1)'
-const DURATION = 320
+const EASE = 'cubic-bezier(0.4, 0, 0.2, 1)'
+const DURATION = 180
 const EDGE_GAP = 12 // gap between the floating panel and the viewport edge (md:p-3)
 const DEFAULT_WIDTH = 860
 const MAX_WIDTH = 1400

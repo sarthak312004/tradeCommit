@@ -164,14 +164,18 @@ function JournalContextProvider({children}){
         return () => window.removeEventListener("beforeunload", warn)
     }, [hasUnsavedTrades])
 
-    // Optimistic: the journal shows up in the sidebar the moment the form closes, under a temporary id,
-    // and is swapped for the saved one when the server answers. If the request fails it is removed again.
+    // Show and select the journal immediately; the real id is swapped in when the server answers.
     const createJournal = async (name, currency = DEFAULT_CURRENCY) => {
         const trimmed = name.trim()
         const tempId = `${TEMP_PREFIX}${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-        const placeholder = normalizeJournalForFrontend({ id: tempId, _id: tempId, name: trimmed, currency, trades: [] })
+        const previousSelectedId = selectedJournalId
+        const placeholder = {
+            ...normalizeJournalForFrontend({ id: tempId, _id: tempId, name: trimmed, currency, trades: [] }),
+            syncState: "saving",
+        }
 
         setJournals((current) => [...current, placeholder])
+        setSelectedJournalId(tempId)
 
         try {
             const response = await fetch(API_BASE, {
@@ -183,10 +187,11 @@ function JournalContextProvider({children}){
 
             const created = normalizeJournalForFrontend(await readJson(response))
             setJournals((current) => current.map((journal) => journal.id === tempId ? created : journal))
-            setSelectedJournalId((currentId) => currentId ?? created.id)
+            setSelectedJournalId((currentId) => currentId === tempId ? created.id : currentId)
             return created
         } catch (error) {
             setJournals((current) => current.filter((journal) => journal.id !== tempId))
+            setSelectedJournalId((currentId) => currentId === tempId ? previousSelectedId : currentId)
             throw error
         }
     }
@@ -244,7 +249,6 @@ function JournalContextProvider({children}){
     }
 
     const selectJournal = (id) => {
-        if (isPending(id)) return // the real id (and its trades) only exist once the server has answered
         setSelectedJournalId(id)
     }
 

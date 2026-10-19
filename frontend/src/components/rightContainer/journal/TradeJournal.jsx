@@ -94,6 +94,20 @@ function TradeJournal({ view = 'trades', journal, onAddTrade, onUpdateTrade, onD
     return <EmptyWorkspace onCreate={onOpenCreateForm} />
   }
 
+  if (journal.syncState === 'saving') {
+    return (
+      <section aria-busy="true" className="rounded-xl border border-zinc-200 bg-white/75 p-6 shadow-card dark:border-white/[0.10] dark:bg-panel/75 dark:shadow-none">
+        <div className="flex items-center gap-3">
+          <span aria-hidden="true" className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-700 dark:border-white/20 dark:border-t-zinc-200" />
+          <div>
+            <p role="status" className="text-sm font-medium text-zinc-800 dark:text-zinc-100">Creating {journal.name}…</p>
+            <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">Your journal will be ready in a moment.</p>
+          </div>
+        </div>
+      </section>
+    )
+  }
+
   const currency = journal.currency ?? DEFAULT_CURRENCY
   const isFiltered = isRangeActive(range)
   const subtitle = isFiltered
