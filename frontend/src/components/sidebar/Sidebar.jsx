@@ -1,4 +1,4 @@
-import { useContext, useEffect, useState } from "react"
+import { Suspense, lazy, useContext, useEffect, useState } from "react"
 import { createPortal } from "react-dom"
 import { useLocation, useMatch, useNavigate } from "react-router"
 import { journalContext, plannerContext } from "../../context/Context"
@@ -6,7 +6,7 @@ import JournalCard from "./JournalCard"
 import JournalCreateForm from "./JournalCreateForm"
 import PlannerCard from "./PlannerCard"
 import PlannerCreateForm from "./PlannerCreateForm"
-import FeedbackDialog from "../feedback/FeedbackDialog"
+import DialogSkeleton from "../common/DialogSkeleton"
 import SidebarSection from "./SidebarSection"
 import { ThemeCycleButton, ThemeSegmented } from "./ThemeToggle"
 import { useFeedbackPrompt } from "../../hooks/useFeedbackPrompt"
@@ -15,6 +15,8 @@ import { CalendarIcon, ChevronsLeftIcon, FileIcon, LogoutIcon, MessageSquareIcon
 import { plannerApi } from "../../services/plannerApi"
 import { preloadPlannerPage } from "../../utils/plannerPageLoader"
 import { EASE, FADE_BASE, fade, focusRing, ghostBtn } from "./sidebarStyles"
+
+const FeedbackDialog = lazy(() => import("../feedback/FeedbackDialog"))
 
 function Sidebar({ isSidebarOpen, setIsSidebarOpen, openFormSection, setOpenFormSection }) {
   const { journals, selectedJournal, selectJournal } = useContext(journalContext)
@@ -239,13 +241,15 @@ function Sidebar({ isSidebarOpen, setIsSidebarOpen, openFormSection, setOpenForm
         </div>
       </div>
       {(isFeedbackOpen || isPromptOpen) && (
-        <FeedbackDialog
-          isAutoPrompt={isPromptOpen && !isFeedbackOpen}
-          onClose={() => {
-            setIsFeedbackOpen(false)
-            if (isPromptOpen) closePrompt()
-          }}
-        />
+        <Suspense fallback={<DialogSkeleton variant="feedback" />}>
+          <FeedbackDialog
+            isAutoPrompt={isPromptOpen && !isFeedbackOpen}
+            onClose={() => {
+              setIsFeedbackOpen(false)
+              if (isPromptOpen) closePrompt()
+            }}
+          />
+        </Suspense>
       )}
       {isLogoutConfirmOpen &&
         createPortal(

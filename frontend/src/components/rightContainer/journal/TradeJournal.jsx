@@ -13,7 +13,8 @@ import { buildTemplateFields, hasJournalContext } from '../../../utils/customFie
 import { buildFieldChoices, collectCustomFieldOptions, resolveCardFields } from '../../../utils/tradeCardFields'
 import { useTradeCardFields } from '../../../hooks/useTradeCardFields'
 import { SlidersIcon } from '../../../utils/Icons.jsx'
-import { loadTradeForm, preloadTradeForm, runWhenIdle } from '../../../utils/formLoaders'
+import { loadTradeForm, preloadTradeForm } from '../../../utils/formLoaders'
+import DialogSkeleton from '../../common/DialogSkeleton'
 
 // loaded on demand so the first paint ships less JavaScript
 const TradeForm = lazy(loadTradeForm)
@@ -30,6 +31,47 @@ const VIEWS = [
   { id: 'analysis', label: 'Analysis', path: '/analysis' }
 ]
 
+function AnalysisLoading() {
+  return (
+    <div
+      aria-busy="true"
+      className="tc-surface rounded-2xl border border-zinc-300 bg-white shadow-card dark:border-white/[0.12] dark:bg-panel dark:shadow-none"
+    >
+      <span role="status" className="sr-only">Loading analysis…</span>
+      <div aria-hidden="true" className="p-5 pb-3 sm:p-6 sm:pb-4">
+        <div className="h-3 w-16 animate-pulse rounded bg-zinc-200 dark:bg-white/[0.08]" />
+        <div className="mt-2 h-8 w-32 animate-pulse rounded bg-zinc-200 dark:bg-white/[0.08]" />
+        <div className="mt-2 h-3 w-40 animate-pulse rounded bg-zinc-100 dark:bg-white/[0.05]" />
+      </div>
+      <div aria-hidden="true" className="px-3 pb-4 sm:px-4">
+        <div className="h-52 animate-pulse rounded-xl bg-zinc-100 dark:bg-white/[0.04]" />
+      </div>
+      <div aria-hidden="true" className="grid grid-cols-2 gap-6 border-t border-zinc-300 p-5 sm:grid-cols-3 sm:p-6 md:grid-cols-5 dark:border-white/[0.12]">
+        {Array.from({ length: 5 }, (_, index) => (
+          <div key={index}>
+            <div className="h-3 w-20 animate-pulse rounded bg-zinc-100 dark:bg-white/[0.05]" />
+            <div className="mt-2 h-6 w-24 animate-pulse rounded bg-zinc-200 dark:bg-white/[0.08]" />
+            <div className="mt-2 h-3 w-28 animate-pulse rounded bg-zinc-100 dark:bg-white/[0.05]" />
+          </div>
+        ))}
+      </div>
+      <div aria-hidden="true" className="grid gap-x-12 gap-y-6 border-t border-zinc-300 p-5 sm:p-6 md:grid-cols-2 dark:border-white/[0.12]">
+        {[0, 1].map((group) => (
+          <div key={group}>
+            <div className="mb-3 h-3 w-24 animate-pulse rounded bg-zinc-100 dark:bg-white/[0.05]" />
+            {Array.from({ length: 5 }, (_, index) => (
+              <div key={index} className="flex justify-between border-b border-zinc-200 py-3 dark:border-white/[0.06]">
+                <div className="h-3 w-28 animate-pulse rounded bg-zinc-100 dark:bg-white/[0.05]" />
+                <div className="h-3 w-16 animate-pulse rounded bg-zinc-200 dark:bg-white/[0.08]" />
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function TradeJournal({ view = 'trades', journal, onAddTrade, onUpdateTrade, onDeleteTrade, onUploadTradeImage, onSaveContext, onRetryTrade, onDiscardTrade, onOpenCreateForm }) {
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [editingTrade, setEditingTrade] = useState(null)
@@ -41,8 +83,10 @@ function TradeJournal({ view = 'trades', journal, onAddTrade, onUpdateTrade, onD
   const [isExportOpen, setIsExportOpen] = useState(false)
   const [isMentorOpen, setIsMentorOpen] = useState(false)
 
-  // fetch the form's code while the browser is idle so the drawer opens instantly on the first click
-  useEffect(() => runWhenIdle(preloadTradeForm), [])
+  // Start loading the form as soon as the journal is mounted, so an immediate first click is ready.
+  useEffect(() => {
+    preloadTradeForm()
+  }, [])
 
   const allTrades = journal?.trades
   // newest first, so a trade you just logged is the first card
@@ -167,7 +211,7 @@ function TradeJournal({ view = 'trades', journal, onAddTrade, onUpdateTrade, onD
       </div>
 
       {isContextOpen && (
-        <Suspense fallback={null}>
+        <Suspense fallback={<DialogSkeleton variant="context" />}>
           <JournalContextDialog
             journalId={journal.id}
             journalName={journal.name}
@@ -179,7 +223,7 @@ function TradeJournal({ view = 'trades', journal, onAddTrade, onUpdateTrade, onD
       )}
 
       {isMentorOpen && (
-        <Suspense fallback={null}>
+        <Suspense fallback={<DialogSkeleton variant="mentor" />}>
           <AiMentorDialog
             journalId={journal.id}
             journalName={journal.name}
@@ -242,7 +286,7 @@ function TradeJournal({ view = 'trades', journal, onAddTrade, onUpdateTrade, onD
           </button>
         </div>
       ) : view === 'analysis' ? (
-        <Suspense fallback={null}>
+        <Suspense fallback={<AnalysisLoading />}>
           <TradeAnalysis
             trades={visibleTrades}
             currency={currency}

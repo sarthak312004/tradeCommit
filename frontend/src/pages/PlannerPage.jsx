@@ -7,7 +7,7 @@ import PlannerCalendar from '../components/rightContainer/planner/PlannerCalenda
 import PlannerJournalLink from '../components/rightContainer/planner/PlannerJournalLink'
 import { todayKey } from '../utils/calendar'
 import { CalendarIcon } from '../utils/Icons.jsx'
-import { loadPlanForm, preloadPlanForm, runWhenIdle } from '../utils/formLoaders'
+import { loadPlanForm, preloadPlanForm } from '../utils/formLoaders'
 
 const pageBody = 'subtle-scrollbar min-h-0 flex-1 overflow-y-auto p-6 md:p-8'
 const PlanForm = lazy(loadPlanForm)
@@ -17,8 +17,10 @@ function PlannerWorkspace({ planner }) {
   // null = drawer closed, { entry: null, date } = new plan, { entry } = editing
   const [formState, setFormState] = useState(null)
 
-  // fetch the form's code while the browser is idle so the drawer opens instantly on the first click
-  useEffect(() => runWhenIdle(preloadPlanForm), [])
+  // Start loading the form as soon as the planner is mounted, so an immediate first click is ready.
+  useEffect(() => {
+    preloadPlanForm()
+  }, [])
 
   const handleSubmit = (values, prepare) =>
     formState.entry ? updateEntry(formState.entry.id, values, prepare) : addEntry(values, prepare)
