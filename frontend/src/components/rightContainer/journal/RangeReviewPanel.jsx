@@ -5,6 +5,7 @@ import { focusRing } from '../../common/controlStyles'
 import ListenControls from './ListenControls'
 import MentorLoader from './MentorLoader'
 import { Review } from './ReviewReport'
+import ReviewDownloadButton from './ReviewDownloadButton'
 import { EmptyState, ReviewSkeleton, allowanceText, buttonPrimary, buttonQuiet, errorText, mondayOf, resolveLock, shiftDays } from './reviewParts'
 
 // Longest range one review may cover. The server enforces the same limit (AI_RANGE_MAX_DAYS, default 366).
@@ -353,11 +354,14 @@ function RangeReviewPanel({ journalId, currency, seed, journalRange, earliestTra
         )}
         <div className="flex flex-wrap items-center justify-between gap-2">
           <ListenControls review={review} period="range" />
-          {data.generatedAt && (
-            <span className="text-[11px] text-zinc-500 dark:text-zinc-400">
-              Written {new Date(data.generatedAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
-            </span>
-          )}
+          <div className="flex items-center gap-1">
+            {data.generatedAt && (
+              <span className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                Written {new Date(data.generatedAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+              </span>
+            )}
+            <ReviewDownloadButton review={review} period="range" from={range.from} to={range.to} generatedAt={data.generatedAt} stats={data.stats} currency={currency} />
+          </div>
         </div>
         <Review key={`${data.id ?? ''}-${data.generatedAt ?? ''}`} review={review} period="range" stats={data.stats} currency={currency} />
       </div>

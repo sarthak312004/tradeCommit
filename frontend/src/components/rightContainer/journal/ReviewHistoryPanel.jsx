@@ -5,6 +5,7 @@ import { getRangeReview, listReviewHistory } from '../../../services/aiRangeRevi
 import { formatDateKey, formatMoney, toneOf } from '../../../utils/tradeAnalytics'
 import { focusRing } from '../../common/controlStyles'
 import ListenControls from './ListenControls'
+import ReviewDownloadButton from './ReviewDownloadButton'
 import { Review } from './ReviewReport'
 import { DISCIPLINE, EmptyState, Pill, ReviewSkeleton, buttonPrimary, buttonQuiet, errorText, moneyTone } from './reviewParts'
 
@@ -246,7 +247,10 @@ function ReviewHistoryPanel({ journalId, currency, onUpdate }) {
             )}
             <div className="flex flex-wrap items-center justify-between gap-2">
               <ListenControls review={data.review} period={period} />
-              {data.generatedAt && <span className="text-[11px] text-zinc-500 dark:text-zinc-400">Written {writtenAt(data.generatedAt)}</span>}
+              <div className="flex items-center gap-1">
+                {data.generatedAt && <span className="text-[11px] text-zinc-500 dark:text-zinc-400">Written {writtenAt(data.generatedAt)}</span>}
+                <ReviewDownloadButton review={data.review} period={period} from={selected.start} to={selected.end} generatedAt={data.generatedAt} stats={stats} currency={currency} />
+              </div>
             </div>
             <Review key={`${selected.kind}:${selected.id}:${data.generatedAt ?? ''}`} review={data.review} period={period} stats={stats} currency={currency} />
           </div>
