@@ -72,18 +72,20 @@ const loadWeek = async (req) => {
     .createHash("sha256")
     .update(
       JSON.stringify({
+        mode: journal.mode ?? "live",
         strategy,
         attributes: (journal.context?.attributes ?? []).map(({ label, type }) => [label, type]),
         plans: planners.length ? [planners.map((planner) => String(planner._id)), planEntries.map((entry) => [String(entry._id), new Date(entry.updatedAt ?? 0).getTime()])] : [],
       })
     )
     .digest("hex");
-  // NOTE: inputHash's shape is unchanged on purpose, so reviews saved before this update are not flagged stale
+  // Include mode in the hash so a live/backtest switch invalidates a review generated under different assumptions.
   const inputHash = crypto
     .createHash("sha256")
     .update(
       JSON.stringify({
         weekStart,
+        mode: journal.mode ?? "live",
         strategy,
         attributes: (journal.context?.attributes ?? []).map(({ label, type }) => [label, type]),
         trades: allTradesToDate.map((trade) => [String(trade._id), new Date(trade.updatedAt ?? 0).getTime()]),

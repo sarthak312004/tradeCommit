@@ -4,6 +4,7 @@ import { formatDateKey } from '../../../utils/tradeAnalytics'
 import { SERIF } from '../../auth/authStyles'
 import { stepEnter } from '../../feedback/formParts'
 import { focusRing } from '../../common/controlStyles'
+import { distinctNextActions } from '../../../utils/reviewActions'
 import { Clamp, Collapsible, DISCIPLINE, PERIOD_WORDS, PLAN_STATUS, Pill, RULE_STATUS, STRATEGY_VERDICT, TradeChips, WeekStats, listBox } from './reviewParts'
 
 const COMMITMENT = {
@@ -443,6 +444,7 @@ export function Review({ review, period = 'week', stats = null, currency }) {
   const hasPlan = Boolean(review.planAlignment && (review.planAlignment.summary || review.planAlignment.days?.length))
   const hasNoticed = review.strengths.length > 0 || review.issues.length > 0
   const flywheel = review.flywheel ?? null
+  const nextActions = distinctNextActions(review)
 
   return (
     <article className="space-y-9">
@@ -455,7 +457,7 @@ export function Review({ review, period = 'week', stats = null, currency }) {
 
       {flywheel && <Flywheel flywheel={flywheel} />}
 
-      {review.nextWeek.length > 0 && <NextSteps actions={review.nextWeek} title={words.next} />}
+      {nextActions.length > 0 && <NextSteps actions={nextActions} title={words.next} />}
 
       {hasNoticed && (
         <div className="grid gap-x-8 gap-y-8 sm:grid-cols-2">

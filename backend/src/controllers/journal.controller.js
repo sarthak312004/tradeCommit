@@ -83,6 +83,7 @@ const serializeJournal = (journal) => ({
   name: journal.journalName,
   journalName: journal.journalName,
   description: journal.description ?? "",
+  mode: journal.mode === "backtest" ? "backtest" : "live",
   currency: journal.currency ?? DEFAULT_CURRENCY,
   context: serializeContext(journal.context),
   createdAt: journal.createdAt ? new Date(journal.createdAt).toISOString() : new Date().toISOString(),
@@ -105,7 +106,7 @@ export const getAllJournals = asyncHandler(async (req, res) => {
 });
 
 export const createJournal = asyncHandler(async (req, res) => {
-  const { journalName, name, description, currency } = req.body ?? {};
+  const { journalName, name, description, currency, mode } = req.body ?? {};
   const trimmedName = (journalName ?? name)?.trim();
   const normalizedCurrency = currency === undefined || currency === null || currency === "" ? DEFAULT_CURRENCY : normalizeCurrency(currency);
 
@@ -115,6 +116,8 @@ export const createJournal = asyncHandler(async (req, res) => {
   if (!isValidCurrency(normalizedCurrency)) {
     throw new ApiError(400, "Unsupported currency code");
   }
+  const normalizedMode = mode === undefined ? "live" : mode;
+  if (!["live", "backtest"].includes(normalizedMode)) throw new ApiError(400, "Journal mode must be live or backtest");
   if (description !== undefined && typeof description !== "string") {
     throw new ApiError(400, "Journal description must be a string");
   }
@@ -123,6 +126,7 @@ export const createJournal = asyncHandler(async (req, res) => {
     journalName: trimmedName,
     description: description?.trim(),
     currency: normalizedCurrency,
+    mode: normalizedMode,
     owner: req.user._id,
   });
 
@@ -138,7 +142,7 @@ export const createJournal = asyncHandler(async (req, res) => {
 
 export const updateJournal = asyncHandler(async (req, res) => {
   const { journalId } = req.params;
-  const { journalName, name, context, applyToExistingTrades } = req.body ?? {};
+  const { journalName, name, context, mode, applyToExistingTrades } = req.body ?? {};
   // true (default) = also update trades logged before; false = only trades created from now on
   if (applyToExistingTrades !== undefined && typeof applyToExistingTrades !== "boolean") {
     throw new ApiError(400, "applyToExistingTrades must be true or false");
@@ -146,6 +150,11 @@ export const updateJournal = asyncHandler(async (req, res) => {
   const applyToExisting = applyToExistingTrades !== false;
   const rawName = journalName ?? name;
   const update = {};
+
+  if (mode !== undefined) {
+    if (!["live", "backtest"].includes(mode)) throw new ApiError(400, "Journal mode must be live or backtest");
+    update.mode = mode;
+  }
 
   if (rawName !== undefined) {
     const trimmedName = typeof rawName === "string" ? rawName.trim() : "";

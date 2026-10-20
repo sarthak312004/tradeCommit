@@ -1,6 +1,7 @@
 import { computeAnalytics, computeLeakEvidence, computeWeekEvidence, dateKey, mondayOf, weeklyHistory } from "./tradeStats.js";
-import { buildPlanSection, commitmentBlock, leakLines, money, pct, plain, rText, statsBlock, SYSTEM_PROMPT, tradeDetail, tradeLine } from "./aiMentorPrompt.js";
+import { buildPlanSection, checkboxLine, commitmentBlock, leakLines, money, pct, plain, rText, statsBlock, SYSTEM_PROMPT, tradeDetail, tradeLine } from "./aiMentorPrompt.js";
 import { htmlToPlainText } from "./richText.js";
+import { inspectMentorData, MODE_SPECIFIC_MENTOR_INSTRUCTIONS } from "./mentorDataQuality.js";
 
 // Same JSON schema and sanitiser as the weekly review (the UI renders both with the same component). Only the
 // instructions and the prompt change: the trader picks any stretch of dates, so a swing trader's whole campaign
@@ -43,6 +44,7 @@ const weekBreakdown = (rangeTrades, currency) => {
 export const buildRangePrompt = ({ journal, rangeStart, rangeEnd, rangeTrades, priorTrades, allTradesToDate, planners = [], planEntries = [], plansTruncated = false, lastCommitment = null }) => {
   const currency = journal.currency ?? "USD";
   const context = journal.context ?? {};
+  const quality = inspectMentorData({ journal, trades: rangeTrades });
 
   const detailed = rangeTrades.slice(-MAX_RANGE_DETAILED);
   const condensed = rangeTrades.slice(0, rangeTrades.length - detailed.length).slice(-MAX_RANGE_CONDENSED);
@@ -69,10 +71,10 @@ export const buildRangePrompt = ({ journal, rangeStart, rangeEnd, rangeTrades, p
     evidence.riskPerTrade
       ? `risk per trade at the logged stop: average ${plain(evidence.riskPerTrade.avg, currency)}, smallest ${plain(evidence.riskPerTrade.min, currency)}, largest ${plain(evidence.riskPerTrade.max, currency)}`
       : "risk per trade: cannot be computed (no stop losses logged)",
-    `trades opened after a losing trade the same day: ${evidence.tradesTakenAfterSameDayLoss}`,
+    `trades opened after a losing trade the same day: ${leak.lookedBackfilled ? "not assessed (shared dates may be batch logging)" : evidence.tradesTakenAfterSameDayLoss}`,
     `closed losses larger than 1.5R (stop not respected or heavy slippage): ${evidence.lossesBeyondOneAndAHalfR}`,
     `trades with written notes: ${evidence.tradesWithNotes} of ${evidence.tradeCount}`,
-    ...evidence.checkboxProperties.map((box) => `checkbox "${box.label}": ticked on ${box.yes}, not ticked on ${box.no}`),
+    ...evidence.checkboxProperties.map(checkboxLine),
     `by direction: ${evidence.byDirection.map((g) => `${g.name} ${g.trades} trades ${money(g.net, currency)} (${g.wins} won)`).join("; ") || "none closed"}`,
     `by instrument: ${evidence.byAsset.map((g) => `${g.name} ${g.trades} trades ${money(g.net, currency)} (${g.wins} won)`).join("; ") || "none closed"}`,
     `closed trades in the whole journal up to the end of this period: ${overall.closedTrades}`,
@@ -91,7 +93,10 @@ export const buildRangePrompt = ({ journal, rangeStart, rangeEnd, rangeTrades, p
   const planSection = buildPlanSection({ planners, planEntries: comparablePlans, shown: detailed, extraTrades: condensed, weekStart: rangeStart, weekEnd: rangeEnd, currency });
 
   const prompt = [
-    `JOURNAL: "${journal.journalName}" | currency ${currency}`,
+    `JOURNAL: "${journal.journalName}" | currency ${currency} | mode ${quality.mode}`,
+    MODE_SPECIFIC_MENTOR_INSTRUCTIONS[quality.mode],
+    "=== DATA QUALITY / LIMITATIONS (computed checks; do not ignore) ===",
+    ...quality.lines,
     journal.description ? `Journal description: ${journal.description}` : null,
     `PERIOD UNDER REVIEW: ${rangeStart} to ${rangeEnd} (inclusive), chosen by the trader`,
     "",

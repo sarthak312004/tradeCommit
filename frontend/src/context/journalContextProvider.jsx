@@ -88,6 +88,7 @@ const normalizeJournalForFrontend = (journal) => ({
     name: journal.name ?? journal.journalName ?? "Untitled journal",
     journalName: journal.journalName ?? journal.name ?? "Untitled journal",
     description: journal.description ?? "",
+    mode: journal.mode === "backtest" ? "backtest" : "live",
     currency: journal.currency ?? DEFAULT_CURRENCY,
     context: normalizeContext(journal.context),
     createdAt: journal.createdAt ?? new Date().toISOString(),
@@ -197,6 +198,19 @@ function JournalContextProvider({children}){
         }
     }
 
+    const updateJournalMode = async (id, mode) => {
+        if (isPending(id)) throw new Error("This journal is still being created. Try again in a moment.")
+        if (!["live", "backtest"].includes(mode)) throw new Error("Journal mode must be live or backtest")
+        const response = await fetch(`${API_BASE}/${id}`, {
+            method: "PATCH", credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ mode })
+        })
+        const updated = normalizeJournalForFrontend(await readJson(response))
+        setJournals((current) => current.map((journal) => journal.id === id ? { ...journal, mode: updated.mode } : journal))
+        return updated.mode
+    }
+
     const updateJournal = async (id, name) => {
         if (isPending(id)) return // still being saved; there is nothing on the server to rename yet
         const trimmed = name.trim()
@@ -213,13 +227,13 @@ function JournalContextProvider({children}){
     }
 
     // Saves the journal's strategy description and default trade properties (see JournalContextDialog).
-    const updateJournalContext = async (id, context, { applyToExisting = true } = {}) => {
+    const updateJournalContext = async (id, context, { applyToExisting = true, mode } = {}) => {
         if (isPending(id)) throw new Error("This journal is still being created. Try again in a moment.")
         const response = await fetch(`${API_BASE}/${id}`, {
             method: "PATCH",
             credentials: "include",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ context, applyToExistingTrades: applyToExisting })
+            body: JSON.stringify({ context, applyToExistingTrades: applyToExisting, ...(mode ? { mode } : {}) })
         })
 
         const saved = normalizeJournalForFrontend(await readJson(response))
@@ -229,6 +243,7 @@ function JournalContextProvider({children}){
         setJournals((current) => current.map((journal) => journal.id === id ? {
             ...journal,
             context: saved.context,
+            mode: saved.mode,
             trades: journal.trades.map((trade) => savedFields.has(String(trade.id)) ? { ...trade, customFields: savedFields.get(String(trade.id)) } : trade)
         } : journal))
         return saved.context
@@ -388,6 +403,7 @@ function JournalContextProvider({children}){
             selectedJournal,
             createJournal,
             updateJournal,
+            updateJournalMode,
             updateJournalContext,
             deleteJournal,
             selectJournal,

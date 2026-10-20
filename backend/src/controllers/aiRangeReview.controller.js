@@ -90,10 +90,10 @@ const loadRange = async ({ ownerId, journalId, start, end }) => {
   const plansFingerprint = planners.length ? [planners.map((planner) => String(planner._id)), planEntries.map((entry) => [String(entry._id), new Date(entry.updatedAt ?? 0).getTime()])] : [];
 
   // strategy, custom fields and connected plans without the trades: a change here unlocks a refresh on its own
-  const contextHash = crypto.createHash("sha256").update(JSON.stringify({ strategy, attributes, plans: plansFingerprint })).digest("hex");
+  const contextHash = crypto.createHash("sha256").update(JSON.stringify({ mode: journal.mode ?? "live", strategy, attributes, plans: plansFingerprint })).digest("hex");
   const inputHash = crypto
     .createHash("sha256")
-    .update(JSON.stringify({ start, end, strategy, attributes, trades: rangeTrades.map((trade) => [String(trade._id), new Date(trade.updatedAt ?? 0).getTime()]), plans: plansFingerprint }))
+    .update(JSON.stringify({ start, end, mode: journal.mode ?? "live", strategy, attributes, trades: rangeTrades.map((trade) => [String(trade._id), new Date(trade.updatedAt ?? 0).getTime()]), plans: plansFingerprint }))
     .digest("hex");
 
   return {

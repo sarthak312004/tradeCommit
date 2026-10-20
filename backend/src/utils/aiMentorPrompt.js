@@ -1,5 +1,6 @@
 import { addDays, computeAnalytics, computeLeakEvidence, computeWeekEvidence, dateKey, sampleStrength, tradePnl, tradeR, tradeRisk, weeklyHistory } from "./tradeStats.js";
 import { htmlToPlainText } from "./richText.js";
+import { inspectMentorData, MODE_SPECIFIC_MENTOR_INSTRUCTIONS } from "./mentorDataQuality.js";
 
 const MAX_WEEK_TRADES = 40; // trades sent in full detail
 const MAX_HISTORY_TRADES = 40; // earlier trades sent as one short line each
@@ -112,6 +113,7 @@ export const REVIEW_SCHEMA = {
 export const SYSTEM_PROMPT = `You are an experienced, candid trading mentor reviewing one trader's journal for one week. You are reviewing PROCESS and DISCIPLINE first and results second.
 
 Your job:
+0. Follow the journal-mode-specific instructions and data-quality notes in the user prompt. Never treat unknown/missing properties as negative evidence; qualify unsupported claims.
 1. Read the trader's written strategy and break it into concrete, checkable rules (entry conditions, risk per trade, stop-loss use, position sizing, trading hours, instruments, max trades, news days, anything else they wrote).
 2. Compare each rule with what the trader ACTUALLY did in this week's trade logs (prices, stops, sizes, notes, custom properties) and decide: followed, broken, or unclear (the logs don't contain enough to tell). Cite the trades involved using their T-numbers (e.g. "T3").
 3. Separate outcome from process. A loss that followed every rule is a good trade. A win that broke the rules is a warning, not a success. Say so plainly.
@@ -150,6 +152,8 @@ STAY INSIDE THE EVIDENCE (a review that overreaches costs the trader trust, so t
 - A loss that closes at exactly -1R shows that the stop was logged and used consistently. In a trade log, with exit prices typed in by the trader, it does not prove discipline under pressure, slippage or gaps. Do not call stop-loss execution "impeccable" or "perfect".
 - Do not name an emotion (revenge, FOMO, fear, greed, tilt) unless the trader's own notes use that word or describe it. When they do, write "your note on T14 says FOMO". Otherwise describe the behaviour only (for example "entered a third time on the same instrument after two stop-outs").
 - If the facts say the trades look backfilled (many trades on one date), the dates are probably the logging date and not the trade dates. Then do not comment on market phases, days of the week, trends across time or live psychology. Judge rule-following and the numbers only, and say that real trade dates would let the review see more.
+- When the dates look backfilled or batch-logged, the T-numbers only show the order the trades were LOGGED, not the order they were taken. Then never call trades "consecutive", "repeated", "re-entries" or "after a loss", and never describe a sequence. Group by instrument or by property instead ("3 trades on TECHM"), and say the shared date once in the whole review (in the summary or the logging-gap issue), not in every section.
+- Do not repeat the same point in several sections. Each leak, issue, rule check and action says something the others do not. Quote an average R or a win rate only from the facts block; never work out a new average yourself.
 - A group of one to three trades is an observation, not a pattern. Say "in these 3 trades", never "this instrument is choppy" or "clear continuation names".
 - Every count you write must be reconcilable. Use counts from the facts block or count the trades you list. If you say "4 trades", name exactly those 4 in "trades". Never list a few examples after "all" or "N of M" claims. If you cannot name them all, give no number.
 - Plans that were not taken, and days off, are neutral. Never invent a reason for anything the notes do not explain.
@@ -173,6 +177,11 @@ export const plain = (value, currency) => (value === null || value === undefined
 export const pct = (value) => (value === null || value === undefined ? "n/a" : `${Math.round(value * 100)}%`);
 export const ratio = (value) => (value === null || value === undefined ? "n/a" : value.toFixed(2));
 export const rText = (value) => (value === null || value === undefined ? "n/a" : `${value.toFixed(2)}R`);
+export const checkboxLine = (box) => {
+  const split = (answer, closed, avgR) => (closed ? `${answer} averaged ${rText(avgR)} over ${closed} closed trade(s)` : null);
+  const results = [split("yes", box.yesClosed, box.yesAvgR), split("no", box.noClosed, box.noAvgR)].filter(Boolean);
+  return `checkbox "${box.label}": confirmed yes on ${box.yes}, confirmed no on ${box.no}, unknown/unrecorded on ${box.unknown ?? 0}${results.length ? ` (${results.join("; ")})` : ""}`;
+};
 
 export const htmlToText = (html = "") =>
   String(html)
@@ -251,25 +260,28 @@ export const leakLines = (leak, currency, { hasPlanner = false } = {}) => {
   }
 
   const re = leak.reEntry;
-  if (re.count) {
-    lines.push(`re-entries (a trade on an instrument that had already lost earlier the same day): ${re.count}`);
-    lines.push(`  ${groupLine("re-entries", re.group, currency)}`);
-    lines.push(`  ${groupLine("all other trades", re.rest, currency)}`);
-    re.chains.forEach((chain) =>
-      lines.push(`  sequence on ${chain.asset} ${chain.day}: ${chain.count} entries in order (${chain.entries.join(", ")}); ${chain.reEntries} of them were opened right after a losing entry on this instrument; net of the sequence ${money(chain.net, currency)}`)
-    );
+  if (leak.lookedBackfilled) {
+    lines.push("chronology-dependent re-entry and after-loss comparisons suppressed: many trades share one recorded date, so actual execution order is not reliable from these records");
   } else {
-    lines.push("re-entries after a same-day loss on the same instrument: none");
-  }
-
-  if (leak.afterLoss.group.count) {
-    lines.push(`${groupLine("trades opened after any same-day loss", leak.afterLoss.group, currency)}`);
-    lines.push(`${groupLine("trades not opened after a same-day loss", leak.afterLoss.rest, currency)}`);
+    if (re.count) {
+      lines.push(`re-entries (a trade on an instrument that had already lost earlier the same day): ${re.count}`);
+      lines.push(`  ${groupLine("re-entries", re.group, currency)}`);
+      lines.push(`  ${groupLine("all other trades", re.rest, currency)}`);
+      re.chains.forEach((chain) =>
+        lines.push(`  sequence on ${chain.asset} ${chain.day}: ${chain.count} entries in order (${chain.entries.join(", ")}); ${chain.reEntries} of them were opened right after a losing entry on this instrument; net of the sequence ${money(chain.net, currency)}`)
+      );
+    } else {
+      lines.push("re-entries after a same-day loss on the same instrument: none");
+    }
+    if (leak.afterLoss.group.count) {
+      lines.push(`${groupLine("trades opened after any same-day loss", leak.afterLoss.group, currency)}`);
+      lines.push(`${groupLine("trades not opened after a same-day loss", leak.afterLoss.rest, currency)}`);
+    }
   }
 
   leak.checkboxSplits.forEach((box) => {
     if (!box.ticked.count || !box.notTicked.count) return;
-    lines.push(`checkbox "${box.label}": ${groupLine("ticked", box.ticked, currency)} | ${groupLine("not ticked", box.notTicked, currency)}`);
+    lines.push(`checkbox "${box.label}": ${groupLine("confirmed yes", box.ticked, currency)} | ${groupLine("confirmed no", box.notTicked, currency)}${box.unknown?.count ? ` | ${box.unknown.count} unknown/unrecorded (excluded from comparison)` : ""}`);
   });
 
   if (leak.riskSpread) {
@@ -375,6 +387,7 @@ export const buildPlanSection = ({ planners, planEntries, shown, extraTrades = [
 export const buildMentorPrompt = ({ journal, weekStart, weekEnd, weekTrades, priorTrades, allTradesToDate, planners = [], planEntries = [], lastCommitment = null }) => {
   const currency = journal.currency ?? "USD";
   const context = journal.context ?? {};
+  const quality = inspectMentorData({ journal, trades: weekTrades });
 
   const shown = weekTrades.slice(0, MAX_WEEK_TRADES);
   const tradeLabels = {};
@@ -399,10 +412,10 @@ export const buildMentorPrompt = ({ journal, weekStart, weekEnd, weekTrades, pri
     evidence.riskPerTrade
       ? `risk per trade at the logged stop: average ${plain(evidence.riskPerTrade.avg, currency)}, smallest ${plain(evidence.riskPerTrade.min, currency)}, largest ${plain(evidence.riskPerTrade.max, currency)}`
       : "risk per trade: cannot be computed (no stop losses logged)",
-    `trades opened after a losing trade the same day: ${evidence.tradesTakenAfterSameDayLoss}`,
+    `trades opened after a losing trade the same day: ${leak.lookedBackfilled ? "not assessed (shared dates may be batch logging)" : evidence.tradesTakenAfterSameDayLoss}`,
     `closed losses larger than 1.5R (stop not respected or heavy slippage): ${evidence.lossesBeyondOneAndAHalfR}`,
     `trades with written notes: ${evidence.tradesWithNotes} of ${evidence.tradeCount}`,
-    ...evidence.checkboxProperties.map((box) => `checkbox "${box.label}": ticked on ${box.yes}, not ticked on ${box.no}`),
+    ...evidence.checkboxProperties.map(checkboxLine),
     `by direction: ${evidence.byDirection.map((g) => `${g.name} ${g.trades} trades ${money(g.net, currency)} (${g.wins} won)`).join("; ") || "none closed"}`,
     `by instrument: ${evidence.byAsset.map((g) => `${g.name} ${g.trades} trades ${money(g.net, currency)} (${g.wins} won)`).join("; ") || "none closed"}`,
     `closed trades in the whole journal up to the end of this week: ${overall.closedTrades}`,
@@ -418,7 +431,10 @@ export const buildMentorPrompt = ({ journal, weekStart, weekEnd, weekTrades, pri
   const planSection = buildPlanSection({ planners, planEntries, shown, weekStart, weekEnd, currency });
 
   const prompt = [
-    `JOURNAL: "${journal.journalName}" | currency ${currency}`,
+    `JOURNAL: "${journal.journalName}" | currency ${currency} | mode ${quality.mode}`,
+    MODE_SPECIFIC_MENTOR_INSTRUCTIONS[quality.mode],
+    "=== DATA QUALITY / LIMITATIONS (computed checks; do not ignore) ===",
+    ...quality.lines,
     journal.description ? `Journal description: ${journal.description}` : null,
     `WEEK UNDER REVIEW: ${weekStart} (Monday) to ${weekEnd} (Sunday)`,
     "",

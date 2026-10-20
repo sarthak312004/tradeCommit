@@ -186,15 +186,28 @@ export const computeWeekEvidence = (weekTrades) => {
 
   // checkbox properties (e.g. "Followed plan?") summarised across the week's trades
   const checkboxes = new Map();
-  for (const { trade } of items) {
+  for (const { trade, r } of items) {
     for (const field of trade.customFields ?? []) {
       if (field.type !== "checkbox") continue;
-      const entry = checkboxes.get(field.label) ?? { label: field.label, yes: 0, no: 0 };
-      if (field.value === true) entry.yes += 1;
-      else entry.no += 1;
+      const entry = checkboxes.get(field.label) ?? { label: field.label, yes: 0, no: 0, unknown: 0, yesR: [], noR: [] };
+      if (field.value === true) {
+        entry.yes += 1;
+        if (r !== null) entry.yesR.push(r);
+      } else if (field.value === false) {
+        entry.no += 1;
+        if (r !== null) entry.noR.push(r);
+      } else entry.unknown += 1;
       checkboxes.set(field.label, entry);
     }
   }
+  const averageR = (values) => (values.length ? sum(values) / values.length : null);
+  const checkboxSummaries = [...checkboxes.values()].map(({ yesR, noR, ...box }) => ({
+    ...box,
+    yesClosed: yesR.length,
+    noClosed: noR.length,
+    yesAvgR: averageR(yesR),
+    noAvgR: averageR(noR),
+  }));
 
   return {
     tradeCount: items.length,
@@ -207,7 +220,7 @@ export const computeWeekEvidence = (weekTrades) => {
     tradesTakenAfterSameDayLoss: afterSameDayLoss,
     lossesBeyondOneAndAHalfR: closed.filter((item) => item.r !== null && item.r < -1.5).length,
     tradesWithNotes: items.filter((item) => hasNote(item.trade)).length,
-    checkboxProperties: [...checkboxes.values()],
+    checkboxProperties: checkboxSummaries,
     byDirection: groupNet(closed, (trade) => (isShort(trade) ? "short" : "long")),
     byAsset: groupNet(closed, (trade) => String(trade.assetName ?? "unknown")).slice(0, 8),
   };
@@ -322,12 +335,14 @@ export const computeLeakEvidence = (trades, { planEntries = null, labelOf = () =
   for (const item of items) {
     for (const field of item.trade.customFields ?? []) {
       if (field.type !== "checkbox") continue;
-      const entry = boxes.get(field.label) ?? { label: field.label, yes: [], no: [] };
-      (field.value === true ? entry.yes : entry.no).push(item);
+      const entry = boxes.get(field.label) ?? { label: field.label, yes: [], no: [], unknown: [] };
+      if (field.value === true) entry.yes.push(item);
+      else if (field.value === false) entry.no.push(item);
+      else entry.unknown.push(item);
       boxes.set(field.label, entry);
     }
   }
-  const checkboxSplits = [...boxes.values()].map((box) => ({ label: box.label, ticked: groupStats(box.yes), notTicked: groupStats(box.no) }));
+  const checkboxSplits = [...boxes.values()].map((box) => ({ label: box.label, ticked: groupStats(box.yes), notTicked: groupStats(box.no), unknown: groupStats(box.unknown) }));
 
   const risks = items.map((item) => item.risk).filter((value) => value !== null);
   const days = new Set(items.map((item) => item.day));

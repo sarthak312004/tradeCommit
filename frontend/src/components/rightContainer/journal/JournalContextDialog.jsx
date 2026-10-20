@@ -15,6 +15,7 @@ import {
   TextIcon
 } from '../../../utils/Icons.jsx'
 import { FIELD_TYPES, MAX_CUSTOM_FIELDS, MAX_STRATEGY_LENGTH, makeFieldKey, toFormField } from '../../../utils/customFields'
+import { focusRing } from '../../common/controlStyles'
 import { ghostFooterButton, iconButtonClass } from '../../common/formStyles'
 import { cleanStrategy, richTextLength, strategyToHtml } from '../../../utils/richText'
 import { MOD_LABEL, useFormShortcuts } from '../../../hooks/useFormShortcuts'
@@ -273,11 +274,12 @@ function AddPropertyMenu({ disabled, onAdd }) {
  * properties are also added to trades that were logged before.
  * Rendered in a portal because the page header uses backdrop-blur, which would trap `fixed` children.
  */
-function JournalContextDialog({ journalId, journalName, context, onSave, onClose }) {
+function JournalContextDialog({ journalId, journalName, context, mode = "live", onSave, onClose }) {
   // the strategy is rich text: older journals hold plain text, which is turned into paragraphs once, here
   const [initialStrategy] = useState(() => strategyToHtml(context?.strategy))
   const [strategy, setStrategy] = useState(initialStrategy)
   const [strategyLength, setStrategyLength] = useState(() => richTextLength(strategyToHtml(context?.strategy)))
+  const [journalMode, setJournalMode] = useState(mode === "backtest" ? "backtest" : "live")
   const [isWide, setIsWide] = useState(readWide)
   const [attributes, setAttributes] = useState(() => (context?.attributes ?? []).map(toFormField))
   const [focusKey, setFocusKey] = useState(null)
@@ -292,8 +294,11 @@ function JournalContextDialog({ journalId, journalName, context, onSave, onClose
     dialogRef.current?.focus({ preventScroll: true })
   }, [])
 
-  const savedPayload = useMemo(() => JSON.stringify(toPayload(strategyToHtml(context?.strategy), (context?.attributes ?? []).map(toFormField))), [context])
-  const isDirty = JSON.stringify(toPayload(strategy, attributes)) !== savedPayload
+  const savedContextPayload = useMemo(() => JSON.stringify(toPayload(strategyToHtml(context?.strategy), (context?.attributes ?? []).map(toFormField))), [context])
+  const currentContextPayload = JSON.stringify(toPayload(strategy, attributes))
+  const contextDirty = currentContextPayload !== savedContextPayload
+  const savedPayload = useMemo(() => JSON.stringify({ ...toPayload(strategyToHtml(context?.strategy), (context?.attributes ?? []).map(toFormField)), mode: mode === "backtest" ? "backtest" : "live" }), [context, mode])
+  const isDirty = JSON.stringify({ ...toPayload(strategy, attributes), mode: journalMode }) !== savedPayload
   const isTooLong = strategyLength > MAX_STRATEGY_LENGTH
   const canSave = isDirty && !isSaving && !isTooLong
 
@@ -341,7 +346,7 @@ function JournalContextDialog({ journalId, journalName, context, onSave, onClose
     setIsSaving(true)
     setError('')
     try {
-      await onSave(toPayload(strategy, attributes), { applyToExisting: scope === 'all' })
+      await onSave(toPayload(strategy, attributes), { applyToExisting: contextDirty && scope === 'all', mode: journalMode })
       rememberScope(journalId, scope)
       onClose()
     } catch (saveError) {
@@ -376,7 +381,7 @@ function JournalContextDialog({ journalId, journalName, context, onSave, onClose
             </span>
             <div className="min-w-0">
               <h3 className="text-base font-semibold tracking-[-0.03em] text-zinc-900 dark:text-zinc-50">Journal context</h3>
-              <p className="mt-0.5 truncate text-xs text-zinc-600 dark:text-zinc-400">
+              <p className="truncate text-xs text-zinc-600 dark:text-zinc-400">
                 How you trade <span className="font-medium text-zinc-800 dark:text-zinc-200">{journalName}</span>
               </p>
             </div>
@@ -409,6 +414,34 @@ function JournalContextDialog({ journalId, journalName, context, onSave, onClose
             title="Strategy"
             titleId="journal-strategy-label"
             description="Entries, risk, stops, hours, what you skip. Saved with the journal and used as background for AI insights."
+            aside={
+              <div className="flex shrink-0 items-center gap-1.5 self-center">
+                <div role="group" aria-label="Journal mode" className="inline-flex items-center rounded-lg border border-[#bfdbfe] bg-[#eff6ff] p-0.5 shadow-[0_2px_8px_rgb(59_130_246/0.12)] dark:border-[#60a5fa]/30 dark:bg-[#17263a] dark:shadow-[0_2px_8px_rgb(59_130_246/0.14)]">
+                  {[
+                    { value: 'live', label: 'Live' },
+                    { value: 'backtest', label: 'Backtest' }
+                  ].map((option) => {
+                    const selected = journalMode === option.value
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        aria-pressed={selected}
+                        title={option.value === 'live' ? 'Review real execution and risk management' : 'Review historical or simulated trading data'}
+                        onClick={() => setJournalMode(option.value)}
+                        className={`h-6 cursor-pointer rounded-md px-2 text-[11px] font-medium transition-all duration-200 ${focusRing} ${
+                          selected
+                            ? 'bg-gradient-to-br from-[#dbeafe] via-[#cfe4ff] to-[#bfdbfe] text-[#1e4f91] shadow-[0_1px_3px_rgb(37_99_235/0.24),inset_0_0_0_1px_rgb(59_130_246/0.2)] dark:from-[#29466b] dark:via-[#263f60] dark:to-[#213651] dark:text-[#c2dcff] dark:shadow-[0_1px_4px_rgb(0_0_0/0.4),inset_0_0_0_1px_rgb(96_165_250/0.3)]'
+                            : 'text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200'
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            }
           >
             <div className="rounded-xl border border-zinc-300 bg-zinc-50/60 p-2 transition-colors focus-within:border-zinc-400 dark:border-white/[0.14] dark:bg-white/[0.02] dark:focus-within:border-white/30">
               <BasicRichTextEditor

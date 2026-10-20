@@ -29,6 +29,8 @@ const journalSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    // Live journals track actual execution; backtest journals analyze historical/simulated setups.
+    mode: { type: String, enum: ["live", "backtest"], default: "live", index: true },
     // ISO 4217 code every amount in this journal is expressed in. Chosen when the
     // journal is created and immutable afterwards, so existing P&L never changes meaning.
     currency: {

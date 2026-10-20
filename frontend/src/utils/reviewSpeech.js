@@ -1,6 +1,8 @@
 // Turns a mentor review into short, speakable chunks for the browser's text-to-speech.
 // Chunks are sentence-aligned so the voice keeps natural phrasing across each one.
 
+import { distinctNextActions } from './reviewActions'
+
 // Big enough that a chunk is usually a few whole sentences (fewer gaps between utterances).
 // The speech hook re-splits smaller for voices that cut off long text (Google's online voices in Chrome).
 const MAX_CHUNK = 300
@@ -165,8 +167,9 @@ export const buildReviewSpeech = (review, period = 'week') => {
     strategy.marketAdaptation ? `On adapting to the market. ${strategy.marketAdaptation}` : ''
   ])
 
-  if (review.nextWeek?.length) {
-    add(isRange ? 'Next steps' : 'Next week', [isRange ? 'For the next period.' : 'For next week.', ...review.nextWeek.map((action, index) => `${ORDINALS[index] ?? 'Also'}, ${endSentence(action)}`)])
+  const nextActions = distinctNextActions(review)
+  if (nextActions.length) {
+    add(isRange ? 'Next steps' : 'Next week', [isRange ? 'For the next period.' : 'For next week.', ...nextActions.map((action, index) => `${ORDINALS[index] ?? 'Also'}, ${endSentence(action)}`)])
   }
 
   add('Closing note', [review.mentorNote])

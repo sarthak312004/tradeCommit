@@ -247,6 +247,7 @@ function TradeJournal({ view = 'trades', journal, onAddTrade, onUpdateTrade, onD
             journalId={journal.id}
             journalName={journal.name}
             context={journalContext}
+            mode={journal.mode}
             onSave={(context, options) => onSaveContext(journal.id, context, options)}
             onClose={() => setIsContextOpen(false)}
           />

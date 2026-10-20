@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { DownloadIcon } from '../../../utils/Icons.jsx'
 import { formatMoney, formatPercent, formatR, formatRatio } from '../../../utils/tradeAnalytics'
 import { focusRing } from '../../common/controlStyles'
+import { distinctNextActions } from '../../../utils/reviewActions'
 
 const nonEmpty = (value) => typeof value === 'string' && value.trim()
 const FLY_COMMITMENT = { kept: 'kept', partly_kept: 'partly kept', not_kept: 'not kept', cannot_tell: "can't tell from the logs" }
@@ -11,7 +12,15 @@ function pdfText(value) {
   return String(value ?? '')
     .normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[–—]/g, '-')
+    .replace(/[–—−]/g, '-')
+    .replace(/[·•‧∙]/g, '-')
+    .replace(/…/g, '...')
+    .replace(/→/g, '->')
+    .replace(/←/g, '<-')
+    .replace(/≥/g, '>=')
+    .replace(/≤/g, '<=')
+    .replace(/×/g, 'x')
+    .replace(/\u00a0/g, ' ')
     .replace(/[‘’]/g, "'")
     .replace(/[“”]/g, '"')
     .replace(/₹/g, 'INR ')
@@ -87,9 +96,10 @@ function createReviewPdf(PdfConstructor, review, { from, to, generatedAt, stats,
     }
   }
 
-  if (review.nextWeek.length) {
+  const nextActions = distinctNextActions(review)
+  if (nextActions.length) {
     heading('Next-period actions')
-    review.nextWeek.forEach(bullet)
+    nextActions.forEach(bullet)
   }
   if (review.strengths.length) {
     heading('Went well')
