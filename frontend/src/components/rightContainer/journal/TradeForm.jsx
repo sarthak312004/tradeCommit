@@ -238,12 +238,17 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
     flashTimerRef.current = setTimeout(() => setFlashed({}), 1700)
   }
 
-  // Stop loss a few points away from the price, below it for a Long and above it for a Short
+  // Stop loss a few points away from the price, below it for a Long and above it for a Short.
+  // Report whether it changed so the automatic update can be highlighted without flashing untouched values.
   const applyAutoStop = (directionValue) => {
     const base = autoStopRef.current
-    if (!base || stopManualRef.current) return
+    if (!base || stopManualRef.current) return false
     const stop = directionValue === 'Short' ? base.price + base.distance : base.price - base.distance
-    if (stop > 0) setValue('stopLoss', String(roundToTick(base.price, stop)), { shouldDirty: true, shouldValidate: true })
+    if (!(stop > 0)) return false
+    const nextStop = String(roundToTick(base.price, stop))
+    if (getValues('stopLoss') === nextStop) return false
+    setValue('stopLoss', nextStop, { shouldDirty: true, shouldValidate: true })
+    return true
   }
 
   // New trade: the first live price for a symbol fills the entry price and a matching stop loss (once, so they
@@ -253,13 +258,13 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
     filledForRef.current = quote.symbol
     setValue('entry', String(quote.price), { shouldDirty: true, shouldValidate: true })
     autoStopRef.current = quote.stopDistance ? { price: quote.price, distance: quote.stopDistance } : null
-    applyAutoStop(getValues('direction'))
-    flash('entry', autoStopRef.current ? 'stopLoss' : 'entry')
+    const stopUpdated = applyAutoStop(getValues('direction'))
+    flash('entry', ...(stopUpdated ? ['stopLoss'] : []))
   }, [quote, initialTrade, setValue, getValues]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Long <-> Short flips the automatic stop loss to the other side of the price
   useEffect(() => {
-    applyAutoStop(direction)
+    if (applyAutoStop(direction)) flash('stopLoss')
   }, [direction]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // the symbol changed: prices we filled in for the old one no longer apply
@@ -526,8 +531,8 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
         className="relative flex h-full max-w-full flex-col overflow-hidden rounded-xl border border-zinc-300 bg-white shadow-2xl outline-none dark:border-white/[0.14] dark:bg-panel"
       >
         <style>{`
-          @keyframes tc-soft-flash { 0% { opacity: 0 } 30% { opacity: 1 } 100% { opacity: 0 } }
-          .tc-soft-flash { background: rgb(52 211 153 / 0.12); box-shadow: inset 0 0 0 1px rgb(52 211 153 / 0.3); animation: tc-soft-flash 1500ms cubic-bezier(0.4, 0, 0.2, 1) both }
+          @keyframes tc-soft-flash { 0% { opacity: 0 } 32% { opacity: 0.7 } 100% { opacity: 0 } }
+          .tc-soft-flash { background: rgb(52 211 153 / 0.07); box-shadow: inset 0 0 0 1px rgb(52 211 153 / 0.2); animation: tc-soft-flash 1100ms cubic-bezier(0.4, 0, 0.2, 1) both }
           @media (prefers-reduced-motion: reduce) { .tc-soft-flash { animation: none; opacity: 0 } }
         `}</style>
         <h2 id="trade-form-title" className="sr-only">{initialTrade ? 'Review trade in' : 'Add to'} {journalName}</h2>
