@@ -1,10 +1,12 @@
-import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router'
 import JournalCalendar from './JournalCalendar'
 import TradeCard from './TradeCard'
 import DateRangeFilter from './DateRangeFilter'
 import JournalActionsMenu from './JournalActionsMenu'
 import MentorOrb from './MentorOrb'
+import MentorUnlockBadge from './MentorUnlockBadge'
+import { useMentorProgress } from '../../../hooks/useMentorProgress'
 import { CalendarNudge, EmptyWorkspace, FirstTradeCard } from '../../onboarding/GetStarted'
 import { ALL_TIME, describeRangeInline, isRangeActive } from '../../../utils/dateRange'
 import { filterTradesByDate, sortTradesNewestFirst, toDateKey } from '../../../utils/tradeAnalytics'
@@ -82,6 +84,22 @@ function TradeJournal({ view = 'trades', journal, onAddTrade, onUpdateTrade, onD
   const [isContextOpen, setIsContextOpen] = useState(false)
   const [isExportOpen, setIsExportOpen] = useState(false)
   const [isMentorOpen, setIsMentorOpen] = useState(false)
+  const [isMentorMounted, setIsMentorMounted] = useState(false)
+  const [hasReadyMentorReview, setHasReadyMentorReview] = useState(false)
+
+  const openMentor = useCallback(() => {
+    setHasReadyMentorReview(false)
+    setIsMentorMounted(true)
+    setIsMentorOpen(true)
+  }, [])
+
+  const closeMentor = useCallback(() => {
+    setIsMentorOpen(false)
+  }, [])
+
+  const handleMentorReviewReady = useCallback(() => {
+    setHasReadyMentorReview(true)
+  }, [])
 
   // Start loading the form as soon as the journal is mounted, so an immediate first click is ready.
   useEffect(() => {
@@ -89,6 +107,19 @@ function TradeJournal({ view = 'trades', journal, onAddTrade, onUpdateTrade, onD
   }, [])
 
   const allTrades = journal?.trades
+  // trades that reached the server (not still saving or failed): drives the unlock progress on the mentor orb
+  const savedTradeCount = useMemo(() => (allTrades ?? []).filter((trade) => !trade.syncState).length, [allTrades])
+  const { progress: mentorProgress, celebrate: celebrateMentor } = useMentorProgress(savedTradeCount)
+  // the mentor's "All trades" period starts at this journal's first trade
+  const earliestTradeDate = useMemo(() => {
+    let earliest = null
+    for (const trade of allTrades ?? []) {
+      if (trade.syncState) continue
+      const key = toDateKey(trade.date)
+      if (key && (!earliest || key < earliest)) earliest = key
+    }
+    return earliest
+  }, [allTrades])
   // newest first, so a trade you just logged is the first card
   const visibleTrades = useMemo(() => sortTradesNewestFirst(filterTradesByDate(allTrades ?? [], range)), [allTrades, range])
 
@@ -222,16 +253,24 @@ function TradeJournal({ view = 'trades', journal, onAddTrade, onUpdateTrade, onD
         </Suspense>
       )}
 
-      {isMentorOpen && (
+      {isMentorMounted && (
         <Suspense fallback={<DialogSkeleton variant="mentor" />}>
           <AiMentorDialog
+            key={journal.id}
             journalId={journal.id}
             journalName={journal.name}
             currency={currency}
+            isOpen={isMentorOpen}
+            onReviewReady={handleMentorReviewReady}
             initialRange={isFiltered ? range : null}
-            onClose={() => setIsMentorOpen(false)}
+            earliestTradeDate={earliestTradeDate}
+            onClose={closeMentor}
+            onAddTrade={() => {
+              closeMentor()
+              handleOpenNewTrade()
+            }}
             onOpenContext={() => {
-              setIsMentorOpen(false)
+              closeMentor()
               setIsContextOpen(true)
             }}
           />
@@ -315,7 +354,26 @@ function TradeJournal({ view = 'trades', journal, onAddTrade, onUpdateTrade, onD
         </div>
       )}
 
-      {!isMentorOpen && !isFormOpen && <MentorOrb onOpen={() => setIsMentorOpen(true)} onWarm={loadAiMentor} />}
+      {mentorProgress?.completed && !mentorProgress.celebrated && !isMentorOpen && !isFormOpen && (
+        <MentorUnlockBadge
+          target={mentorProgress.target}
+          onDismiss={celebrateMentor}
+          onOpenMentor={() => {
+            celebrateMentor()
+            openMentor()
+          }}
+        />
+      )}
+
+      {!isMentorOpen && !isFormOpen && (
+        <MentorOrb
+          onOpen={openMentor}
+          onWarm={loadAiMentor}
+          progress={mentorProgress}
+          hasReadyReview={hasReadyMentorReview}
+          onLogTrade={() => handleOpenNewTrade()}
+        />
+      )}
     </section>
   )
 }

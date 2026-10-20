@@ -6,6 +6,7 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { deleteImagesFromCloudinary, uploadOnCloudinary } from "../utils/cloudinary.js";
 import { parseCustomFields } from "../utils/customFields.js";
+import { recordNewTrade } from "../utils/mentorProgress.js";
 
 const serializeTrade = (trade) => {
   const direction = trade.direction === "long" ? "Long" : "Short";
@@ -179,6 +180,12 @@ export const createTrade = asyncHandler(async (req, res) => {
     removedImageUrlsFromBody(req.body).filter((url) => !retainedImages.has(url)),
     `trading-journal/${journal._id}`
   );
+
+  try {
+    await recordNewTrade(req.user._id, parsed, trade._id);
+  } catch (error) {
+    console.error("mentor progress update failed", error);
+  }
 
   return res
     .status(201)

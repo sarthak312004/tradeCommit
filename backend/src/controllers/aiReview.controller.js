@@ -9,7 +9,7 @@ import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { buildMentorPrompt, REVIEW_SCHEMA, sanitizeReview, SYSTEM_PROMPT } from "../utils/aiMentorPrompt.js";
-import { evaluateAccess, getQuotaSnapshot, markUsageOk, releaseUsage, reserveUsage } from "../utils/aiQuota.js";
+import { evaluateAccess, getQuotaSnapshot, withUsageReservation } from "../utils/aiQuota.js";
 import { isUserBusy, markUserBusy, releaseUser } from "../utils/aiJobGuard.js";
 import { generateJson } from "../utils/gemini.js";
 import { runQueued } from "../utils/geminiQueue.js";
@@ -128,29 +128,20 @@ const generate = async (week) => {
   const ownerId = week.journal.owner;
   const { prompt, tradeLabels, hasPlanContext } = buildMentorPrompt(week);
 
-  // reserve the generation first so concurrent traders cannot overshoot the shared daily budget
-  const usage = await reserveUsage({ ownerId, journalId: week.journal._id, weekStart: week.weekStart });
-  let reachedGemini = false;
-  try {
-    const { result, model } = await runQueued(() => {
-      reachedGemini = true;
-      return generateJson({ system: SYSTEM_PROMPT, prompt, schema: REVIEW_SCHEMA });
-    });
+  // The generation is reserved first so concurrent traders cannot overshoot the shared daily budget, but it only
+  // counts once the review is saved. If Gemini is rate limited, the queue is full, the call times out or the answer
+  // is unusable, the reservation is deleted and the trader's daily/weekly allowance is untouched.
+  return withUsageReservation({ ownerId, journalId: week.journal._id, weekStart: week.weekStart }, async () => {
+    const { result, model } = await runQueued(() => generateJson({ system: SYSTEM_PROMPT, prompt, schema: REVIEW_SCHEMA }));
     const review = sanitizeReview(result, tradeLabels, { hasPlanContext, weekStart: week.weekStart, weekEnd: week.weekEnd });
     if (!review.summary || !review.headline) throw new ApiError(502, "The AI returned an incomplete review. Please try again.");
 
-    const saved = await AiReview.findOneAndUpdate(
+    return AiReview.findOneAndUpdate(
       { journal: week.journal._id, weekStart: week.weekStart },
       { $set: { owner: ownerId, inputHash: week.inputHash, contextHash: week.contextHash, reviewedTradeCount: week.weekTrades.length, model, review } },
       { upsert: true, new: true, setDefaultsOnInsert: true }
     ).lean();
-    await markUsageOk(usage._id);
-    return saved;
-  } catch (error) {
-    // turned away by the queue before Gemini was called: nothing was spent, so nothing is charged
-    if (!reachedGemini) await releaseUsage(usage._id).catch(() => {});
-    throw error;
-  }
+  });
 };
 
 // GET /api/v1/journals/:journalId/ai-review?weekStart=YYYY-MM-DD

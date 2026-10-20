@@ -1,12 +1,11 @@
 import { useState } from 'react'
-import { CheckIcon, ChevronDownIcon, ChevronRightIcon } from '../../../utils/Icons.jsx'
-import { dateKeyFromDate, formatDateKey, formatMoney, formatPercent, formatR, toneOf } from '../../../utils/tradeAnalytics'
+import { ChevronDownIcon } from '../../../utils/Icons.jsx'
+import { dateKeyFromDate, formatMoney, formatPercent, formatR, toneOf } from '../../../utils/tradeAnalytics'
 import { SERIF } from '../../auth/authStyles'
 import { stepEnter } from '../../feedback/formParts'
 import { focusRing } from '../../common/controlStyles'
 
-// Pieces shared by the weekly review, the date-range review and the review history. Moved out of AiMentorDialog.jsx
-// unchanged, except that every piece is exported and `Review` takes a `period` ('week' | 'range') for its wording.
+// Pieces shared by the review report, the date-range panel and the review history.
 
 export const PERIOD_WORDS = {
   week: { thisPeriod: 'this week', next: 'Next week', nextLower: 'next week' },
@@ -91,13 +90,23 @@ export const resolveLock = (access, quota, otherBusy = false) => {
   if (limitStillOn) return { locked: true, reason: shared.reason, message: shared.message }
 
   if (otherBusy || shared?.generating) {
-    return { locked: true, reason: 'busy_other', message: 'Another review is still being written. It will count toward your allowance; try again when it finishes.' }
+    return { locked: true, reason: 'busy_other', message: 'Another review is still being written. It counts toward your allowance only if it is delivered; try again when it finishes.' }
   }
   return { locked: !access.canGenerate, reason: access.reason, message: access.message }
 }
 
 /** "Reviews: 0/1 today - 1/3 this week", the allowance both tabs draw from. */
 export const usageLine = (usage) => (usage ? `Reviews: ${usage.day.used}/${usage.day.limit} today \u00b7 ${usage.week.used}/${usage.week.limit} this week` : '')
+
+/** "2 of 3 reviews left this week", or "none left today" while a cap is hit: what a review would draw from. */
+export const allowanceText = (usage) => {
+  if (!usage) return ''
+  const weekLeft = Math.max(usage.week.limit - usage.week.used, 0)
+  const dayLeft = Math.max(usage.day.limit - usage.day.used, 0)
+  if (dayLeft === 0) return 'No reviews left today'
+  if (weekLeft === 0) return 'No reviews left this week'
+  return `${weekLeft} of ${usage.week.limit} reviews left this week`
+}
 
 /* ---------------------------- small pieces ---------------------------- */
 
@@ -167,7 +176,7 @@ export function EmptyState({ title, children, action }) {
 
 /* ------------------------------- review ------------------------------- */
 
-// The review is split into tabs so nobody has to scroll one long page: a short Overview first, details a tap away.
+// The review itself (verdict, next steps, rules, folds) lives in ReviewReport.jsx. These are the building blocks it shares.
 
 /** Row that opens and closes its details. Rows without details render as plain rows. */
 export function Collapsible({ header, children, defaultOpen = false, hasBody = true }) {
@@ -209,390 +218,3 @@ export function Clamp({ children, className = '' }) {
     </div>
   )
 }
-
-export function SnapshotCard({ label, onClick, children, note }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex min-w-0 cursor-pointer flex-col items-start gap-2.5 rounded-xl border border-zinc-200 p-4 text-left transition-colors hover:bg-zinc-50 dark:border-white/[0.08] dark:hover:bg-white/[0.04] ${focusRing}`}
-    >
-      <span className="text-[11px] font-medium uppercase tracking-wider text-zinc-600 dark:text-zinc-400">{label}</span>
-      {children}
-      {note && <span className="text-xs text-zinc-600 dark:text-zinc-400">{note}</span>}
-    </button>
-  )
-}
-
-export function Highlight({ tone, label, text, onClick }) {
-  const dot = tone === 'positive' ? 'bg-emerald-600 dark:bg-emerald-300' : 'bg-rose-600 dark:bg-rose-300'
-  return (
-    <button type="button" onClick={onClick} className={`flex w-full cursor-pointer items-start gap-3 px-5 py-4 text-left transition-colors hover:bg-zinc-50 dark:hover:bg-white/[0.04] ${focusRing}`}>
-      <span aria-hidden="true" className={`mt-[7px] h-2 w-2 shrink-0 rounded-full ${dot}`} />
-      <span className="min-w-0 flex-1">
-        <span className="block text-[11px] font-medium uppercase tracking-wider text-zinc-600 dark:text-zinc-400">{label}</span>
-        <span className="mt-1 block text-sm font-medium leading-6 text-zinc-900 dark:text-zinc-100">{text}</span>
-      </span>
-      <ChevronRightIcon className="mt-1 h-4 w-4 shrink-0 text-zinc-500 dark:text-zinc-400" />
-    </button>
-  )
-}
-
-export function OverviewTab({ review, discipline, strategy, goTo, words }) {
-  const days = review.planAlignment?.days ?? []
-  const hasPlan = Boolean(review.planAlignment && (review.planAlignment.summary || days.length))
-  const asPlanned = days.filter((day) => day.status === 'executed_as_planned').length
-  const strength = review.strengths[0]
-  const issue = review.issues[0]
-  const firstAction = review.nextWeek[0]
-
-  return (
-    <div className="space-y-7">
-      <div>
-        <h2 className={`${SERIF} text-[26px] font-medium leading-[1.15] tracking-[-0.025em] text-zinc-900 dark:text-zinc-50`}>{review.headline}</h2>
-        <div className="mt-4">
-          <Clamp className="text-sm leading-7 text-zinc-700 dark:text-zinc-300">{review.summary}</Clamp>
-        </div>
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-3">
-        <SnapshotCard label="Discipline" onClick={() => goTo('rules')} note={review.discipline.score !== null ? `${review.discipline.score}% of checkable rules` : undefined}>
-          <Pill tone={discipline.tone}>{discipline.label}</Pill>
-        </SnapshotCard>
-        <SnapshotCard label="Strategy" onClick={() => goTo('strategy')} note={review.strategyFeedback.suggestedChanges.length ? `${review.strategyFeedback.suggestedChanges.length} change${review.strategyFeedback.suggestedChanges.length === 1 ? '' : 's'} to test` : undefined}>
-          <Pill tone={strategy.tone}>{strategy.label}</Pill>
-        </SnapshotCard>
-        {hasPlan ? (
-          <SnapshotCard label="Plan" onClick={() => goTo('plan')} note={days.length ? `${asPlanned} of ${days.length} day${days.length === 1 ? '' : 's'} as planned` : undefined}>
-            <Pill tone={days.length && asPlanned === days.length ? 'positive' : 'neutral'}>{days.length && asPlanned === days.length ? 'On plan' : 'Plan vs execution'}</Pill>
-          </SnapshotCard>
-        ) : (
-          <SnapshotCard label={words.next} onClick={() => goTo('next')} note={review.nextWeek.length ? `${review.nextWeek.length} action${review.nextWeek.length === 1 ? '' : 's'}` : undefined}>
-            <Pill tone="neutral">Your focus</Pill>
-          </SnapshotCard>
-        )}
-      </div>
-
-      {(strength || issue || firstAction) && (
-        <div className={listBox}>
-          {strength && <Highlight tone="positive" label={`Best thing ${words.thisPeriod}`} text={strength.title} onClick={() => goTo('insights')} />}
-          {issue && <Highlight tone="negative" label="Biggest thing to fix" text={issue.title} onClick={() => goTo('insights')} />}
-          {firstAction && (
-            <button type="button" onClick={() => goTo('next')} className={`flex w-full cursor-pointer items-start gap-3 px-5 py-4 text-left transition-colors hover:bg-zinc-50 dark:hover:bg-white/[0.04] ${focusRing}`}>
-              <span aria-hidden="true" className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-zinc-900 text-[11px] font-medium text-white dark:bg-zinc-100 dark:text-zinc-900">1</span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-[11px] font-medium uppercase tracking-wider text-zinc-600 dark:text-zinc-400">Do this first {words.nextLower}</span>
-                <span className="mt-1 block text-sm font-medium leading-6 text-zinc-900 dark:text-zinc-100">{firstAction}</span>
-              </span>
-              <ChevronRightIcon className="mt-1 h-4 w-4 shrink-0 text-zinc-500 dark:text-zinc-400" />
-            </button>
-          )}
-        </div>
-      )}
-
-      {review.mentorNote && (
-        <p className={`${SERIF} border-l-2 border-zinc-300 py-0.5 pl-5 text-[17px] italic leading-8 text-zinc-700 dark:border-white/20 dark:text-zinc-300`}>{review.mentorNote}</p>
-      )}
-    </div>
-  )
-}
-
-export const RULE_FILTERS = [
-  { id: 'all', label: 'All' },
-  { id: 'broken', label: 'Broken' },
-  { id: 'followed', label: 'Followed' },
-  { id: 'unclear', label: "Can't tell" }
-]
-export const RULE_ORDER = { broken: 0, unclear: 1, followed: 2 }
-
-export function RulesTab({ review, discipline }) {
-  const [filter, setFilter] = useState('all')
-  const checks = review.ruleChecks
-  const counts = { followed: 0, broken: 0, unclear: 0 }
-  for (const check of checks) counts[RULE_STATUS[check.status] ? check.status : 'unclear'] += 1
-
-  // broken rules first: those are what needs attention
-  const shown = checks
-    .filter((check) => filter === 'all' || (RULE_STATUS[check.status] ? check.status : 'unclear') === filter)
-    .sort((a, b) => (RULE_ORDER[a.status] ?? 1) - (RULE_ORDER[b.status] ?? 1))
-
-  return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-center gap-2.5">
-        <Pill tone={discipline.tone}>{discipline.label}</Pill>
-        {review.discipline.score !== null && <span className="text-xs tabular-nums text-zinc-600 dark:text-zinc-400">{review.discipline.score}% of checkable rules</span>}
-      </div>
-      <Clamp className="text-sm leading-6 text-zinc-700 dark:text-zinc-300">{review.discipline.explanation}</Clamp>
-
-      {checks.length > 0 && (
-        <>
-          <div className="flex h-2 overflow-hidden rounded-full bg-zinc-200 dark:bg-white/[0.08]" role="img" aria-label={`${counts.followed} followed, ${counts.broken} broken, ${counts.unclear} unclear`}>
-            <span className="bg-emerald-600 dark:bg-emerald-400" style={{ width: `${(counts.followed / checks.length) * 100}%` }} />
-            <span className="bg-rose-600 dark:bg-rose-400" style={{ width: `${(counts.broken / checks.length) * 100}%` }} />
-          </div>
-
-          <div role="group" aria-label="Filter rules" className="flex flex-wrap gap-2">
-            {RULE_FILTERS.map((item) => {
-              const count = item.id === 'all' ? checks.length : counts[item.id]
-              if (item.id !== 'all' && count === 0) return null
-              const active = filter === item.id
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  aria-pressed={active}
-                  onClick={() => setFilter(item.id)}
-                  className={`h-7 cursor-pointer rounded-full border px-3 text-xs font-medium tabular-nums transition-colors ${focusRing} ${
-                    active
-                      ? 'border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900'
-                      : 'border-zinc-300 text-zinc-700 hover:bg-zinc-100 dark:border-white/[0.14] dark:text-zinc-300 dark:hover:bg-white/[0.07]'
-                  }`}
-                >
-                  {item.label} {count}
-                </button>
-              )
-            })}
-          </div>
-
-          <ul className={listBox}>
-            {shown.map((check, index) => {
-              const status = RULE_STATUS[check.status] ?? RULE_STATUS.unclear
-              return (
-                <li key={`${check.rule}-${index}`}>
-                  <Collapsible
-                    defaultOpen={check.status === 'broken'}
-                    hasBody={Boolean(check.evidence) || Boolean(check.trades?.length)}
-                    header={
-                      <span className="flex items-start gap-3">
-                        <span className={`mt-[7px] h-2 w-2 shrink-0 rounded-full ${status.dot}`} aria-hidden="true" />
-                        <span className="min-w-0 text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                          {check.rule} <span className="ml-1 text-xs font-normal text-zinc-600 dark:text-zinc-400">{status.label}</span>
-                        </span>
-                      </span>
-                    }
-                  >
-                    <div className="pl-5">
-                      {check.evidence && <p className="text-[13px] leading-6 text-zinc-600 dark:text-zinc-400">{check.evidence}</p>}
-                      <TradeChips trades={check.trades} />
-                    </div>
-                  </Collapsible>
-                </li>
-              )
-            })}
-          </ul>
-        </>
-      )}
-    </div>
-  )
-}
-
-export function PlanTab({ review }) {
-  const plan = review.planAlignment
-  return (
-    <div className="space-y-5">
-      {plan.summary && <Clamp className="text-sm leading-6 text-zinc-700 dark:text-zinc-300">{plan.summary}</Clamp>}
-      {plan.days.length > 0 && (
-        <ul className={listBox}>
-          {plan.days.map((day, index) => {
-            const status = PLAN_STATUS[day.status] ?? PLAN_STATUS.plan_not_taken
-            return (
-              <li key={`${day.date}-${index}`}>
-                <Collapsible
-                  hasBody={Boolean(day.detail) || Boolean(day.trades?.length)}
-                  header={
-                    <span className="flex flex-wrap items-center gap-2">
-                      <span className="text-sm font-medium tabular-nums text-zinc-900 dark:text-zinc-100">{formatDateKey(day.date)}</span>
-                      <Pill tone={status.tone}>{status.label}</Pill>
-                    </span>
-                  }
-                >
-                  {day.detail && <p className="text-[13px] leading-6 text-zinc-600 dark:text-zinc-400">{day.detail}</p>}
-                  <TradeChips trades={day.trades} />
-                </Collapsible>
-              </li>
-            )
-          })}
-        </ul>
-      )}
-    </div>
-  )
-}
-
-export function InsightGroup({ title, items, dot }) {
-  if (!items.length) return null
-  return (
-    <div>
-      <h3 className="mb-3 flex items-center gap-2 text-[11px] font-medium uppercase tracking-wider text-zinc-600 dark:text-zinc-400">
-        <span aria-hidden="true" className={`h-2 w-2 rounded-full ${dot}`} />
-        {title} <span className="tabular-nums">({items.length})</span>
-      </h3>
-      <ul className={listBox}>
-        {items.map((item, index) => (
-          <li key={item.title}>
-            <Collapsible
-              defaultOpen={index === 0}
-              hasBody={Boolean(item.detail) || Boolean(item.trades?.length)}
-              header={<span className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{item.title}</span>}
-            >
-              {item.detail && <p className="text-sm leading-6 text-zinc-600 dark:text-zinc-400">{item.detail}</p>}
-              <TradeChips trades={item.trades} />
-            </Collapsible>
-          </li>
-        ))}
-      </ul>
-    </div>
-  )
-}
-
-export function InsightsTab({ review }) {
-  return (
-    <div className="space-y-7">
-      <InsightGroup title="What went well" items={review.strengths} dot="bg-emerald-600 dark:bg-emerald-300" />
-      <InsightGroup title="Where to work" items={review.issues} dot="bg-rose-600 dark:bg-rose-300" />
-    </div>
-  )
-}
-
-export function StrategyTab({ review, strategy }) {
-  const { suggestedChanges, marketAdaptation, reasoning } = review.strategyFeedback
-  return (
-    <div className="space-y-5">
-      <Pill tone={strategy.tone}>{strategy.label}</Pill>
-      <Clamp className="text-sm leading-6 text-zinc-700 dark:text-zinc-300">{reasoning}</Clamp>
-
-      {suggestedChanges.length > 0 && (
-        <div>
-          <h3 className="mb-3 text-[11px] font-medium uppercase tracking-wider text-zinc-600 dark:text-zinc-400">Worth testing</h3>
-          <ul className="space-y-2.5">
-            {suggestedChanges.map((change) => (
-              <li key={change} className="rounded-xl border border-zinc-200 px-5 py-4 text-sm leading-6 text-zinc-700 dark:border-white/[0.08] dark:text-zinc-300">
-                {change}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {marketAdaptation && (
-        <div className="rounded-xl bg-zinc-100 px-5 py-4 dark:bg-white/[0.05]">
-          <h3 className="text-[11px] font-medium uppercase tracking-wider text-zinc-600 dark:text-zinc-400">Adapting to the market</h3>
-          <p className="mt-1.5 text-sm leading-6 text-zinc-700 dark:text-zinc-300">{marketAdaptation}</p>
-        </div>
-      )}
-    </div>
-  )
-}
-
-export function NextWeekTab({ review }) {
-  // ticking is only a reading aid, so it lives in this tab and is not saved
-  const [done, setDone] = useState(() => new Set())
-  const toggle = (index) =>
-    setDone((current) => {
-      const next = new Set(current)
-      if (next.has(index)) next.delete(index)
-      else next.add(index)
-      return next
-    })
-
-  return (
-    <div className="space-y-4">
-      <p className="text-xs tabular-nums text-zinc-600 dark:text-zinc-400">{done.size} of {review.nextWeek.length} ticked off</p>
-      <ul className="space-y-2.5">
-        {review.nextWeek.map((action, index) => {
-          const checked = done.has(index)
-          return (
-            <li key={action}>
-              <button
-                type="button"
-                role="checkbox"
-                aria-checked={checked}
-                onClick={() => toggle(index)}
-                className={`flex w-full cursor-pointer items-start gap-3.5 rounded-xl border border-zinc-200 px-5 py-4 text-left transition-colors hover:bg-zinc-50 dark:border-white/[0.08] dark:hover:bg-white/[0.04] ${focusRing}`}
-              >
-                <span aria-hidden="true" className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border transition-colors ${checked ? 'border-emerald-600 bg-emerald-600 text-white dark:border-emerald-400 dark:bg-emerald-400 dark:text-zinc-950' : 'border-zinc-400 dark:border-zinc-500'}`}>
-                  {checked && <CheckIcon className="h-3.5 w-3.5" />}
-                </span>
-                <span className={`text-sm leading-6 ${checked ? 'text-zinc-500 line-through dark:text-zinc-500' : 'text-zinc-800 dark:text-zinc-200'}`}>{action}</span>
-              </button>
-            </li>
-          )
-        })}
-      </ul>
-    </div>
-  )
-}
-
-export function Review({ review, period = 'week' }) {
-  const words = PERIOD_WORDS[period] ?? PERIOD_WORDS.week
-  const discipline = DISCIPLINE[review.discipline.verdict] ?? DISCIPLINE.cannot_assess
-  const strategy = STRATEGY_VERDICT[review.strategyFeedback.verdict] ?? STRATEGY_VERDICT.keep
-  const [tab, setTab] = useState('overview')
-
-  const hasPlan = Boolean(review.planAlignment && (review.planAlignment.summary || review.planAlignment.days.length))
-  const insightCount = review.strengths.length + review.issues.length
-  const brokenCount = review.ruleChecks.filter((check) => check.status === 'broken').length
-
-  const tabs = [
-    { id: 'overview', label: 'Overview' },
-    { id: 'rules', label: 'Rules', count: review.ruleChecks.length || undefined, alert: brokenCount > 0 },
-    hasPlan && { id: 'plan', label: 'Plan' },
-    insightCount > 0 && { id: 'insights', label: 'Insights', count: insightCount },
-    { id: 'strategy', label: 'Strategy' },
-    review.nextWeek.length > 0 && { id: 'next', label: words.next, count: review.nextWeek.length }
-  ].filter(Boolean)
-
-  const handleKeyDown = (event) => {
-    const step = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0
-    if (!step) return
-    event.preventDefault()
-    const index = tabs.findIndex((item) => item.id === tab)
-    const next = tabs[(index + step + tabs.length) % tabs.length]
-    setTab(next.id)
-    document.getElementById(`review-tab-${next.id}`)?.focus()
-  }
-
-  return (
-    <div>
-      {/* sticky inside the dialog's scroll area, so the tabs stay reachable while a long tab scrolls */}
-      <div className="sticky top-0 z-10 -mx-8 bg-white px-8 pb-4 pt-3 dark:bg-panel">
-        <div role="tablist" aria-label="Review sections" onKeyDown={handleKeyDown} className="no-scrollbar flex gap-1 overflow-x-auto overflow-y-hidden border-b border-zinc-200 dark:border-white/[0.08]">
-          {tabs.map((item) => {
-            const active = tab === item.id
-            return (
-              <button
-                key={item.id}
-                id={`review-tab-${item.id}`}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                aria-controls="review-panel"
-                tabIndex={active ? 0 : -1}
-                onClick={() => setTab(item.id)}
-                className={`inline-flex h-10 shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap border-b-2 px-3 text-[13px] font-medium transition-colors ${focusRing} ${
-                  active
-                    ? 'border-zinc-900 text-zinc-900 dark:border-zinc-100 dark:text-zinc-50'
-                    : 'border-transparent text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'
-                }`}
-              >
-                {item.label}
-                {item.count !== undefined && (
-                  <span className={`rounded-full px-1.5 text-[11px] tabular-nums ${item.alert ? 'bg-rose-100 text-rose-800 dark:bg-rose-400/15 dark:text-rose-300' : 'bg-zinc-100 text-zinc-700 dark:bg-white/[0.07] dark:text-zinc-300'}`}>{item.count}</span>
-                )}
-              </button>
-            )
-          })}
-        </div>
-      </div>
-
-      <div key={tab} id="review-panel" role="tabpanel" aria-labelledby={`review-tab-${tab}`} className={stepEnter}>
-        {tab === 'overview' && <OverviewTab review={review} discipline={discipline} strategy={strategy} goTo={setTab} words={words} />}
-        {tab === 'rules' && <RulesTab review={review} discipline={discipline} />}
-        {tab === 'plan' && hasPlan && <PlanTab review={review} />}
-        {tab === 'insights' && <InsightsTab review={review} />}
-        {tab === 'strategy' && <StrategyTab review={review} strategy={strategy} />}
-        {tab === 'next' && <NextWeekTab review={review} />}
-      </div>
-    </div>
-  )
-}
-

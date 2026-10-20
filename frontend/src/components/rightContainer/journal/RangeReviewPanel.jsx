@@ -3,7 +3,9 @@ import { createRangeReview, previewRangeReview } from '../../../services/aiRange
 import { dateKeyFromDate, formatDateKey } from '../../../utils/tradeAnalytics'
 import { focusRing } from '../../common/controlStyles'
 import ListenControls from './ListenControls'
-import { EmptyState, Review, ReviewSkeleton, WeekStats, buttonPrimary, errorText, resolveLock, shiftDays } from './reviewParts'
+import MentorLoader from './MentorLoader'
+import { Review } from './ReviewReport'
+import { EmptyState, ReviewSkeleton, allowanceText, buttonPrimary, buttonQuiet, errorText, mondayOf, resolveLock, shiftDays } from './reviewParts'
 
 // Longest range one review may cover. The server enforces the same limit (AI_RANGE_MAX_DAYS, default 366).
 export const MAX_RANGE_DAYS = 366
@@ -12,51 +14,48 @@ const dateInputClass =
   'h-9 w-full rounded-lg border border-zinc-300 bg-transparent px-2.5 text-xs text-zinc-800 outline-none transition-colors [color-scheme:light] focus:border-sky-500/60 focus:ring-1 focus:ring-sky-500/30 dark:border-white/[0.14] dark:text-zinc-100 dark:[color-scheme:dark]'
 
 const todayKey = () => dateKeyFromDate(new Date())
+const daysBetween = (from, to) => Math.round((new Date(`${to}T00:00:00Z`) - new Date(`${from}T00:00:00Z`)) / 86_400_000) + 1
+const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`
 
-// Quick picks. Every range ends today at the latest: a review is about trades that already happened.
+/** Oldest start a review may use: the longest allowed range ending today. */
+const oldestAllowed = (today) => shiftDays(today, -(MAX_RANGE_DAYS - 1))
+
+// One picker for every kind of period. Weekly is just a preset now. Every range ends today at the latest.
 const PRESETS = [
-  { id: '7d', label: 'Last 7 days', resolve: (today) => ({ from: shiftDays(today, -6), to: today }) },
-  { id: '30d', label: 'Last 30 days', resolve: (today) => ({ from: shiftDays(today, -29), to: today }) },
-  { id: '90d', label: 'Last 90 days', resolve: (today) => ({ from: shiftDays(today, -89), to: today }) },
+  { id: 'week', label: 'This week', resolve: (today) => ({ from: mondayOf(today), to: today }) },
+  { id: 'last-week', label: 'Last week', resolve: (today) => ({ from: shiftDays(mondayOf(today), -7), to: shiftDays(mondayOf(today), -1) }) },
   {
     id: 'month',
     label: 'This month',
-    resolve: (today) => {
-      const now = new Date()
-      return { from: dateKeyFromDate(new Date(now.getFullYear(), now.getMonth(), 1)), to: today }
-    }
+    resolve: (today) => ({ from: `${today.slice(0, 7)}-01`, to: today })
   },
+  { id: '30d', label: 'Last 30 days', resolve: (today) => ({ from: shiftDays(today, -29), to: today }) },
   {
-    id: 'last-month',
-    label: 'Last month',
-    resolve: () => {
-      const now = new Date()
-      return { from: dateKeyFromDate(new Date(now.getFullYear(), now.getMonth() - 1, 1)), to: dateKeyFromDate(new Date(now.getFullYear(), now.getMonth(), 0)) }
+    id: 'all',
+    label: 'All trades',
+    // from the journal's first trade, but never further back than one review may cover
+    resolve: (today, earliest) => {
+      const floor = oldestAllowed(today)
+      return { from: earliest && earliest > floor ? earliest : floor, to: today }
     }
-  },
-  { id: 'year', label: 'This year', resolve: (today) => ({ from: `${today.slice(0, 4)}-01-01`, to: today }) }
+  }
 ]
 
-const rangeFromPreset = (id) => ({ preset: id, ...PRESETS.find((item) => item.id === id).resolve(todayKey()) })
+const rangeFromPreset = (id, earliest) => ({ preset: id, ...PRESETS.find((item) => item.id === id).resolve(todayKey(), earliest) })
 
-const daysBetween = (from, to) => Math.round((new Date(`${to}T00:00:00Z`) - new Date(`${from}T00:00:00Z`)) / 86_400_000) + 1
-
-const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`
-
-const pillButton = (active) =>
-  `h-7 cursor-pointer rounded-full border px-3 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${focusRing} ${
+const chip = (active) =>
+  `h-8 cursor-pointer whitespace-nowrap rounded-full border px-3.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${focusRing} ${
     active
       ? 'border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900'
       : 'border-zinc-300 text-zinc-700 hover:bg-zinc-100 dark:border-white/[0.14] dark:text-zinc-300 dark:hover:bg-white/[0.07]'
   }`
 
-/** Quick picks plus two date fields. Swing traders can cover a whole campaign in one go. */
-function RangePicker({ range, onChange, disabled, journalRange, tradeCount }) {
+/** Preset chips, plus two date fields only when "Custom" is picked. */
+function RangePicker({ range, onChange, disabled, earliestTradeDate, summary }) {
   const today = todayKey()
+  const custom = range.preset === 'custom'
   const days = range.from && range.to && range.from <= range.to ? daysBetween(range.from, range.to) : 0
   const tooLong = days > MAX_RANGE_DAYS
-  const missing = !range.from || !range.to
-  const journalFilterUsable = Boolean(journalRange?.from && journalRange?.to) && !(journalRange.from === range.from && journalRange.to === range.to)
 
   const changeCustom = (field, value) => {
     const next = { ...range, preset: 'custom', [field]: value }
@@ -69,58 +68,67 @@ function RangePicker({ range, onChange, disabled, journalRange, tradeCount }) {
   }
 
   return (
-    <div className="space-y-4 rounded-xl border border-zinc-200 bg-zinc-50/70 p-5 dark:border-white/[0.08] dark:bg-white/[0.03]">
-      <div role="group" aria-label="Quick date ranges" className="flex flex-wrap gap-2">
+    <div className="space-y-3.5">
+      <div role="group" aria-label="Period to review" className="flex flex-wrap gap-2">
         {PRESETS.map((preset) => (
-          <button key={preset.id} type="button" disabled={disabled} aria-pressed={range.preset === preset.id} onClick={() => onChange(rangeFromPreset(preset.id))} className={pillButton(range.preset === preset.id)}>
+          <button key={preset.id} type="button" disabled={disabled} aria-pressed={range.preset === preset.id} onClick={() => onChange(rangeFromPreset(preset.id, earliestTradeDate))} className={chip(range.preset === preset.id)}>
             {preset.label}
           </button>
         ))}
-        {journalFilterUsable && (
-          <button
-            type="button"
-            disabled={disabled}
-            onClick={() => onChange({ preset: 'journal', from: journalRange.from, to: journalRange.to > today ? today : journalRange.to })}
-            title="The date filter currently applied to this journal"
-            className={pillButton(range.preset === 'journal')}
-          >
-            Journal filter
-          </button>
-        )}
+        <button type="button" disabled={disabled} aria-pressed={custom} onClick={() => onChange({ ...range, preset: 'custom' })} className={chip(custom)}>
+          Custom
+        </button>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <label className="min-w-0">
-          <span className="mb-1.5 block text-[11px] text-zinc-500 dark:text-zinc-400">From</span>
-          <input type="date" disabled={disabled} value={range.from} max={range.to || today} onChange={(event) => changeCustom('from', event.target.value)} className={dateInputClass} />
-        </label>
-        <label className="min-w-0">
-          <span className="mb-1.5 block text-[11px] text-zinc-500 dark:text-zinc-400">To</span>
-          <input type="date" disabled={disabled} value={range.to} min={range.from || undefined} max={today} onChange={(event) => changeCustom('to', event.target.value)} className={dateInputClass} />
-        </label>
-      </div>
+      {custom && (
+        <div className="grid max-w-md grid-cols-2 gap-3">
+          <label className="min-w-0">
+            <span className="mb-1.5 block text-[11px] text-zinc-500 dark:text-zinc-400">From</span>
+            <input type="date" disabled={disabled} value={range.from} max={range.to || today} onChange={(event) => changeCustom('from', event.target.value)} className={dateInputClass} />
+          </label>
+          <label className="min-w-0">
+            <span className="mb-1.5 block text-[11px] text-zinc-500 dark:text-zinc-400">To</span>
+            <input type="date" disabled={disabled} value={range.to} min={range.from || undefined} max={today} onChange={(event) => changeCustom('to', event.target.value)} className={dateInputClass} />
+          </label>
+        </div>
+      )}
 
-      <p className={`text-xs ${tooLong || missing ? 'text-rose-700 dark:text-rose-300' : 'text-zinc-600 dark:text-zinc-400'}`} role={tooLong ? 'alert' : undefined}>
-        {missing
+      <p className={`text-xs ${tooLong || !days ? 'text-rose-700 dark:text-rose-300' : 'text-zinc-500 dark:text-zinc-400'}`} role={tooLong ? 'alert' : undefined}>
+        {!range.from || !range.to
           ? 'Pick a start and an end date.'
           : tooLong
-            ? `Ranges can cover up to ${MAX_RANGE_DAYS} days. Pick a shorter one, or review the period in parts.`
-            : `${plural(days, 'day')}, ${formatDateKey(range.from, { withYear: true })} - ${formatDateKey(range.to, { withYear: true })}${tradeCount === null ? '' : `. ${plural(tradeCount, 'trade')} in this range.`}`}
+            ? `A review can cover up to ${MAX_RANGE_DAYS} days. Pick a shorter range.`
+            : `${formatDateKey(range.from, { withYear: true })} - ${formatDateKey(range.to, { withYear: true })}${summary ? ` · ${summary}` : ''}`}
       </p>
     </div>
   )
 }
 
+/** Five small segments filling as the range gains trades: how close the review is to unlocking. */
+function UnlockMeter({ count, target }) {
+  return (
+    <span className="flex items-center justify-center gap-1.5" role="img" aria-label={`${count} of ${target} trades in this range`}>
+      {Array.from({ length: target }, (_, index) => (
+        <span key={index} className={`h-1.5 w-8 rounded-full transition-colors ${index < count ? 'bg-[#c4623f] dark:bg-[#e08a68]' : 'bg-zinc-200 dark:bg-white/[0.12]'}`} />
+      ))}
+    </span>
+  )
+}
+
 /**
- * One AI mentor review for any date range. Choosing dates only loads what is saved (free); a new review is written
- * when the trader presses the button. Needs at least 5 trades in the range; shares the 1-a-day / 3-a-week allowance
- * with the weekly review. Opening a range that was reviewed before shows that saved review again.
- * The allowance is one pool for both tabs: `quota` is the dialog's freshest copy of it (so a weekly review written a
- * moment ago locks this tab too), `onAccess` hands every response's allowance back to the dialog, `otherBusy` is true
- * while the weekly tab is writing, and `onBusyChange` tells the dialog when this tab is.
+ * The only way to ask the mentor for feedback: pick a period (a preset or any dates), then press the button.
+ * Choosing dates only loads what is saved (free); a new review is written when the trader presses the button.
+ * It needs at least 5 trades in the range and draws on the trader's 1-a-day / 3-a-week allowance.
+ * `quota` is the dialog's freshest copy of the allowance, `onAccess` hands every response's allowance back to the dialog,
+ * and `onBusyChange` tells the dialog while a review is being written.
  */
-function RangeReviewPanel({ journalId, currency, seed, journalRange, onOpenContext, quota = null, onAccess, otherBusy = false, onBusyChange }) {
-  const [range, setRange] = useState(() => (seed?.from && seed?.to ? { preset: 'custom', from: seed.from, to: seed.to } : rangeFromPreset('30d')))
+function RangeReviewPanel({ journalId, currency, seed, journalRange, earliestTradeDate, onOpenContext, onAddTrade, quota = null, onAccess, onBusyChange, onRefreshQuota, onReviewReady }) {
+  const [range, setRange] = useState(() => {
+    const today = todayKey()
+    if (seed?.from && seed?.to) return { preset: 'custom', from: seed.from < oldestAllowed(today) ? oldestAllowed(today) : seed.from, to: seed.to > today ? today : seed.to }
+    if (journalRange?.from && journalRange?.to) return { preset: 'custom', from: journalRange.from, to: journalRange.to > today ? today : journalRange.to }
+    return rangeFromPreset('all', earliestTradeDate)
+  })
   const [data, setData] = useState(null)
   const [phase, setPhase] = useState('idle') // 'idle' | 'loading' | 'generating' | 'ready'
   const [error, setError] = useState('')
@@ -130,18 +138,22 @@ function RangeReviewPanel({ journalId, currency, seed, journalRange, onOpenConte
   const days = range.from && range.to && range.from <= range.to ? daysBetween(range.from, range.to) : 0
   const valid = days > 0 && days <= MAX_RANGE_DAYS
 
+  const changeRange = useCallback((next) => {
+    requestId.current += 1
+    setRange(next)
+    setData(null)
+    setPhase('idle')
+    setError('')
+  }, [])
+
   // changing the dates loads the saved review for that exact range (nothing is generated by picking dates)
   useEffect(() => {
     const id = ++requestId.current
-    if (!valid) {
-      setData(null)
-      setPhase('idle')
-      return undefined
-    }
-    setPhase('loading')
-    setError('')
-    setData(null)
+    if (!valid) return undefined
     const timer = setTimeout(async () => {
+      setPhase('loading')
+      setError('')
+      setData(null)
       try {
         const next = await previewRangeReview(journalId, range.from, range.to)
         if (id !== requestId.current) return
@@ -173,12 +185,14 @@ function RangeReviewPanel({ journalId, currency, seed, journalRange, onOpenConte
       if (id !== requestId.current) return
       setData(next)
       onAccess?.(next.access)
+      if (next.review && !next.stale) onReviewReady?.()
     } catch (generateError) {
       if (id !== requestId.current) return
       setError(errorText(generateError))
+      onRefreshQuota?.()
     }
     if (id === requestId.current) setPhase('ready')
-  }, [journalId, range.from, range.to, onAccess])
+  }, [journalId, range.from, range.to, onAccess, onRefreshQuota, onReviewReady])
 
   // a long request can outlive the connection: while generating, keep checking whether the review has been saved
   useEffect(() => {
@@ -194,6 +208,7 @@ function RangeReviewPanel({ journalId, currency, seed, journalRange, onOpenConte
         if (latest.review && !latest.stale) {
           setData(latest)
           onAccess?.(latest.access)
+          onReviewReady?.()
           setError('')
           setPhase('ready')
           return
@@ -208,9 +223,9 @@ function RangeReviewPanel({ journalId, currency, seed, journalRange, onOpenConte
       cancelled = true
       clearTimeout(timeoutId)
     }
-  }, [phase, journalId, range.from, range.to, onAccess])
+  }, [phase, journalId, range.from, range.to, onAccess, onReviewReady])
 
-  const busy = phase === 'generating'
+  const busy = valid && phase === 'generating'
   useEffect(() => {
     onBusyChange?.(busy)
     return () => onBusyChange?.(false)
@@ -218,15 +233,16 @@ function RangeReviewPanel({ journalId, currency, seed, journalRange, onOpenConte
 
   const review = data?.review ?? null
   const access = data?.access ?? null
-  const lock = resolveLock(access, quota, otherBusy)
+  const lock = resolveLock(access, quota, false)
   const locked = lock.locked
+  const allowance = allowanceText(quota?.usage ?? access?.usage)
 
   const renderBody = () => {
     if (!valid) return null
-    if (phase === 'loading') return <ReviewSkeleton message="Opening this range..." />
+    if (phase === 'loading') return <ReviewSkeleton message="Opening this period..." />
     if (phase === 'generating') {
       const count = data?.tradeCount
-      return <ReviewSkeleton message={`Reading your strategy and ${count ? plural(count, 'trade') : 'trades'}. A long range can take up to 30 seconds.`} />
+      return <MentorLoader tradeCount={count} />
     }
 
     if (!data && error) {
@@ -262,35 +278,61 @@ function RangeReviewPanel({ journalId, currency, seed, journalRange, onOpenConte
       )
     }
 
-    if (data.tradeCount === 0) {
+    // a saved review is shown even when the range has since dropped below the minimum
+    if (!review && data.access?.reason === 'not_enough_trades') {
+      const target = data.access.threshold ?? 5
+      const have = Math.min(data.tradeCount, target)
+      const remaining = Math.max(target - data.tradeCount, 0)
       return (
-        <EmptyState title="No trades in this range">
-          Nothing is logged between these dates. Pick a wider range, or one of the quick ranges above.
+        <EmptyState
+          title={data.tradeCount === 0 ? 'No trades in this period' : `${plural(remaining, 'more trade')} to unlock`}
+          action={
+            <>
+              {range.preset !== 'all' && (
+                <button type="button" onClick={() => changeRange(rangeFromPreset('all', earliestTradeDate))} className={buttonQuiet}>
+                  Use all trades
+                </button>
+              )}
+              {onAddTrade && (
+                <button type="button" onClick={onAddTrade} className={buttonPrimary}>
+                  Log a trade
+                </button>
+              )}
+            </>
+          }
+        >
+          <span className="mb-5 block"><UnlockMeter count={have} target={target} /></span>
+          A review needs at least {target} trades in the period you pick, so the mentor can see patterns instead of guessing. You have {data.tradeCount} here.
         </EmptyState>
       )
     }
 
     if (!review) {
-      const notYetUnlocked = locked && lock.reason === 'not_enough_trades'
+      const capped = locked && (lock.reason === 'daily_limit' || lock.reason === 'weekly_limit')
       return (
         <EmptyState
-          title={notYetUnlocked ? 'Log a few more trades' : lock.reason === 'daily_limit' || lock.reason === 'weekly_limit' ? 'Come back for the next review' : 'Ready to review this range'}
+          title={capped ? 'Come back for the next review' : `Ready to review ${plural(data.tradeCount, 'trade')}`}
           action={
             <button type="button" onClick={generate} disabled={locked} className={buttonPrimary}>
-              Review {plural(data.tradeCount, 'trade')}
+              Write my review
             </button>
           }
         >
           {locked
             ? lock.message
-            : `${plural(data.tradeCount, 'trade')} over ${plural(data.days, 'day')}. The mentor compares them with your strategy${data.planner?.connected ? ', the plans in your connected planner' : ''} and looks for how your habits changed across the period.`}
+            : `Over ${plural(data.days, 'day')}. The mentor checks your trades against your strategy${data.planner?.connected ? ', the plans in your connected planner' : ''} and looks at how your habits changed.`}
+          {!locked && allowance && <span className="mt-3 block text-xs text-zinc-500 dark:text-zinc-400">This uses one review once it is delivered. {allowance}.</span>}
+          {error && (
+            <span role="alert" className="mt-5 block rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-left text-[13px] leading-6 text-rose-800 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-300">
+              {error}
+            </span>
+          )}
         </EmptyState>
       )
     }
 
     return (
       <div className="space-y-7">
-        {data.stats && <WeekStats week={data.stats} currency={currency} />}
         {data.stale && (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300/60 bg-amber-50 px-5 py-3.5 text-[13px] leading-6 text-amber-900 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200">
             <span>
@@ -317,14 +359,14 @@ function RangeReviewPanel({ journalId, currency, seed, journalRange, onOpenConte
             </span>
           )}
         </div>
-        <Review key={`${data.id ?? ''}-${data.generatedAt ?? ''}`} review={review} period="range" />
+        <Review key={`${data.id ?? ''}-${data.generatedAt ?? ''}`} review={review} period="range" stats={data.stats} currency={currency} />
       </div>
     )
   }
 
   return (
-    <div className="space-y-7">
-      <RangePicker range={range} onChange={setRange} disabled={busy} journalRange={journalRange} tradeCount={data?.tradeCount ?? null} />
+    <div className="space-y-8">
+      <RangePicker range={range} onChange={changeRange} disabled={busy} earliestTradeDate={earliestTradeDate} summary={data ? plural(data.tradeCount, 'trade') : ''} />
       {renderBody()}
     </div>
   )

@@ -1,0 +1,95 @@
+/* Mentor unlock progress: segmented bar on the orb, the "hit" pop, and the unlock badge. Motion only; colours come from Tailwind classes. */
+
+.mp-seg { transition: background-color .35s ease, box-shadow .35s ease; }
+.mp-seg-on {
+  background-image: linear-gradient(90deg, #d9805c, #c4623f);
+  box-shadow: 0 0 8px -1px rgb(196 98 63 / .55);
+}
+.dark .mp-seg-on {
+  background-image: linear-gradient(90deg, #eba283, #e08a68);
+  box-shadow: 0 0 10px -1px rgb(224 138 104 / .5);
+}
+.mp-seg-hit { animation: mp-hit .7s cubic-bezier(.2, 1.4, .4, 1); }
+@keyframes mp-hit {
+  0% { transform: scaleY(1) scaleX(.4); filter: brightness(1.6); }
+  55% { transform: scaleY(2.1) scaleX(1.12); }
+  100% { transform: scaleY(1) scaleX(1); filter: brightness(1); }
+}
+/* a slow sheen running over the filled part of the bar */
+.mp-sheen { position: relative; overflow: hidden; }
+.mp-sheen::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(100deg, transparent 35%, rgb(255 255 255 / .55) 50%, transparent 65%);
+  transform: translateX(-120%); animation: mp-sheen 3.6s ease-in-out infinite;
+}
+@keyframes mp-sheen { 0%, 55% { transform: translateX(-120%); } 100% { transform: translateX(120%); } }
+
+.mp-pop { animation: mp-pop .22s ease-out; transform-origin: bottom right; }
+@keyframes mp-pop { from { opacity: 0; transform: translateY(6px) scale(.96); } to { opacity: 1; transform: none; } }
+
+/* ------------------------------ mentor unlock popup ------------------------------ */
+
+.mu-backdrop { animation: mp-fade .22s ease-out both; }
+.mu-card { animation: mu-slide-in .42s cubic-bezier(.2, .75, .25, 1) both; }
+@keyframes mu-slide-in {
+  from { opacity: 0; transform: translateX(36px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.mu-mark { animation: mu-mark-activate .72s cubic-bezier(.2, .8, .25, 1) both; }
+@keyframes mu-mark-activate {
+  0% { opacity: .35; transform: scale(.55) rotate(-35deg); }
+  65% { opacity: 1; transform: scale(1.12) rotate(8deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0); }
+}
+
+.mu-mark-halo { animation: mu-mark-halo .72s ease-out both; }
+@keyframes mu-mark-halo {
+  from { opacity: .5; transform: scale(.65); box-shadow: 0 0 0 0 rgb(196 98 63 / .22); }
+  to { opacity: 0; transform: scale(1.5); box-shadow: 0 0 0 8px rgb(196 98 63 / 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mp-seg-hit, .mp-sheen::after, .mp-pop { animation: none !important; }
+  .mu-backdrop, .mu-card, .mu-mark, .mu-mark-halo { animation: none !important; }
+}
+
+/* ------------------------------ mentor review loader ------------------------------ */
+
+.ml-enter { animation: ml-enter .35s ease-out both; }
+@keyframes ml-enter { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+.ml-spin { transform-origin: 80px 80px; animation: ml-spin 2.8s linear infinite; }
+@keyframes ml-spin { to { transform: rotate(360deg); } }
+
+.ml-dot { opacity: .16; animation-name: ml-dot; animation-timing-function: ease-out; animation-iteration-count: infinite; }
+@keyframes ml-dot { 0% { opacity: 1; } 35% { opacity: .5; } 70%, 100% { opacity: .16; } }
+
+.ml-mark { animation: ml-breathe 3.2s ease-in-out infinite; }
+@keyframes ml-breathe {
+  0%, 100% { transform: scale(.94) rotate(0deg); }
+  50% { transform: scale(1.06) rotate(30deg); }
+}
+
+.ml-glow {
+  background: radial-gradient(circle, rgb(196 98 63 / .20), rgb(196 98 63 / 0) 68%);
+  animation: ml-glow 3.2s ease-in-out infinite;
+}
+.dark .ml-glow { background: radial-gradient(circle, rgb(224 138 104 / .24), rgb(224 138 104 / 0) 68%); }
+@keyframes ml-glow { 0%, 100% { opacity: .55; transform: scale(.92); } 50% { opacity: 1; transform: scale(1.08); } }
+
+.ml-line { animation: ml-line .5s ease-out both; }
+@keyframes ml-line { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+.ml-ellipsis::after { content: ''; animation: ml-ellipsis 1.6s steps(1, end) infinite; }
+@keyframes ml-ellipsis {
+  0% { content: ''; }
+  25% { content: '.'; }
+  50% { content: '..'; }
+  75% { content: '...'; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ml-enter, .ml-line, .ml-glow, .ml-mark, .ml-spin { animation: none !important; }
+  .ml-dot { animation: none !important; opacity: .4; }
+  .ml-ellipsis::after { animation: none !important; content: '...'; }
+}

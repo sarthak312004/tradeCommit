@@ -12,7 +12,7 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { sanitizeReview, REVIEW_SCHEMA } from "../utils/aiMentorPrompt.js";
 import { buildRangePrompt, RANGE_SYSTEM_PROMPT } from "../utils/aiRangePrompt.js";
 import { isUserBusy, markUserBusy, releaseUser } from "../utils/aiJobGuard.js";
-import { evaluateAccess, markUsageOk, releaseUsage, reserveUsage } from "../utils/aiQuota.js";
+import { evaluateAccess, withUsageReservation } from "../utils/aiQuota.js";
 import { generateJson } from "../utils/gemini.js";
 import { runQueued } from "../utils/geminiQueue.js";
 import { htmlToPlainText } from "../utils/richText.js";
@@ -145,18 +145,14 @@ const generate = async (range) => {
   const ownerId = range.journal.owner;
   const { prompt, tradeLabels, hasPlanContext } = buildRangePrompt(range);
 
-  // reserve the generation first so concurrent traders cannot overshoot the shared daily budget
-  const usage = await reserveUsage({ ownerId, journalId: range.journal._id, weekStart: range.rangeStart });
-  let reachedGemini = false;
-  try {
-    const { result, model } = await runQueued(() => {
-      reachedGemini = true;
-      return generateJson({ system: RANGE_SYSTEM_PROMPT, prompt, schema: REVIEW_SCHEMA });
-    });
+  // Reserved first (shared daily budget), counted only once the review is saved. Any failure on the way, such as a
+  // Gemini rate limit, a full queue, a timeout or an unusable answer, deletes the reservation: no allowance is used.
+  return withUsageReservation({ ownerId, journalId: range.journal._id, weekStart: range.rangeStart }, async () => {
+    const { result, model } = await runQueued(() => generateJson({ system: RANGE_SYSTEM_PROMPT, prompt, schema: REVIEW_SCHEMA }));
     const review = sanitizeReview(result, tradeLabels, { hasPlanContext, weekStart: range.rangeStart, weekEnd: range.rangeEnd, maxPlanDays: MAX_PLAN_DAYS_IN_REVIEW });
     if (!review.summary || !review.headline) throw new ApiError(502, "The AI returned an incomplete review. Please try again.");
 
-    const saved = await AiRangeReview.findOneAndUpdate(
+    return AiRangeReview.findOneAndUpdate(
       { journal: range.journal._id, rangeStart: range.rangeStart, rangeEnd: range.rangeEnd },
       {
         $set: {
@@ -171,13 +167,7 @@ const generate = async (range) => {
       },
       { upsert: true, new: true, setDefaultsOnInsert: true }
     ).lean();
-    await markUsageOk(usage._id);
-    return saved;
-  } catch (error) {
-    // turned away by the queue before Gemini was called: nothing was spent, so nothing is charged
-    if (!reachedGemini) await releaseUsage(usage._id).catch(() => {});
-    throw error;
-  }
+  });
 };
 
 // GET /api/v1/journals/:journalId/ai-range-reviews/preview?start=YYYY-MM-DD&end=YYYY-MM-DD

@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronLeftIcon, ChevronRightIcon } from '../../../utils/Icons.jsx'
 import { getAiReview } from '../../../services/aiReviewApi'
 import { getRangeReview, listReviewHistory } from '../../../services/aiRangeReviewApi'
 import { formatDateKey, formatMoney, toneOf } from '../../../utils/tradeAnalytics'
 import { focusRing } from '../../common/controlStyles'
 import ListenControls from './ListenControls'
-import { DISCIPLINE, EmptyState, Pill, Review, ReviewSkeleton, WeekStats, buttonPrimary, buttonQuiet, errorText, moneyTone } from './reviewParts'
+import { Review } from './ReviewReport'
+import { DISCIPLINE, EmptyState, Pill, ReviewSkeleton, buttonPrimary, buttonQuiet, errorText, moneyTone } from './reviewParts'
 
 const FILTERS = [
   { id: 'all', label: 'All' },
@@ -77,27 +78,26 @@ function ReviewHistoryPanel({ journalId, currency, onUpdate }) {
   const index = visible.findIndex((item) => `${item.kind}:${item.id}` === selectedId)
   const selected = index >= 0 ? visible[index] : null
 
-  const loadFirst = useCallback(async () => {
-    setStatus('loading')
-    setError('')
-    try {
-      const page = await listReviewHistory(journalId)
-      setItems(page.items)
-      setHasMore(page.hasMore)
-      setNextBefore(page.nextBefore)
-      setStatus('ready')
-    } catch (loadError) {
-      setError(errorText(loadError))
-      setStatus('error')
-    }
-  }, [journalId])
-
   useEffect(() => {
-    loadFirst()
+    let cancelled = false
+    listReviewHistory(journalId)
+      .then((page) => {
+        if (cancelled) return
+        setItems(page.items)
+        setHasMore(page.hasMore)
+        setNextBefore(page.nextBefore)
+        setStatus('ready')
+      })
+      .catch((loadError) => {
+        if (cancelled) return
+        setError(errorText(loadError))
+        setStatus('error')
+      })
     return () => {
+      cancelled = true
       detailRequest.current += 1
     }
-  }, [loadFirst])
+  }, [journalId])
 
   /** Loads the next page of the history. Resolves to the items it added (an empty list when it failed). */
   const loadMore = async () => {
@@ -145,6 +145,21 @@ function ReviewHistoryPanel({ journalId, currency, onUpdate }) {
     return added.length ? openItem(added[0]) : undefined
   }
   const goNewer = () => (index > 0 ? openItem(visible[index - 1]) : undefined)
+  const retryFirst = () => {
+    setStatus('loading')
+    setError('')
+    listReviewHistory(journalId)
+      .then((page) => {
+        setItems(page.items)
+        setHasMore(page.hasMore)
+        setNextBefore(page.nextBefore)
+        setStatus('ready')
+      })
+      .catch((loadError) => {
+        setError(errorText(loadError))
+        setStatus('error')
+      })
+  }
 
   if (status === 'loading') return <ReviewSkeleton message="Opening your past feedback..." />
 
@@ -153,7 +168,7 @@ function ReviewHistoryPanel({ journalId, currency, onUpdate }) {
       <EmptyState
         title="Couldn't load your feedback"
         action={
-          <button type="button" onClick={loadFirst} className={buttonPrimary}>
+          <button type="button" onClick={retryFirst} className={buttonPrimary}>
             Try again
           </button>
         }
@@ -217,11 +232,10 @@ function ReviewHistoryPanel({ journalId, currency, onUpdate }) {
           </EmptyState>
         )}
 
-        {detail.phase === 'ready' && data && !data.review && <EmptyState title="This review is no longer saved">Open the Weekly or Date range tab to write a new one.</EmptyState>}
+        {detail.phase === 'ready' && data && !data.review && <EmptyState title="This review is no longer saved">Open the Review tab to write a new one.</EmptyState>}
 
         {detail.phase === 'ready' && data?.review && (
           <div className="space-y-7">
-            {stats && <WeekStats week={stats} currency={currency} />}
             {data.stale && (
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300/60 bg-amber-50 px-5 py-3.5 text-[13px] leading-6 text-amber-900 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200">
                 <span>Your trades, strategy or plans changed after this review was written.</span>
@@ -234,7 +248,7 @@ function ReviewHistoryPanel({ journalId, currency, onUpdate }) {
               <ListenControls review={data.review} period={period} />
               {data.generatedAt && <span className="text-[11px] text-zinc-500 dark:text-zinc-400">Written {writtenAt(data.generatedAt)}</span>}
             </div>
-            <Review key={`${selected.kind}:${selected.id}:${data.generatedAt ?? ''}`} review={data.review} period={period} />
+            <Review key={`${selected.kind}:${selected.id}:${data.generatedAt ?? ''}`} review={data.review} period={period} stats={stats} currency={currency} />
           </div>
         )}
       </div>
@@ -243,7 +257,7 @@ function ReviewHistoryPanel({ journalId, currency, onUpdate }) {
 
   return (
     <div className="space-y-5">
-      <div role="group" aria-label="Filter feedback" className="flex flex-wrap gap-2">
+      <div role="group" aria-label="Filter feedback" className={`flex flex-wrap gap-2 ${items.some((entry) => entry.kind === 'week') && items.some((entry) => entry.kind === 'range') ? '' : 'hidden'}`}>
         {FILTERS.map((item) => {
           const active = filter === item.id
           const count = item.id === 'all' ? items.length : items.filter((entry) => entry.kind === item.id).length

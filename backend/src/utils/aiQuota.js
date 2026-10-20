@@ -16,6 +16,9 @@ export const aiLimits = () => ({
 });
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+// A reservation that is still unconfirmed after this long is treated as dead (the longest a call can legitimately take
+// is the queue wait plus Gemini's request timeout, which is under four minutes).
+const PENDING_WINDOW_MS = 6 * 60 * 1000;
 
 /** The current date in Pacific time, because Gemini's daily free-tier quota resets at midnight Pacific. */
 export const pacificDayKey = () =>
@@ -87,20 +90,35 @@ export const evaluateAccess = async ({ week, saved, ownerId }) => {
   const newTrades = Math.max(0, week.weekTrades.length - reviewedBefore);
   // a finished week unlocks with a single trade; an open week waits for enough trades to find patterns
   // a date-range review never takes the closed-week shortcut: it always needs the full minimum of trades
-  const threshold = week.isClosed && !week.strictMinimum ? 1 : saved ? limits.stepTrades : limits.firstTrades;
+  // Date ranges have ONE rule, always: the range must hold at least `firstTrades` trades. There is no "5 new trades"
+  // step for a refresh; a changed range is simply stale, and refreshing it is bounded by the daily/weekly caps below.
+  const isRange = Boolean(week.strictMinimum);
+  const rangeCount = week.weekTrades.length;
+  const threshold = isRange ? limits.firstTrades : week.isClosed ? 1 : saved ? limits.stepTrades : limits.firstTrades;
   const rulesRewritten = Boolean(saved?.contextHash) && saved.contextHash !== week.contextHash;
 
   const quota = await getQuotaSnapshot(ownerId);
-  const budgetUsed = await AiUsage.countDocuments({ day: pacificDayKey() });
+  // The shared budget counts delivered reviews, plus reservations still waiting on Gemini right now. A reservation that
+  // failed is deleted at once (see withUsageReservation); this window also ignores any orphan left by a crash.
+  const budgetUsed = await AiUsage.countDocuments({
+    day: pacificDayKey(),
+    $or: [{ ok: true }, { createdAt: { $gte: new Date(Date.now() - PENDING_WINDOW_MS) } }],
+  });
 
   const { usage } = quota;
   const base = { needsReview, newTrades, threshold, usage, nextAvailableAt: null, quota };
 
   if (!needsReview) return { ...base, canGenerate: false, reason: "up_to_date", message: "" };
 
-  if (!rulesRewritten && newTrades < threshold) {
+  if (isRange && rangeCount < threshold) {
+    const missing = threshold - rangeCount;
+    const message = `Log ${plural(missing, "more trade")} in this date range to unlock your review (${rangeCount} of ${threshold}). Or pick a wider range.`;
+    return { ...base, newTrades: rangeCount, canGenerate: false, reason: "not_enough_trades", message };
+  }
+
+  if (!isRange && !rulesRewritten && newTrades < threshold) {
     const missing = threshold - newTrades;
-    const scope = week.scopeLabel; // set for date ranges ("this date range"); weekly reviews keep their original wording
+    const scope = week.scopeLabel; // weekly reviews keep their original wording
     const message = saved
       ? `Log ${plural(missing, "more trade")} in ${scope ?? "this week"} to unlock an updated review (${newTrades} of ${threshold} new trades).`
       : `Log ${plural(missing, "more trade")} ${scope ? `in ${scope}` : "this week"} to unlock your review (${week.weekTrades.length} of ${threshold}). More trades give the mentor real patterns to work with.`;
@@ -123,5 +141,49 @@ export const reserveUsage = ({ ownerId, journalId, weekStart }) => AiUsage.creat
 
 export const markUsageOk = (id) => AiUsage.updateOne({ _id: id }, { $set: { ok: true } });
 
-/** Gives the reservation back when Gemini was never called (the request was turned away by the queue). */
+/** Gives a reservation back: the review was not delivered, so it must not use any allowance. */
 export const releaseUsage = (id) => AiUsage.deleteOne({ _id: id });
+
+// Tells the trader, in the error they see, that a failed attempt cost them nothing.
+const withAllowanceNote = (error) => {
+  const intentional = error && error.success === false && typeof error.message === "string";
+  if (intentional && !/allowance/i.test(error.message)) {
+    const message = error.message.trim();
+    error.message = `${message}${/[.!?]$/.test(message) ? "" : "."} Your review allowance was not used.`;
+  }
+  return error;
+};
+
+/**
+ * Runs `work` (queue -> Gemini -> save the review) under a usage reservation, for weekly and date-range reviews alike.
+ *
+ *  - `work` resolves: the review was delivered, so the reservation is confirmed (ok: true) and counts toward the
+ *    trader's caps and the shared daily budget.
+ *  - `work` throws, for ANY reason (Gemini rate limit, queue full, timeout, bad or empty answer, failed save): the
+ *    reservation is deleted, so nothing is charged anywhere and the trader can simply try again.
+ *
+ * The caps only ever count confirmed rows, so a failed attempt can never lock someone out.
+ */
+export const withUsageReservation = async ({ ownerId, journalId, weekStart }, work) => {
+  const usage = await reserveUsage({ ownerId, journalId, weekStart });
+
+  let result;
+  try {
+    result = await work();
+  } catch (error) {
+    await releaseUsage(usage._id).catch((releaseError) => console.error("Could not release an unused AI review reservation:", releaseError));
+    throw withAllowanceNote(error);
+  }
+
+  // The review is saved. If confirming it fails twice the trader still keeps the review; the row stays unconfirmed,
+  // which simply means it is not counted against them.
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      await markUsageOk(usage._id);
+      break;
+    } catch (markError) {
+      console.error("Could not confirm an AI review reservation:", markError);
+    }
+  }
+  return result;
+};

@@ -47,6 +47,7 @@ import { feedbackRouter } from './routes/feedback.routes.js'
 import { aiReviewRouter } from './routes/aiReview.routes.js'
 import { aiRangeReviewRouter } from './routes/aiRangeReview.routes.js'
 import { marketRouter } from './routes/market.routes.js'
+import { progressRouter } from './routes/progress.routes.js'
 
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20 })
 app.use("/api/v1/auth/login", authLimiter)
@@ -83,6 +84,7 @@ app.use("/api/v1/journals/:journalId/ai-range-reviews", aiRangeReviewRouter)
 app.use("/api/v1/planners", plannerRouter)
 app.use("/api/v1/feedback", feedbackRouter)
 app.use("/api/v1/market", marketRouter)
+app.use("/api/v1/progress", progressRouter)
 
 app.use("/api", (req, res) => {
     res.status(404).json({ statusCode: 404, success: false, message: "Route not found", errors: [] })
