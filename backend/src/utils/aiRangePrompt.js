@@ -1,5 +1,5 @@
-import { computeAnalytics, computeWeekEvidence, dateKey, mondayOf, weeklyHistory } from "./tradeStats.js";
-import { buildPlanSection, money, pct, plain, rText, statsBlock, SYSTEM_PROMPT, tradeDetail, tradeLine } from "./aiMentorPrompt.js";
+import { computeAnalytics, computeLeakEvidence, computeWeekEvidence, dateKey, mondayOf, weeklyHistory } from "./tradeStats.js";
+import { buildPlanSection, commitmentBlock, leakLines, money, pct, plain, rText, statsBlock, SYSTEM_PROMPT, tradeDetail, tradeLine } from "./aiMentorPrompt.js";
 import { htmlToPlainText } from "./richText.js";
 
 // Same JSON schema and sanitiser as the weekly review (the UI renders both with the same component). Only the
@@ -16,7 +16,8 @@ IMPORTANT: THIS REVIEW COVERS A DATE RANGE CHOSEN BY THE TRADER, NOT ONE WEEK. W
 - Use the "WEEK-BY-WEEK INSIDE THIS PERIOD" table to find trends: is discipline, win rate or risk per trade improving or getting worse as the period goes on? Say which weeks stand out and why, citing T-numbers.
 - With more trades you may draw firmer conclusions than for a single week, but only from what the data shows. Still avoid recommending strategy changes from one or two trades.
 - Earlier trades of the period that have no T-number are given as short lines for context. Never cite them by T-number.
-- headline: one sentence verdict of the period. nextWeek: 2 or 3 concrete actions for the NEXT period of trading (the field keeps its name; it is not limited to seven days).
+- headline: one sentence verdict of the period. nextWeek: 2 or 3 concrete actions for the NEXT period of trading (the field keeps its name; it is not limited to seven days), the first being the flywheel carry-forward change.
+- A longer period is where anti-edge patterns show: look for the same leak recurring in several weeks of the table, and say when it appears only once.
 - planAlignment.days (only when plans are present): list at most 40 days, choosing the ones that matter most (unplanned trades, differences from the plan, notable executions); skip routine days.`;
 
 const weekBreakdown = (rangeTrades, currency) => {
@@ -31,7 +32,7 @@ const weekBreakdown = (rangeTrades, currency) => {
     .map(([weekStart, trades]) => {
       const stats = computeAnalytics(trades);
       const evidence = computeWeekEvidence(trades);
-      return `week of ${weekStart}: ${stats.totalTrades} trades (${stats.openTrades} open), net ${money(stats.netPnl, currency)}, win rate ${pct(stats.winRate)}, avg R ${rText(stats.avgRrr)}, stop logged on ${evidence.stopLossLogged} of ${evidence.tradeCount}, trades after a same-day loss ${evidence.tradesTakenAfterSameDayLoss}`;
+      return `week of ${weekStart}: ${stats.totalTrades} trades (${stats.openTrades} open), net ${money(stats.netPnl, currency)}, win rate ${pct(stats.winRate)}, expectancy ${rText(stats.expectancyR)}, stop logged on ${evidence.stopLossLogged} of ${evidence.tradeCount}, trades after a same-day loss ${evidence.tradesTakenAfterSameDayLoss}`;
     });
 };
 
@@ -39,7 +40,7 @@ const weekBreakdown = (rangeTrades, currency) => {
  * Everything the mentor reads for a date range. Returns { prompt, tradeLabels, hasPlanContext } like buildMentorPrompt.
  * `tradeLabels` maps "T3" to a readable name for the most recent MAX_RANGE_DETAILED trades of the range.
  */
-export const buildRangePrompt = ({ journal, rangeStart, rangeEnd, rangeTrades, priorTrades, allTradesToDate, planners = [], planEntries = [], plansTruncated = false }) => {
+export const buildRangePrompt = ({ journal, rangeStart, rangeEnd, rangeTrades, priorTrades, allTradesToDate, planners = [], planEntries = [], plansTruncated = false, lastCommitment = null }) => {
   const currency = journal.currency ?? "USD";
   const context = journal.context ?? {};
 
@@ -48,13 +49,17 @@ export const buildRangePrompt = ({ journal, rangeStart, rangeEnd, rangeTrades, p
   const skipped = rangeTrades.length - detailed.length - condensed.length;
 
   const tradeLabels = {};
+  const labelByTrade = new Map();
   detailed.forEach((trade, index) => {
-    tradeLabels[`T${index + 1}`] = `${dateKey(trade.date)} ${trade.assetName} ${trade.direction}`;
+    // the T-number is part of the readable name, so two trades on the same instrument and day stay distinguishable
+    tradeLabels[`T${index + 1}`] = `T${index + 1} · ${dateKey(trade.date)} ${trade.assetName} ${trade.direction}`;
+    labelByTrade.set(String(trade._id), `T${index + 1}`);
   });
 
   const periodStats = computeAnalytics(rangeTrades);
   const overall = computeAnalytics(allTradesToDate);
   const evidence = computeWeekEvidence(rangeTrades);
+  const leak = computeLeakEvidence(rangeTrades, { planEntries: planners.length ? planEntries : null, labelOf: (trade) => labelByTrade.get(String(trade._id)) ?? null });
   const history = weeklyHistory(allTradesToDate, mondayOf(rangeStart));
   const defaults = (context.attributes ?? []).map((attribute) => `${attribute.label} (${attribute.type})`);
 
@@ -70,10 +75,12 @@ export const buildRangePrompt = ({ journal, rangeStart, rangeEnd, rangeTrades, p
     ...evidence.checkboxProperties.map((box) => `checkbox "${box.label}": ticked on ${box.yes}, not ticked on ${box.no}`),
     `by direction: ${evidence.byDirection.map((g) => `${g.name} ${g.trades} trades ${money(g.net, currency)} (${g.wins} won)`).join("; ") || "none closed"}`,
     `by instrument: ${evidence.byAsset.map((g) => `${g.name} ${g.trades} trades ${money(g.net, currency)} (${g.wins} won)`).join("; ") || "none closed"}`,
+    `closed trades in the whole journal up to the end of this period: ${overall.closedTrades}`,
+    ...leakLines(leak, currency, { hasPlanner: planners.length > 0 }),
   ];
 
   const historyLines = history.length
-    ? history.map((row) => `week of ${row.weekStart}: ${row.trades} trades, net ${money(row.net, currency)}, win rate ${pct(row.winRate)}, avg R ${rText(row.avgRrr)}`)
+    ? history.map((row) => `week of ${row.weekStart}: ${row.trades} trades, net ${money(row.net, currency)}, win rate ${pct(row.winRate)}, expectancy ${rText(row.expectancyR)}`)
     : ["(no earlier weeks with trades)"];
   const priorLines = priorTrades.slice(-MAX_HISTORY_TRADES).map((trade) => tradeLine(trade, currency));
 
@@ -105,6 +112,7 @@ export const buildRangePrompt = ({ journal, rangeStart, rangeEnd, rangeTrades, p
     planSection ? (plansTruncated ? "(this period holds many plans: only the most recent ones are included)" : null) : null,
     planSection,
     planSection ? "" : null,
+    ...commitmentBlock(lastCommitment),
     "=== Facts computed from the logs (ground truth) ===",
     ...evidenceLines,
     "",
@@ -128,5 +136,5 @@ export const buildRangePrompt = ({ journal, rangeStart, rangeEnd, rangeTrades, p
     .filter((line) => line !== null)
     .join("\n");
 
-  return { prompt, tradeLabels, hasPlanContext: Boolean(planSection) };
+  return { prompt, tradeLabels, hasPlanContext: Boolean(planSection), hasLast: Boolean(lastCommitment), closedCount: overall.closedTrades };
 };

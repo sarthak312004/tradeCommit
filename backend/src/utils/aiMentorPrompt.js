@@ -1,4 +1,4 @@
-import { addDays, computeAnalytics, computeWeekEvidence, dateKey, tradePnl, tradeR, tradeRisk, weeklyHistory } from "./tradeStats.js";
+import { addDays, computeAnalytics, computeLeakEvidence, computeWeekEvidence, dateKey, sampleStrength, tradePnl, tradeR, tradeRisk, weeklyHistory } from "./tradeStats.js";
 import { htmlToPlainText } from "./richText.js";
 
 const MAX_WEEK_TRADES = 40; // trades sent in full detail
@@ -6,6 +6,9 @@ const MAX_HISTORY_TRADES = 40; // earlier trades sent as one short line each
 const NOTE_CHARS = 700;
 const PLAN_CHARS = 1200; // written text of one plan
 const PLAN_STATUSES = ["executed_as_planned", "executed_with_differences", "plan_not_taken", "unplanned_trade"];
+const COMMITMENT_STATUSES = ["kept", "partly_kept", "not_kept", "cannot_tell", "none"];
+const CONFIDENCE = ["early", "building", "solid"];
+const LOOP_STAGES = ["plan", "execute", "record", "review"];
 
 /* ------------------------------- schema ------------------------------- */
 
@@ -67,10 +70,41 @@ export const REVIEW_SCHEMA = {
       },
       required: ["summary", "days"],
     },
+    // the anti-edge / flywheel part: what costs the edge, and the one thing to carry into the next plan
+    flywheel: {
+      type: "OBJECT",
+      properties: {
+        lastCommitment: {
+          type: "OBJECT",
+          properties: { status: { type: "STRING", enum: COMMITMENT_STATUSES }, evidence: str },
+          required: ["status", "evidence"],
+        },
+        leaks: {
+          type: "ARRAY",
+          items: { type: "OBJECT", properties: { title: str, detail: str, cost: str, trades: strList }, required: ["title", "detail", "cost", "trades"] },
+        },
+        edgeSignal: {
+          type: "OBJECT",
+          properties: { confidence: { type: "STRING", enum: CONFIDENCE }, detail: str },
+          required: ["confidence", "detail"],
+        },
+        weakestLink: {
+          type: "OBJECT",
+          properties: { stage: { type: "STRING", enum: LOOP_STAGES }, detail: str },
+          required: ["stage", "detail"],
+        },
+        carryForward: {
+          type: "OBJECT",
+          properties: { rule: str, planLine: str, checkpoint: str },
+          required: ["rule", "planLine", "checkpoint"],
+        },
+      },
+      required: ["lastCommitment", "leaks", "edgeSignal", "weakestLink", "carryForward"],
+    },
     nextWeek: strList,
     mentorNote: str,
   },
-  required: ["headline", "summary", "discipline", "ruleChecks", "strengths", "issues", "strategyFeedback", "nextWeek", "mentorNote"],
+  required: ["headline", "summary", "discipline", "ruleChecks", "strengths", "issues", "strategyFeedback", "flywheel", "nextWeek", "mentorNote"],
 };
 
 /* ------------------------------- prompt ------------------------------- */
@@ -101,18 +135,38 @@ Rules of evidence:
 - The "Facts computed from the logs" block is ground truth; build on it instead of recalculating.
 - The weekly trade count may be small. Acknowledge small samples honestly instead of drawing strong conclusions.
 
+ANTI-EDGE AND THE FLYWHEEL (this is the heart of the review; build the whole answer around it):
+A trader improves when a loop keeps turning: PLAN the trade, EXECUTE it, RECORD it honestly, REVIEW it, then REFINE the rules that feed the next plan. Most traders stall because the review never changes the next plan. Your job is to close that loop with ONE specific change, not to hand out praise or a long to-do list.
+- "Anti-edge" means a repeatable pattern in THIS trader's own logs that pulls results below what their own written rules produce: a kind of trade, a behaviour, a setup condition or a logging habit that costs expectancy. Find it by comparing groups the "Facts computed from the logs" block already splits for you (first entries versus re-entries after a same-day loss, trades after a same-day loss versus others, checkbox ticked versus not ticked, planned days versus unplanned days) and by reading the notes. Rank by cost: the pattern with the largest measured effect on P&L or R comes first. Put the amount in "cost" (for example "3 trades, -INR 2,909"). If the cost cannot be measured from the data, say so in that field.
+- flywheel.lastCommitment: when the prompt has a "LAST REVIEW'S COMMITMENT" block, judge from the trades whether the trader did it: "kept", "partly_kept", "not_kept", or "cannot_tell" when the logs do not show it. Say what in the trades shows that. Without that block use status "none" and an empty evidence string. This is the link that makes the loop turn, so be exact and fair.
+- flywheel.leaks: 0 to 3 anti-edge patterns, biggest cost first, each with the trades involved. A strong week may have none: then return an empty list instead of inventing weaknesses.
+- flywheel.edgeSignal: what the numbers do and do not support. confidence is "early" when the sample is under 30 closed trades, "building" for 30 to 99, "solid" only from 100 and only when the result holds across weeks. Use the win-rate range from the facts block. Never write that the edge is "clear", "proven", "confirmed" or "robust" below 100 closed trades; say "early read" and what a bigger sample must show.
+- flywheel.weakestLink: which stage of the loop is weakest right now and why: "plan" (no plan, plan not specific enough to check), "execute" (rules not followed), "record" (stops, notes or properties missing or contradicting each other, so the review cannot see the truth) or "review" (last period's commitment was ignored or never set). Choose from evidence, one stage only.
+- flywheel.carryForward: exactly ONE change. rule: one sentence to add to or tighten in the written strategy, phrased so a trade can be checked against it. planLine: one line the trader writes in their next plan BEFORE trading to apply it. checkpoint: how the next review will judge it, with a number the trader can count (for example "no re-entry on an instrument after its stop-out, over the next 10 trades"). The first item of nextWeek must be this same change.
+- Before you propose any limit or threshold, test it against the trades you cite: it must actually block or change the trade you are pointing at. Count the entries in the sequence first (the original entry, then each re-entry) and set the limit so the later trade is caught.
+
+STAY INSIDE THE EVIDENCE (a review that overreaches costs the trader trust, so these are hard rules):
+- Terms: "expectancy in R" is the average R per trade. "Reward-to-risk" or "RRR" is the average winner divided by the average loser. They are different numbers: never call expectancy an RRR, and use the labels used in the numbers blocks.
+- A loss that closes at exactly -1R shows that the stop was logged and used consistently. In a trade log, with exit prices typed in by the trader, it does not prove discipline under pressure, slippage or gaps. Do not call stop-loss execution "impeccable" or "perfect".
+- Do not name an emotion (revenge, FOMO, fear, greed, tilt) unless the trader's own notes use that word or describe it. When they do, write "your note on T14 says FOMO". Otherwise describe the behaviour only (for example "entered a third time on the same instrument after two stop-outs").
+- If the facts say the trades look backfilled (many trades on one date), the dates are probably the logging date and not the trade dates. Then do not comment on market phases, days of the week, trends across time or live psychology. Judge rule-following and the numbers only, and say that real trade dates would let the review see more.
+- A group of one to three trades is an observation, not a pattern. Say "in these 3 trades", never "this instrument is choppy" or "clear continuation names".
+- Every count you write must be reconcilable. Use counts from the facts block or count the trades you list. If you say "4 trades", name exactly those 4 in "trades". Never list a few examples after "all" or "N of M" claims. If you cannot name them all, give no number.
+- Plans that were not taken, and days off, are neutral. Never invent a reason for anything the notes do not explain.
+
 Tone: direct, warm, specific, like a mentor who respects the trader. No hype, no generic advice ("manage risk", "stay disciplined") unless tied to a specific trade or number. Address the trader as "you". Plain text only: no markdown, no bullet characters, no emojis. Do not give buy or sell calls on any instrument and do not predict prices.
 
 Output rules:
 - headline: one sentence verdict of the week (max 140 characters).
 - summary: 2 to 4 sentences.
-- discipline.verdict: "followed", "mostly_followed", "partly_followed", "not_followed", or "cannot_assess". discipline.score is 0 to 100 (share of checkable rules followed, weighted by importance). Use cannot_assess with score 0 when the logs don't allow a fair judgement.
+- discipline.verdict: "followed", "mostly_followed", "partly_followed", "not_followed", or "cannot_assess". discipline.score is 0 to 100: the share of checkable rules (followed or broken, not unclear) that were followed. The app recomputes it from your ruleChecks, so make the ruleChecks honest and make the two agree. Use cannot_assess with score 0 when the logs don't allow a fair judgement.
 - ruleChecks: 3 to 8 of the most important rules from the strategy. "trades" lists T-numbers, or an empty list for week-wide rules.
-- strengths: 1 to 3 items. issues: 1 to 4 items, most important first, each with the T-numbers involved.
+- strengths: 1 to 2 items about what the logs genuinely support (not what a backtest guarantees), each with the T-numbers involved when they are specific trades. issues: 0 to 2 items that are NOT already in flywheel.leaks, for example logging gaps where checkbox properties contradict the written notes. Do not repeat a leak here.
 - strategyFeedback.verdict: "keep", "tweak", or "rethink". suggestedChanges: 0 to 3 specific, testable edits to the written strategy (empty list when verdict is keep). marketAdaptation: 1 to 3 sentences grounded in the trader's own data, or say plainly that the data is too thin to tell.
 - planAlignment: ONLY when the TRADER'S TRADE PLANS block is present, otherwise omit it. summary: 1 to 3 sentences on how closely execution matched the plans, treating plans that were not triggered or skipped and unplanned trades as neutral facts. days: one item per day that has a plan or a trade, using the date as written in the prompt. status is "executed_as_planned", "executed_with_differences", "plan_not_taken" (not triggered or skipped), or "unplanned_trade". detail: 1 or 2 sentences. trades: T-numbers involved, or an empty list.
-- nextWeek: exactly 2 or 3 concrete actions for next week.
-- mentorNote: 2 to 3 sentences, personal and encouraging but honest.`;
+- flywheel: always present, following the rules above. Text fields are plain sentences. leaks[].cost is short ("-INR 2,909 over 3 trades"). carryForward fields are one sentence each.
+- nextWeek: exactly 2 or 3 concrete actions for next week. The first one is flywheel.carryForward.rule turned into an action. The others come from leaks or logging gaps and are countable.
+- mentorNote: 2 to 3 sentences, personal and honest. Name the one thing that will make the next review better than this one. No praise that the numbers do not back.`;
 
 export const money = (value, currency) => (value === null || value === undefined || Number.isNaN(value) ? "n/a" : `${value < 0 ? "-" : "+"}${currency} ${Math.abs(value).toFixed(2)}`);
 export const plain = (value, currency) => (value === null || value === undefined || Number.isNaN(value) ? "n/a" : `${currency} ${value.toFixed(2)}`);
@@ -173,12 +227,75 @@ export const statsBlock = (stats, currency) =>
     `win rate ${pct(stats.winRate)} (${stats.wins} won, ${stats.losses} lost)`,
     `profit factor ${stats.profitFactor === null ? (stats.wins > 0 && stats.losses === 0 ? "no losing trades yet" : "n/a") : ratio(stats.profitFactor)}`,
     `expectancy ${money(stats.expectancy, currency)} per closed trade`,
-    `average R ${rText(stats.avgRrr)} (${stats.rrrSample} trades have a stop loss)`,
-    `average win ${plain(stats.avgWin, currency)}, average loss ${plain(stats.avgLoss, currency)}, payoff ratio ${ratio(stats.payoffRatio)}`,
+    `expectancy in R (average R per trade, NOT a reward-to-risk ratio) ${rText(stats.expectancyR)} (${stats.rrrSample} trades have a stop loss)`,
+    `reward-to-risk (RRR = average winner / average loser, in R) ${stats.rewardRisk === null ? "n/a" : ratio(stats.rewardRisk)} (average winner ${rText(stats.avgWinR)}, average loser ${rText(stats.avgLossR)})`,
+    `average win ${plain(stats.avgWin, currency)}, average loss ${plain(stats.avgLoss, currency)}, payoff ratio by amount ${ratio(stats.payoffRatio)}`,
     `best ${money(stats.bestTrade, currency)}, worst ${money(stats.worstTrade, currency)}`,
     `max drawdown ${plain(stats.maxDrawdown, currency)}, longest win streak ${stats.winStreak}, longest losing streak ${stats.lossStreak}`,
     `long: ${stats.long.count} trades, ${money(stats.long.netPnl, currency)}, ${pct(stats.long.winRate)} win | short: ${stats.short.count} trades, ${money(stats.short.netPnl, currency)}, ${pct(stats.short.winRate)} win`,
   ].join("\n");
+
+const groupLine = (name, group, currency) =>
+  `${name}: ${group.count} trade${group.count === 1 ? "" : "s"}, net ${money(group.closed ? group.net : null, currency)}, average ${rText(group.avgR)}, ${group.wins} won of ${group.closed} closed`;
+
+/** The anti-edge facts as prompt lines. `leak` comes from computeLeakEvidence. */
+export const leakLines = (leak, currency, { hasPlanner = false } = {}) => {
+  const lines = [];
+  const range = leak.winRateRange;
+  lines.push(
+    `sample reliability: ${leak.closedCount} closed trades = "${leak.strength}" (under 30 early, 30 to 99 building, 100+ solid)` +
+      (range ? `; the 95% range for the true win rate on this sample is about ${Math.round(range.low * 100)}% to ${Math.round(range.high * 100)}%` : "")
+  );
+  if (leak.lookedBackfilled) {
+    lines.push("trade dates: many trades share one date, so they look backfilled (a backtest or catch-up logging). The dates are probably the logging date, not the trade dates.");
+  }
+
+  const re = leak.reEntry;
+  if (re.count) {
+    lines.push(`re-entries (a trade on an instrument that had already lost earlier the same day): ${re.count}`);
+    lines.push(`  ${groupLine("re-entries", re.group, currency)}`);
+    lines.push(`  ${groupLine("all other trades", re.rest, currency)}`);
+    re.chains.forEach((chain) =>
+      lines.push(`  sequence on ${chain.asset} ${chain.day}: ${chain.count} entries in order (${chain.entries.join(", ")}); ${chain.reEntries} of them were opened right after a losing entry on this instrument; net of the sequence ${money(chain.net, currency)}`)
+    );
+  } else {
+    lines.push("re-entries after a same-day loss on the same instrument: none");
+  }
+
+  if (leak.afterLoss.group.count) {
+    lines.push(`${groupLine("trades opened after any same-day loss", leak.afterLoss.group, currency)}`);
+    lines.push(`${groupLine("trades not opened after a same-day loss", leak.afterLoss.rest, currency)}`);
+  }
+
+  leak.checkboxSplits.forEach((box) => {
+    if (!box.ticked.count || !box.notTicked.count) return;
+    lines.push(`checkbox "${box.label}": ${groupLine("ticked", box.ticked, currency)} | ${groupLine("not ticked", box.notTicked, currency)}`);
+  });
+
+  if (leak.riskSpread) {
+    lines.push(`risk per trade spread: largest is ${leak.riskSpread.ratio === null ? "n/a" : `${leak.riskSpread.ratio.toFixed(2)}x`} the smallest`);
+  }
+
+  if (hasPlanner && leak.planSplit) {
+    lines.push(`plans by date only (a plan on a day does not prove a trade matched it): ${leak.planSplit.plannedDays} day(s) with a plan`);
+    lines.push(`  ${groupLine("trades on days with a plan", leak.planSplit.onPlannedDays, currency)}`);
+    lines.push(`  ${groupLine("trades on days without a plan", leak.planSplit.onUnplannedDays, currency)}`);
+  }
+  return lines;
+};
+
+/** What the previous review asked the trader to carry into this period (from utils/flywheel.js), or null. */
+export const commitmentBlock = (last) =>
+  last
+    ? [
+        `=== LAST REVIEW'S COMMITMENT (written for ${last.start} to ${last.end}; judge whether this period's trades show it) ===`,
+        `rule to carry forward: ${last.rule}`,
+        last.planLine ? `line the trader was to write in each plan: ${last.planLine}` : null,
+        last.checkpoint ? `how it was to be checked: ${last.checkpoint}` : null,
+        last.source === "next_steps" ? "(that review had no single commitment; this is its first suggested action)" : null,
+        "",
+      ].filter((line) => line !== null)
+    : [];
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const weekday = (key) => WEEKDAYS[new Date(`${key}T00:00:00Z`).getUTCDay()];
@@ -255,17 +372,21 @@ export const buildPlanSection = ({ planners, planEntries, shown, extraTrades = [
  * Assembles everything the mentor reads. Returns { prompt, tradeLabels } where tradeLabels maps "T3" to a
  * readable name so the answer's trade references can be shown to the user.
  */
-export const buildMentorPrompt = ({ journal, weekStart, weekEnd, weekTrades, priorTrades, allTradesToDate, planners = [], planEntries = [] }) => {
+export const buildMentorPrompt = ({ journal, weekStart, weekEnd, weekTrades, priorTrades, allTradesToDate, planners = [], planEntries = [], lastCommitment = null }) => {
   const currency = journal.currency ?? "USD";
   const context = journal.context ?? {};
 
   const shown = weekTrades.slice(0, MAX_WEEK_TRADES);
   const tradeLabels = {};
+  const labelByTrade = new Map();
   shown.forEach((trade, index) => {
-    tradeLabels[`T${index + 1}`] = `${dateKey(trade.date)} ${trade.assetName} ${trade.direction}`;
+    // the T-number is part of the readable name, so two trades on the same instrument and day stay distinguishable
+    tradeLabels[`T${index + 1}`] = `T${index + 1} · ${dateKey(trade.date)} ${trade.assetName} ${trade.direction}`;
+    labelByTrade.set(String(trade._id), `T${index + 1}`);
   });
 
   const weekStats = computeAnalytics(weekTrades);
+  const leak = computeLeakEvidence(weekTrades, { planEntries: planners.length ? planEntries : null, labelOf: (trade) => labelByTrade.get(String(trade._id)) ?? null });
   const overall = computeAnalytics(allTradesToDate);
   const evidence = computeWeekEvidence(weekTrades);
   const history = weeklyHistory(allTradesToDate, weekStart);
@@ -284,10 +405,12 @@ export const buildMentorPrompt = ({ journal, weekStart, weekEnd, weekTrades, pri
     ...evidence.checkboxProperties.map((box) => `checkbox "${box.label}": ticked on ${box.yes}, not ticked on ${box.no}`),
     `by direction: ${evidence.byDirection.map((g) => `${g.name} ${g.trades} trades ${money(g.net, currency)} (${g.wins} won)`).join("; ") || "none closed"}`,
     `by instrument: ${evidence.byAsset.map((g) => `${g.name} ${g.trades} trades ${money(g.net, currency)} (${g.wins} won)`).join("; ") || "none closed"}`,
+    `closed trades in the whole journal up to the end of this week: ${overall.closedTrades}`,
+    ...leakLines(leak, currency, { hasPlanner: planners.length > 0 }),
   ];
 
   const historyLines = history.length
-    ? history.map((row) => `week of ${row.weekStart}: ${row.trades} trades, net ${money(row.net, currency)}, win rate ${pct(row.winRate)}, avg R ${rText(row.avgRrr)}`)
+    ? history.map((row) => `week of ${row.weekStart}: ${row.trades} trades, net ${money(row.net, currency)}, win rate ${pct(row.winRate)}, expectancy ${rText(row.expectancyR)}`)
     : ["(no earlier weeks with trades)"];
 
   const priorLines = priorTrades.slice(-MAX_HISTORY_TRADES).map((trade) => tradeLine(trade, currency));
@@ -310,6 +433,7 @@ export const buildMentorPrompt = ({ journal, weekStart, weekEnd, weekTrades, pri
     planSection ? "=== TRADER'S TRADE PLANS vs WHAT WAS EXECUTED (from the planner connected to this journal) ===" : null,
     planSection,
     planSection ? "" : null,
+    ...commitmentBlock(lastCommitment),
     "=== Facts computed from the logs (ground truth) ===",
     ...evidenceLines,
     "",
@@ -330,7 +454,7 @@ export const buildMentorPrompt = ({ journal, weekStart, weekEnd, weekTrades, pri
     .filter((line) => line !== null)
     .join("\n");
 
-  return { prompt, tradeLabels, hasPlanContext: Boolean(planSection) };
+  return { prompt, tradeLabels, hasPlanContext: Boolean(planSection), hasLast: Boolean(lastCommitment), closedCount: overall.closedTrades };
 };
 
 /* ---------------------------- sanitising ---------------------------- */
@@ -362,18 +486,31 @@ const sanitizePlanAlignment = (raw, labels, weekStart, weekEnd, maxDays = 14) =>
   return summary || days.length ? { summary, days } : null;
 };
 
-/** Never trust the model's JSON blindly: clamp lengths, enforce the enums, resolve trade references. */
-export const sanitizeReview = (raw, tradeLabels, { hasPlanContext = false, weekStart = "", weekEnd = "", maxPlanDays = 14 } = {}) => {
-  const discipline = raw?.discipline ?? {};
-  const verdict = oneOf(discipline.verdict, ["followed", "mostly_followed", "partly_followed", "not_followed", "cannot_assess"], "cannot_assess");
-  const score = Number.isFinite(Number(discipline.score)) ? Math.min(100, Math.max(0, Math.round(Number(discipline.score)))) : 0;
-  const feedback = raw?.strategyFeedback ?? {};
+// Confidence is capped by the sample, whatever the model says: under 30 closed trades is an early read, full stop.
+const sanitizeFlywheel = (raw, labels, { hasLast, closedCount }) => {
+  const cap = sampleStrength(closedCount);
+  const order = CONFIDENCE;
+  const asked = oneOf(raw?.edgeSignal?.confidence, CONFIDENCE, "early");
+  const confidence = order.indexOf(asked) > order.indexOf(cap) ? cap : asked;
+  const status = hasLast ? oneOf(raw?.lastCommitment?.status, COMMITMENT_STATUSES, "cannot_tell") : "none";
 
   return {
-    headline: text(raw?.headline, 200),
-    summary: text(raw?.summary, 900),
-    discipline: { verdict, score: verdict === "cannot_assess" ? null : score, explanation: text(discipline.explanation, 700) },
-    ruleChecks: list(raw?.ruleChecks, 8, (item) => {
+    lastCommitment: { status, evidence: status === "none" ? "" : text(raw?.lastCommitment?.evidence, 600) },
+    leaks: list(raw?.leaks, 3, (item) =>
+      text(item?.title, 140) ? { title: text(item.title, 140), detail: text(item.detail, 700), cost: text(item.cost, 160), trades: resolveTrades(item.trades, labels) } : null
+    ),
+    edgeSignal: { confidence, detail: text(raw?.edgeSignal?.detail, 700) },
+    weakestLink: { stage: oneOf(raw?.weakestLink?.stage, LOOP_STAGES, "review"), detail: text(raw?.weakestLink?.detail, 500) },
+    carryForward: { rule: text(raw?.carryForward?.rule, 400), planLine: text(raw?.carryForward?.planLine, 400), checkpoint: text(raw?.carryForward?.checkpoint, 400) },
+  };
+};
+
+/** Never trust the model's JSON blindly: clamp lengths, enforce the enums, resolve trade references. */
+export const sanitizeReview = (raw, tradeLabels, { hasPlanContext = false, weekStart = "", weekEnd = "", maxPlanDays = 14, hasLast = false, closedCount = 0 } = {}) => {
+  const discipline = raw?.discipline ?? {};
+  const feedback = raw?.strategyFeedback ?? {};
+
+  const ruleChecks = list(raw?.ruleChecks, 8, (item) => {
       const rule = text(item?.rule, 220);
       if (!rule) return null;
       return {
@@ -382,7 +519,21 @@ export const sanitizeReview = (raw, tradeLabels, { hasPlanContext = false, weekS
         evidence: text(item.evidence, 500),
         trades: resolveTrades(item.trades, tradeLabels),
       };
-    }),
+    });
+
+  // The score is arithmetic, not a feeling: followed rules / (followed + broken). "Can't tell" rules are left out of it.
+  const followedCount = ruleChecks.filter((check) => check.status === "followed").length;
+  const brokenCount = ruleChecks.filter((check) => check.status === "broken").length;
+  const checkable = followedCount + brokenCount;
+  const computedScore = checkable ? Math.round((followedCount / checkable) * 100) : null;
+  const verdict = computedScore === null ? "cannot_assess" : computedScore >= 95 ? "followed" : computedScore >= 75 ? "mostly_followed" : computedScore >= 40 ? "partly_followed" : "not_followed";
+  const score = computedScore;
+
+  return {
+    headline: text(raw?.headline, 200),
+    summary: text(raw?.summary, 900),
+    discipline: { verdict, score, explanation: text(discipline.explanation, 700) },
+    ruleChecks,
     strengths: list(raw?.strengths, 3, (item) => (text(item?.title, 120) ? { title: text(item.title, 120), detail: text(item.detail, 600) } : null)),
     issues: list(raw?.issues, 4, (item) =>
       text(item?.title, 120) ? { title: text(item.title, 120), detail: text(item.detail, 700), trades: resolveTrades(item.trades, tradeLabels) } : null
@@ -393,6 +544,7 @@ export const sanitizeReview = (raw, tradeLabels, { hasPlanContext = false, weekS
       suggestedChanges: list(feedback.suggestedChanges, 3, (item) => text(item, 400) || null),
       marketAdaptation: text(feedback.marketAdaptation, 700),
     },
+    flywheel: sanitizeFlywheel(raw?.flywheel, tradeLabels, { hasLast, closedCount }),
     planAlignment: hasPlanContext ? sanitizePlanAlignment(raw?.planAlignment, tradeLabels, weekStart, weekEnd, maxPlanDays) : null,
     nextWeek: list(raw?.nextWeek, 3, (item) => text(item, 300) || null),
     mentorNote: text(raw?.mentorNote, 700),

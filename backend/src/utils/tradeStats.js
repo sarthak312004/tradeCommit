@@ -100,6 +100,11 @@ export const computeAnalytics = (trades) => {
   }
 
   const rValues = closed.map((item) => item.r).filter((value) => value !== null);
+  const winR = closed.filter((item) => item.pnl > 0 && item.r !== null).map((item) => item.r);
+  const lossR = closed.filter((item) => item.pnl < 0 && item.r !== null).map((item) => item.r);
+  const avgWinR = winR.length ? sum(winR) / winR.length : null;
+  const avgLossR = lossR.length ? Math.abs(sum(lossR) / lossR.length) : null; // shown as a positive size
+  const expectancyR = rValues.length ? sum(rValues) / rValues.length : null;
   const avgWin = wins.length ? grossProfit / wins.length : null;
   const avgLoss = losses.length ? grossLoss / losses.length : null;
   const side = (name) => sideSummary(closed.filter((item) => (isShort(item.trade) ? "short" : "long") === name));
@@ -114,8 +119,14 @@ export const computeAnalytics = (trades) => {
     winRate: closed.length ? wins.length / closed.length : null,
     expectancy: closed.length ? netPnl / closed.length : null,
     profitFactor: grossLoss > 0 ? grossProfit / grossLoss : null, // null = no losing trade yet (undefined / infinite)
-    avgRrr: rValues.length ? sum(rValues) / rValues.length : null,
+    // Average R per trade = EXPECTANCY in R. It is not a reward-to-risk ratio.
+    expectancyR,
+    avgRrr: expectancyR, // legacy name kept so reviews saved earlier still read; always means expectancyR
     rrrSample: rValues.length,
+    avgWinR,
+    avgLossR,
+    // Reward-to-risk = average winner / average loser, both in R (needs stops). Null when there is no winner or loser with a stop.
+    rewardRisk: avgWinR !== null && avgLossR !== null && avgLossR > 0 ? avgWinR / avgLossR : null,
     avgWin,
     avgLoss,
     payoffRatio: avgWin !== null && avgLoss !== null ? avgWin / avgLoss : null,
@@ -214,7 +225,132 @@ export const weeklyHistory = (trades, beforeWeekStart, weeks = 8) => {
     });
     if (!inWeek.length) continue;
     const stats = computeAnalytics(inWeek);
-    rows.push({ weekStart: start, trades: stats.totalTrades, closed: stats.closedTrades, net: stats.netPnl, winRate: stats.winRate, avgRrr: stats.avgRrr });
+    rows.push({ weekStart: start, trades: stats.totalTrades, closed: stats.closedTrades, net: stats.netPnl, winRate: stats.winRate, expectancyR: stats.expectancyR });
   }
   return rows;
+};
+
+/* --------------------- the numbers a summary card shows --------------------- */
+
+/** One shape for the stats saved with a review and shown above it (weekly and date range alike). */
+export const summaryStats = (trades) => {
+  const stats = computeAnalytics(trades);
+  return {
+    trades: stats.totalTrades,
+    closed: stats.closedTrades,
+    netPnl: stats.netPnl,
+    winRate: stats.winRate,
+    expectancyR: stats.expectancyR,
+    rewardRisk: stats.rewardRisk,
+    payoffRatio: stats.payoffRatio,
+    avgRrr: stats.expectancyR, // legacy alias, same value as expectancyR
+  };
+};
+
+/* ------------------- anti-edge evidence (what costs the edge) ------------------- */
+
+const wilson = (wins, n, z = 1.96) => {
+  if (!n) return null;
+  const p = wins / n;
+  const denom = 1 + (z * z) / n;
+  const centre = (p + (z * z) / (2 * n)) / denom;
+  const half = (z * Math.sqrt((p * (1 - p)) / n + (z * z) / (4 * n * n))) / denom;
+  return { low: Math.max(0, centre - half), high: Math.min(1, centre + half) };
+};
+
+const groupStats = (items) => {
+  const closed = items.filter((item) => item.pnl !== null);
+  const rs = closed.map((item) => item.r).filter((value) => value !== null);
+  return {
+    count: items.length,
+    closed: closed.length,
+    net: sum(closed.map((item) => item.pnl)),
+    wins: closed.filter((item) => item.pnl > 0).length,
+    avgR: rs.length ? sum(rs) / rs.length : null,
+  };
+};
+
+/** Sample size honesty: how much weight a number can carry. Under 30 closed trades nothing is more than an early read. */
+export const sampleStrength = (closedCount) => (closedCount < 30 ? "early" : closedCount < 100 ? "building" : "solid");
+
+const sameAsset = (a, b) => String(a.assetName ?? "").trim().toLowerCase() === String(b.assetName ?? "").trim().toLowerCase();
+
+/**
+ * Facts for the anti-edge part of the review, computed from the logs so the model never has to guess:
+ * how reliable the sample is, trades opened again on the same instrument after a stop-out, trades taken after a
+ * same-day loss, results with and without each checkbox property ticked, risk-size spread, and (when a planner
+ * is connected) results on days that had a plan versus days that did not.
+ * `labelOf(trade)` returns the T-number the prompt uses for a trade, or null for trades listed without one.
+ */
+export const computeLeakEvidence = (trades, { planEntries = null, labelOf = () => null } = {}) => {
+  const ordered = [...trades].sort((a, b) => {
+    const byDay = dateKey(a.date).localeCompare(dateKey(b.date));
+    return byDay || new Date(a.createdAt ?? 0) - new Date(b.createdAt ?? 0);
+  });
+  const items = ordered.map((trade) => ({ trade, day: dateKey(trade.date), pnl: tradePnl(trade), r: tradeR(trade), risk: tradeRisk(trade), label: labelOf(trade) }));
+  const closed = items.filter((item) => item.pnl !== null);
+  const wins = closed.filter((item) => item.pnl > 0).length;
+
+  // re-entries: a trade on an instrument that already lost earlier the same day (and was not itself the first entry)
+  const reEntryItems = [];
+  const chains = new Map();
+  items.forEach((item, index) => {
+    const earlier = items.slice(0, index).filter((other) => other.day === item.day && sameAsset(other.trade, item.trade));
+    if (!earlier.length) return;
+    const lastEarlier = earlier[earlier.length - 1];
+    if (lastEarlier.pnl === null || lastEarlier.pnl >= 0) return; // only after a loss: re-entry after a win is a different thing
+    reEntryItems.push(item);
+    const key = `${item.day}|${String(item.trade.assetName ?? "").trim().toLowerCase()}`;
+    const chain = chains.get(key) ?? { day: item.day, asset: item.trade.assetName, entries: [] };
+    chain.entries = [...earlier, item].map((e) => e.label ?? "(no T-number)");
+    chain.count = earlier.length + 1;
+    chain.reEntries = (chain.reEntries ?? 0) + 1;
+    chain.net = sum([...earlier, item].filter((e) => e.pnl !== null).map((e) => e.pnl));
+    chains.set(key, chain);
+  });
+
+  const reEntrySet = new Set(reEntryItems);
+  const afterLossItems = [];
+  const lossDays = new Set();
+  for (const item of items) {
+    if (lossDays.has(item.day)) afterLossItems.push(item);
+    if (item.pnl !== null && item.pnl < 0) lossDays.add(item.day);
+  }
+
+  // checkbox properties: result when ticked vs not ticked
+  const boxes = new Map();
+  for (const item of items) {
+    for (const field of item.trade.customFields ?? []) {
+      if (field.type !== "checkbox") continue;
+      const entry = boxes.get(field.label) ?? { label: field.label, yes: [], no: [] };
+      (field.value === true ? entry.yes : entry.no).push(item);
+      boxes.set(field.label, entry);
+    }
+  }
+  const checkboxSplits = [...boxes.values()].map((box) => ({ label: box.label, ticked: groupStats(box.yes), notTicked: groupStats(box.no) }));
+
+  const risks = items.map((item) => item.risk).filter((value) => value !== null);
+  const days = new Set(items.map((item) => item.day));
+
+  let planSplit = null;
+  if (planEntries) {
+    const plannedDays = new Set(planEntries.map((entry) => entry.date));
+    planSplit = {
+      plannedDays: plannedDays.size,
+      onPlannedDays: groupStats(items.filter((item) => plannedDays.has(item.day))),
+      onUnplannedDays: groupStats(items.filter((item) => !plannedDays.has(item.day))),
+    };
+  }
+
+  return {
+    closedCount: closed.length,
+    strength: sampleStrength(closed.length),
+    winRateRange: wilson(wins, closed.length),
+    lookedBackfilled: items.length >= 8 && days.size === 1, // many trades, one date: probably logged after the fact (backtest or catch-up)
+    reEntry: { count: reEntryItems.length, group: groupStats(reEntryItems), rest: groupStats(items.filter((item) => !reEntrySet.has(item))), chains: [...chains.values()] },
+    afterLoss: { group: groupStats(afterLossItems), rest: groupStats(items.filter((item) => !afterLossItems.includes(item))) },
+    checkboxSplits,
+    riskSpread: risks.length ? { min: Math.min(...risks), max: Math.max(...risks), ratio: Math.min(...risks) > 0 ? Math.max(...risks) / Math.min(...risks) : null } : null,
+    planSplit,
+  };
 };

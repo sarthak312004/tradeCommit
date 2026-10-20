@@ -44,13 +44,16 @@ function TradeAnalysis({ trades, currency, rangeLabel }) {
   // a trade that failed to save (shown with Retry / Discard) isn't in the journal yet, so it stays out of the numbers
   const stats = useMemo(() => computeAnalytics(trades.filter((trade) => trade.syncState !== 'failed')), [trades])
   const hasClosed = stats.closedTrades > 0
+  // reward-to-risk in R when stops are logged, otherwise the same idea by amount
+  const rewardRisk = stats.rewardRisk ?? stats.payoffRatio
 
   const sideNote = (side) => (side.count ? `${plural(side.count, 'trade')}, ${formatPercent(side.winRate)} win` : 'no trades')
 
   const performanceRows = [
     { label: 'Average win', value: money(stats.avgWin), tone: stats.avgWin ? 'positive' : 'neutral' },
     { label: 'Average loss', value: money(stats.avgLoss === null ? null : -stats.avgLoss), tone: stats.avgLoss ? 'negative' : 'neutral' },
-    { label: 'Payoff ratio', value: formatRatio(stats.payoffRatio), note: 'avg win / avg loss' },
+    { label: 'Payoff ratio', value: formatRatio(stats.payoffRatio), note: 'avg win / avg loss, by amount' },
+    { label: 'Expectancy (R)', value: formatR(stats.expectancyR), note: 'average R per trade', tone: stats.expectancyR === null ? 'neutral' : toneOf(stats.expectancyR) },
     { label: 'Best trade', value: money(stats.bestTrade, { signed: true }), tone: toneOf(stats.bestTrade) },
     { label: 'Worst trade', value: money(stats.worstTrade, { signed: true }), tone: toneOf(stats.worstTrade) }
   ]
@@ -93,12 +96,23 @@ function TradeAnalysis({ trades, currency, rangeLabel }) {
         <Stat label="Total trades" value={String(stats.totalTrades)} hint={`${stats.closedTrades} closed, ${stats.openTrades} open`} />
         <Stat label="Win rate" value={formatPercent(stats.winRate)} hint={hasClosed ? `${stats.wins} won, ${stats.losses} lost` : undefined} />
         <Stat label="Profit factor" value={formatRatio(stats.profitFactor)} hint="gross profit / gross loss" />
-        <Stat label="Expectancy" value={money(stats.expectancy, { signed: true })} tone={toneOf(stats.expectancy)} hint="average per closed trade" />
         <Stat
-          label="Avg RRR"
-          value={formatR(stats.avgRrr)}
-          tone={stats.avgRrr === null ? 'neutral' : toneOf(stats.avgRrr)}
-          hint={stats.rrrSample ? `${stats.rrrSample} of ${stats.closedTrades} trades have a stop loss` : 'add a stop loss to your trades'}
+          label="Expectancy"
+          value={money(stats.expectancy, { signed: true })}
+          tone={toneOf(stats.expectancy)}
+          hint={stats.expectancyR === null ? 'average per closed trade' : `average per closed trade, ${formatR(stats.expectancyR)}`}
+        />
+        <Stat
+          label="Reward : risk"
+          value={rewardRisk === null ? '-' : formatRatio(rewardRisk)}
+          tone={rewardRisk === null ? 'neutral' : rewardRisk >= 1 ? 'positive' : 'negative'}
+          hint={
+            stats.rewardRisk !== null
+              ? `avg winner ${formatR(stats.avgWinR)} / avg loser ${formatR(stats.avgLossR)}`
+              : rewardRisk !== null
+                ? 'avg win / avg loss by amount (no stop losses logged)'
+                : 'needs a winning and a losing trade'
+          }
         />
       </div>
 

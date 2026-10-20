@@ -16,7 +16,8 @@ import { evaluateAccess, withUsageReservation } from "../utils/aiQuota.js";
 import { generateJson } from "../utils/gemini.js";
 import { runQueued } from "../utils/geminiQueue.js";
 import { htmlToPlainText } from "../utils/richText.js";
-import { addDays, computeAnalytics, dateKey, isDateKey } from "../utils/tradeStats.js";
+import { findLastCommitment } from "../utils/flywheel.js";
+import { addDays, dateKey, isDateKey, summaryStats } from "../utils/tradeStats.js";
 
 // A strategy shorter than this has no rules to check trades against.
 const MIN_STRATEGY_LENGTH = 15;
@@ -116,10 +117,8 @@ const loadRange = async ({ ownerId, journalId, start, end }) => {
   };
 };
 
-const rangeStats = (trades) => {
-  const stats = computeAnalytics(trades);
-  return { trades: stats.totalTrades, closed: stats.closedTrades, netPnl: stats.netPnl, winRate: stats.winRate, avgRrr: stats.avgRrr };
-};
+// { trades, closed, netPnl, winRate, expectancyR, rewardRisk, payoffRatio, avgRrr (legacy alias of expectancyR) }
+const rangeStats = summaryStats;
 
 const serialize = (range, saved, access) => ({
   kind: "range",
@@ -143,13 +142,15 @@ const findSaved = (range) => AiRangeReview.findOne({ journal: range.journal._id,
 
 const generate = async (range) => {
   const ownerId = range.journal.owner;
-  const { prompt, tradeLabels, hasPlanContext } = buildRangePrompt(range);
+  // the flywheel link: what the previous review asked the trader to carry into this period
+  const lastCommitment = await findLastCommitment({ journalId: range.journal._id, ownerId, before: range.rangeStart });
+  const { prompt, tradeLabels, hasPlanContext, hasLast, closedCount } = buildRangePrompt({ ...range, lastCommitment });
 
   // Reserved first (shared daily budget), counted only once the review is saved. Any failure on the way, such as a
   // Gemini rate limit, a full queue, a timeout or an unusable answer, deletes the reservation: no allowance is used.
   return withUsageReservation({ ownerId, journalId: range.journal._id, weekStart: range.rangeStart }, async () => {
     const { result, model } = await runQueued(() => generateJson({ system: RANGE_SYSTEM_PROMPT, prompt, schema: REVIEW_SCHEMA }));
-    const review = sanitizeReview(result, tradeLabels, { hasPlanContext, weekStart: range.rangeStart, weekEnd: range.rangeEnd, maxPlanDays: MAX_PLAN_DAYS_IN_REVIEW });
+    const review = sanitizeReview(result, tradeLabels, { hasPlanContext, weekStart: range.rangeStart, weekEnd: range.rangeEnd, maxPlanDays: MAX_PLAN_DAYS_IN_REVIEW, hasLast, closedCount });
     if (!review.summary || !review.headline) throw new ApiError(502, "The AI returned an incomplete review. Please try again.");
 
     return AiRangeReview.findOneAndUpdate(
@@ -221,6 +222,18 @@ export const createRangeReview = asyncHandler(async (req, res) => {
   markUserBusy(ownerId, key);
 
   return respond(await job);
+});
+
+// GET /api/v1/journals/:journalId/ai-range-reviews/carry-forward
+// The one change the latest saved review asked the trader to carry into their next plan, so the planner can show it
+// while a plan is being written: { commitment: { start, end, rule, planLine, checkpoint, source } | null }. Never calls the AI.
+export const getCarryForward = asyncHandler(async (req, res) => {
+  const journalId = requireJournalId(req);
+  const journal = await Journal.findOne({ _id: journalId, owner: req.user._id }).select("_id").lean();
+  if (!journal) throw new ApiError(404, "Journal not found");
+  // no upper bound: the latest review wins, including a weekly one whose week is still running
+  const commitment = await findLastCommitment({ journalId: journal._id, ownerId: req.user._id, before: "9999-12-31" });
+  return res.status(200).json(new ApiResponse(200, { commitment }, "Carry-forward fetched"));
 });
 
 // GET /api/v1/journals/:journalId/ai-range-reviews/:reviewId

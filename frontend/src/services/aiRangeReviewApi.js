@@ -11,7 +11,7 @@ const base = (journalId) => `/api/v1/journals/${journalId}/ai-range-reviews`
 /**
  * Saved review for exactly this range (never calls the AI, never uses allowance). `start` / `end` are YYYY-MM-DD, inclusive.
  * Resolves to { kind: 'range', id, rangeStart, rangeEnd, days, currency, hasStrategy, tradeCount, planner,
- *   stats: { trades, closed, netPnl, winRate, avgRrr }, review, model, generatedAt, stale, access }
+ *   stats: { trades, closed, netPnl, winRate, expectancyR, rewardRisk, payoffRatio, avgRrr (legacy alias of expectancyR) }, review, model, generatedAt, stale, access }
  * `access` has the same shape as for weekly reviews (canGenerate, reason, message, newTrades, threshold, usage...).
  */
 export const previewRangeReview = (journalId, start, end) =>
@@ -19,6 +19,13 @@ export const previewRangeReview = (journalId, start, end) =>
 
 /** Returns the saved review when it is current, otherwise asks the mentor. Rejects with the server's explanation when not allowed. */
 export const createRangeReview = (journalId, start, end) => requestJson(base(journalId), { method: 'POST', body: { start, end } })
+
+/**
+ * The one change the journal's latest review (weekly or range) asked the trader to carry into the next plan, so the
+ * planner can show it while a plan is written. Resolves to { commitment: { start, end, rule, planLine, checkpoint, source } | null }.
+ * Never calls the AI.
+ */
+export const getCarryForward = (journalId) => requestJson(`${base(journalId)}/carry-forward`, { cache: 'no-store' })
 
 /** One saved range review by id (opened from the history). */
 export const getRangeReview = (journalId, reviewId) => requestJson(`${base(journalId)}/${encodeURIComponent(reviewId)}`, { cache: 'no-store' })

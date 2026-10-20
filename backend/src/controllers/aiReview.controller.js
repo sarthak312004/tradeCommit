@@ -14,7 +14,8 @@ import { isUserBusy, markUserBusy, releaseUser } from "../utils/aiJobGuard.js";
 import { generateJson } from "../utils/gemini.js";
 import { runQueued } from "../utils/geminiQueue.js";
 import { htmlToPlainText } from "../utils/richText.js";
-import { addDays, computeAnalytics, dateKey, isDateKey, mondayOf } from "../utils/tradeStats.js";
+import { findLastCommitment } from "../utils/flywheel.js";
+import { addDays, dateKey, isDateKey, mondayOf, summaryStats } from "../utils/tradeStats.js";
 
 // A strategy shorter than this has no rules to check trades against.
 const MIN_STRATEGY_LENGTH = 15;
@@ -101,10 +102,8 @@ const loadWeek = async (req) => {
   return { journal, weekStart, weekEnd, weekTrades, priorTrades, allTradesToDate, planners, planEntries, hasStrategy: strategy.length >= MIN_STRATEGY_LENGTH, inputHash, contextHash, isClosed: weekEnd < todayKey() };
 };
 
-const weekSummary = (weekTrades) => {
-  const stats = computeAnalytics(weekTrades);
-  return { trades: stats.totalTrades, closed: stats.closedTrades, netPnl: stats.netPnl, winRate: stats.winRate, avgRrr: stats.avgRrr };
-};
+// { trades, closed, netPnl, winRate, expectancyR, rewardRisk, payoffRatio, avgRrr (legacy alias of expectancyR) }
+const weekSummary = summaryStats;
 
 const serialize = (week, saved, access) => ({
   weekStart: week.weekStart,
@@ -126,14 +125,16 @@ const serialize = (week, saved, access) => ({
 
 const generate = async (week) => {
   const ownerId = week.journal.owner;
-  const { prompt, tradeLabels, hasPlanContext } = buildMentorPrompt(week);
+  // the flywheel link: what the previous review asked the trader to carry into this week
+  const lastCommitment = await findLastCommitment({ journalId: week.journal._id, ownerId, before: week.weekStart });
+  const { prompt, tradeLabels, hasPlanContext, hasLast, closedCount } = buildMentorPrompt({ ...week, lastCommitment });
 
   // The generation is reserved first so concurrent traders cannot overshoot the shared daily budget, but it only
   // counts once the review is saved. If Gemini is rate limited, the queue is full, the call times out or the answer
   // is unusable, the reservation is deleted and the trader's daily/weekly allowance is untouched.
   return withUsageReservation({ ownerId, journalId: week.journal._id, weekStart: week.weekStart }, async () => {
     const { result, model } = await runQueued(() => generateJson({ system: SYSTEM_PROMPT, prompt, schema: REVIEW_SCHEMA }));
-    const review = sanitizeReview(result, tradeLabels, { hasPlanContext, weekStart: week.weekStart, weekEnd: week.weekEnd });
+    const review = sanitizeReview(result, tradeLabels, { hasPlanContext, weekStart: week.weekStart, weekEnd: week.weekEnd, hasLast, closedCount });
     if (!review.summary || !review.headline) throw new ApiError(502, "The AI returned an incomplete review. Please try again.");
 
     return AiReview.findOneAndUpdate(

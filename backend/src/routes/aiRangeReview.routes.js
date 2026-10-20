@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { createRangeReview, getRangeReviewById, listAiReviewHistory, previewRangeReview } from "../controllers/aiRangeReview.controller.js";
+import { createRangeReview, getCarryForward, getRangeReviewById, listAiReviewHistory, previewRangeReview } from "../controllers/aiRangeReview.controller.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 
 // mounted at /api/v1/journals/:journalId/ai-range-reviews
@@ -14,11 +14,15 @@ import { verifyJWT } from "../middlewares/auth.middleware.js";
 //                                     daily budget, queues a Gemini call and saves the result. Failed calls use no allowance.
 //                                     403 = not enough trades yet, 429 = cap reached / mentor busy,
 //                                     400 = bad range, no strategy or no trades.
+// GET  /carry-forward                 the one change the latest saved review (weekly or range) asked the trader to carry
+//                                     into the next plan: { commitment: { start, end, rule, planLine, checkpoint, source } | null }.
+//                                     Read by the planner and the journal so feedback reaches the next plan. Never calls Gemini.
 // GET  /:reviewId                     one saved range review, for opening it from the history.
 const router = Router({ mergeParams: true });
 
 router.get("/", verifyJWT, listAiReviewHistory);
 router.get("/preview", verifyJWT, previewRangeReview);
+router.get("/carry-forward", verifyJWT, getCarryForward); // before "/:reviewId" so it is not read as an id
 router.post("/", verifyJWT, createRangeReview);
 router.get("/:reviewId", verifyJWT, getRangeReviewById);
 

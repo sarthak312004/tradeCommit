@@ -23,8 +23,9 @@ const MAX_TITLE = 120
  * @param {Function} [onDelete]      async () => void   (editing only)
  * @param {Function} onClose
  * @param {Function} onUploadImage   (file) => Promise<url>
+ * @param {object}   [carryForward]  { rule, planLine, checkpoint } the linked journal's latest mentor review asked the trader to apply
  */
-function PlanForm({ plannerName, plannerType, initialEntry = null, initialDate, onSubmit, onDelete, onClose, onUploadImage }) {
+function PlanForm({ plannerName, plannerType, initialEntry = null, initialDate, onSubmit, onDelete, onClose, onUploadImage, carryForward = null }) {
   const defaultDate = initialEntry?.date ?? initialDate ?? todayKey()
   const { register, handleSubmit, watch, formState: { errors } } = useForm({
     defaultValues: { title: initialEntry?.title ?? '', date: defaultDate }
@@ -148,6 +149,15 @@ function PlanForm({ plannerName, plannerType, initialEntry = null, initialDate, 
       </div>
 
       <hr className="my-6 border-zinc-300 dark:border-white/[0.12]" />
+
+      {carryForward?.rule && !initialEntry && (
+        <aside aria-label="From your last mentor review" className="mb-5 rounded-xl border border-[#d6a88f]/70 bg-[#fbf6f1] px-4 py-3.5 dark:border-[#e08a68]/30 dark:bg-[#e08a68]/[0.07]">
+          <p className="text-[11px] font-medium uppercase tracking-wider text-[#a24d2e] dark:text-[#e08a68]">From your last mentor review</p>
+          <p className="mt-1.5 text-sm font-medium leading-6 text-zinc-900 dark:text-zinc-100">{carryForward.rule}</p>
+          {carryForward.planLine && <p className="mt-1.5 text-[13px] leading-6 text-zinc-600 dark:text-zinc-300">Write in this plan: {carryForward.planLine}</p>}
+          {carryForward.checkpoint && <p className="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">Next review checks: {carryForward.checkpoint}</p>}
+        </aside>
+      )}
 
       <DeferredEditor
         ref={editorRef}

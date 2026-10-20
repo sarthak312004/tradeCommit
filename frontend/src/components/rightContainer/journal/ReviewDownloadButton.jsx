@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { DownloadIcon } from '../../../utils/Icons.jsx'
-import { formatMoney, formatPercent, formatR } from '../../../utils/tradeAnalytics'
+import { formatMoney, formatPercent, formatR, formatRatio } from '../../../utils/tradeAnalytics'
 import { focusRing } from '../../common/controlStyles'
 
 const nonEmpty = (value) => typeof value === 'string' && value.trim()
+const FLY_COMMITMENT = { kept: 'kept', partly_kept: 'partly kept', not_kept: 'not kept', cannot_tell: "can't tell from the logs" }
 const PAGE = { width: 210, height: 297, margin: 18 }
 
 function pdfText(value) {
@@ -60,7 +61,30 @@ function createReviewPdf(PdfConstructor, review, { from, to, generatedAt, stats,
 
   if (stats) {
     heading('Period stats')
-    write(`Trades: ${stats.trades ?? '-'} | Closed: ${stats.closed ?? '-'} | Net P&L: ${formatMoney(stats.closed ? stats.netPnl : null, { currency, signed: true })} | Win rate: ${formatPercent(stats.winRate)} | Average RRR: ${formatR(stats.avgRrr)}`)
+    // avgRrr is the old name of expectancyR (average R per trade); reward : risk is average winner / average loser
+    const expectancyR = stats.expectancyR !== undefined ? stats.expectancyR : stats.avgRrr
+    const rewardRisk = stats.rewardRisk !== undefined ? (stats.rewardRisk ?? stats.payoffRatio ?? null) : undefined
+    write(`Trades: ${stats.trades ?? '-'} | Closed: ${stats.closed ?? '-'} | Net P&L: ${formatMoney(stats.closed ? stats.netPnl : null, { currency, signed: true })} | Win rate: ${formatPercent(stats.winRate)} | Expectancy: ${formatR(expectancyR)} per trade${rewardRisk === undefined ? '' : ` | Reward:risk: ${rewardRisk === null ? '-' : formatRatio(rewardRisk)}`}`)
+  }
+
+  const fly = review.flywheel
+  if (fly) {
+    heading('Flywheel: close the loop')
+    if (fly.lastCommitment && fly.lastCommitment.status !== 'none') {
+      write(`Last review's commitment: ${FLY_COMMITMENT[fly.lastCommitment.status] ?? fly.lastCommitment.status}${nonEmpty(fly.lastCommitment.evidence) ? ` - ${fly.lastCommitment.evidence}` : ''}`)
+    }
+    if (fly.weakestLink?.stage) write(`Weakest link in your loop: ${fly.weakestLink.stage}${nonEmpty(fly.weakestLink.detail) ? ` - ${fly.weakestLink.detail}` : ''}`)
+    if (fly.leaks?.length) {
+      write('Where your edge leaks', { bold: true })
+      fly.leaks.forEach((item) => bullet(`${item.title}${nonEmpty(item.cost) ? ` [${item.cost}]` : ''}${nonEmpty(item.detail) ? ` - ${item.detail}` : ''}${item.trades?.length ? ` (Trades: ${item.trades.join(', ')})` : ''}`))
+    }
+    if (nonEmpty(fly.edgeSignal?.detail)) write(`What the data shows (${fly.edgeSignal.confidence} read): ${fly.edgeSignal.detail}`)
+    if (nonEmpty(fly.carryForward?.rule)) {
+      write('Carry into your next plan', { bold: true })
+      bullet(`Rule: ${fly.carryForward.rule}`)
+      if (nonEmpty(fly.carryForward.planLine)) bullet(`Write in your plan: ${fly.carryForward.planLine}`)
+      if (nonEmpty(fly.carryForward.checkpoint)) bullet(`Next review checks: ${fly.carryForward.checkpoint}`)
+    }
   }
 
   if (review.nextWeek.length) {
@@ -72,7 +96,7 @@ function createReviewPdf(PdfConstructor, review, { from, to, generatedAt, stats,
     review.strengths.forEach((item) => bullet(`${item.title}${nonEmpty(item.detail) ? ` - ${item.detail}` : ''}`))
   }
   if (review.issues.length) {
-    heading('Work on')
+    heading(fly ? 'Also worth fixing' : 'Work on')
     review.issues.forEach((item) => bullet(`${item.title}${nonEmpty(item.detail) ? ` - ${item.detail}` : ''}${item.trades?.length ? ` (Trades: ${item.trades.join(', ')})` : ''}`))
   }
   if (review.ruleChecks.length) {

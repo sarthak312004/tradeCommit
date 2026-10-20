@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ChevronDownIcon } from '../../../utils/Icons.jsx'
-import { dateKeyFromDate, formatMoney, formatPercent, formatR, toneOf } from '../../../utils/tradeAnalytics'
+import { dateKeyFromDate, formatMoney, formatPercent, formatR, formatRatio, toneOf } from '../../../utils/tradeAnalytics'
 import { SERIF } from '../../auth/authStyles'
 import { stepEnter } from '../../feedback/formParts'
 import { focusRing } from '../../common/controlStyles'
@@ -127,19 +127,28 @@ export function Pill({ tone, children }) {
   return <span className={`inline-flex h-6 items-center whitespace-nowrap rounded-full px-2.5 text-xs font-medium ${pillTone[tone]}`}>{children}</span>
 }
 
+/**
+ * The period's numbers. "Expectancy" is the average R per trade; "Reward : risk" is the average winner divided by the
+ * average loser. They are different numbers. Reviews saved before this was split only hold `avgRrr`, which was always the
+ * expectancy, so it is shown under that name and the reward : risk tile is left out for them.
+ */
 export function WeekStats({ week, currency }) {
+  const expectancyR = week.expectancyR !== undefined ? week.expectancyR : week.avgRrr
+  const rewardRisk = week.rewardRisk !== undefined ? (week.rewardRisk ?? week.payoffRatio ?? null) : undefined
   const items = [
     { label: 'Net P&L', value: formatMoney(week.closed ? week.netPnl : null, { currency, signed: true }), tone: week.closed ? toneOf(week.netPnl) : 'neutral' },
     { label: 'Trades', value: String(week.trades) },
     { label: 'Win rate', value: formatPercent(week.winRate) },
-    { label: 'Avg RRR', value: formatR(week.avgRrr) }
-  ]
+    { label: 'Expectancy', value: formatR(expectancyR), tone: expectancyR === null || expectancyR === undefined ? 'neutral' : toneOf(expectancyR), hint: 'avg R per trade' },
+    rewardRisk !== undefined && { label: 'Reward : risk', value: rewardRisk === null ? '-' : formatRatio(rewardRisk), hint: 'avg winner / avg loser' }
+  ].filter(Boolean)
   return (
-    <dl className="grid grid-cols-2 gap-x-6 gap-y-4 rounded-xl border border-zinc-200 bg-zinc-50/70 px-5 py-4 sm:grid-cols-4 dark:border-white/[0.08] dark:bg-white/[0.03]">
-      {items.map(({ label, value, tone = 'neutral' }) => (
+    <dl className={`grid grid-cols-2 gap-x-6 gap-y-4 rounded-xl border border-zinc-200 bg-zinc-50/70 px-5 py-4 dark:border-white/[0.08] dark:bg-white/[0.03] ${items.length > 4 ? 'sm:grid-cols-5' : 'sm:grid-cols-4'}`}>
+      {items.map(({ label, value, hint, tone = 'neutral' }) => (
         <div key={label} className="min-w-0">
           <dt className="text-[11px] text-zinc-500 dark:text-zinc-400">{label}</dt>
           <dd className={`mt-1 truncate text-[15px] font-semibold tabular-nums ${moneyTone[tone]}`}>{value}</dd>
+          {hint && <p className="mt-0.5 truncate text-[10.5px] text-zinc-500 dark:text-zinc-500">{hint}</p>}
         </div>
       ))}
     </dl>

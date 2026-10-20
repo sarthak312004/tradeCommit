@@ -132,11 +132,14 @@ function MentorOrb({ onOpen, onWarm, progress = null, hasReadyReview = false, on
         <span className="grid h-12 w-12 shrink-0 place-items-center">
           <MentorMark className="h-6 w-6 transition-transform duration-700 ease-out group-hover:rotate-[60deg] group-hover:scale-110 motion-reduce:transition-none" />
         </span>
-        {hasReadyReview && (
-          <span aria-hidden="true" className="absolute right-1 top-1 h-2.5 w-2.5 rounded-full bg-[#c4623f] ring-2 ring-white dark:bg-[#e08a68] dark:ring-[#242424]" />
-        )}
       </button>
 
+      {/* The "feedback is ready" dot is a sibling of the button, not a child: the button is overflow-hidden and
+          rounded-full, so a dot inside it was cut off where the circle curves away at the top right corner.
+          Placed on the disc's 45 degree rim point, so nothing can clip it. */}
+      {hasReadyReview && (
+        <span aria-hidden="true" className="pointer-events-none absolute right-[1px] top-[1px] z-10 h-3 w-3 rounded-full bg-[#c4623f] ring-2 ring-white dark:bg-[#e08a68] dark:ring-[#242424]" />
+      )}
     </div>,
     document.body
   )

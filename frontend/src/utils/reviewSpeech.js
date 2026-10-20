@@ -29,6 +29,17 @@ const PLAN_STATUS = {
   unplanned_trade: 'traded without a plan'
 }
 
+const COMMITMENT = {
+  kept: 'You kept the change your last review asked for.',
+  partly_kept: 'You partly kept the change your last review asked for.',
+  not_kept: 'You did not keep the change your last review asked for.',
+  cannot_tell: "I can't tell from your logs whether you kept the change your last review asked for."
+}
+
+const CONFIDENCE = { early: 'This is an early read.', building: 'This read is still building.', solid: 'This read is on a solid sample.' }
+
+const STAGE = { plan: 'planning', execute: 'execution', record: 'recording', review: 'review' }
+
 const ORDINALS = ['First', 'Second', 'Third']
 
 // small fixes so numbers and symbols are read the way a person would say them
@@ -97,6 +108,27 @@ export const buildReviewSpeech = (review, period = 'week') => {
   }
 
   add('Summary', [endSentence(review.headline ?? ''), review.summary])
+
+  const fly = review.flywheel
+  if (fly) {
+    const last = fly.lastCommitment
+    add('Your loop', [
+      last && last.status !== 'none' ? `${COMMITMENT[last.status] ?? ''} ${last.evidence ?? ''}` : '',
+      fly.weakestLink?.stage ? `The weakest link in your loop right now is ${STAGE[fly.weakestLink.stage] ?? fly.weakestLink.stage}. ${fly.weakestLink.detail ?? ''}` : ''
+    ])
+    if (fly.leaks?.length) {
+      add('Where your edge leaks', ['Where your edge leaks.', ...fly.leaks.map((item) => `${endSentence(item.title)} ${item.cost ? `${endSentence(item.cost)} ` : ''}${item.detail ?? ''}`)])
+    }
+    if (fly.edgeSignal?.detail) add('What the data shows', [CONFIDENCE[fly.edgeSignal.confidence] ?? '', fly.edgeSignal.detail])
+    if (fly.carryForward?.rule) {
+      add('Carry into your next plan', [
+        'What to carry into your next plan.',
+        endSentence(fly.carryForward.rule),
+        fly.carryForward.planLine ? `Write this in your plan before you trade: ${endSentence(fly.carryForward.planLine)}` : '',
+        fly.carryForward.checkpoint ? `The next review will check: ${endSentence(fly.carryForward.checkpoint)}` : ''
+      ])
+    }
+  }
 
   const discipline = review.discipline ?? {}
   add('Discipline', [

@@ -8,6 +8,7 @@ import PlannerJournalLink from '../components/rightContainer/planner/PlannerJour
 import { todayKey } from '../utils/calendar'
 import { CalendarIcon } from '../utils/Icons.jsx'
 import { loadPlanForm, preloadPlanForm } from '../utils/formLoaders'
+import { getCarryForward } from '../services/aiRangeReviewApi'
 
 const pageBody = 'subtle-scrollbar min-h-0 flex-1 overflow-y-auto p-6 md:p-8'
 const PlanForm = lazy(loadPlanForm)
@@ -16,6 +17,19 @@ function PlannerWorkspace({ planner }) {
   const { entries, isLoading, error, addEntry, updateEntry, removeEntry, uploadImage } = usePlanEntries(planner.id)
   // null = drawer closed, { entry: null, date } = new plan, { entry } = editing
   const [formState, setFormState] = useState(null)
+  // the change the linked journal's latest mentor review asked for: shown inside the plan form so feedback reaches the next plan
+  const [carryForward, setCarryForward] = useState(null)
+  const linkedJournalId = planner.linkedJournalId
+  useEffect(() => {
+    if (!linkedJournalId) return undefined
+    let cancelled = false
+    getCarryForward(linkedJournalId)
+      .then((response) => { if (!cancelled) setCarryForward(response?.commitment ?? null) })
+      .catch((error) => {
+        if (!cancelled) console.error('Could not load the mentor carry-forward hint:', error)
+      })
+    return () => { cancelled = true }
+  }, [linkedJournalId, formState])
 
   // Start loading the form as soon as the planner is mounted, so an immediate first click is ready.
   useEffect(() => {
@@ -69,6 +83,7 @@ function PlannerWorkspace({ planner }) {
             onDelete={formState.entry ? () => removeEntry(formState.entry.id) : undefined}
             onClose={() => setFormState(null)}
             onUploadImage={uploadImage}
+            carryForward={linkedJournalId ? carryForward : null}
           />
         </Suspense>
       )}

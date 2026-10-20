@@ -142,6 +142,11 @@ export const computeAnalytics = (trades) => {
   })
 
   const rValues = closed.map((item) => item.r).filter((value) => value !== null)
+  const winR = closed.filter((item) => item.pnl > 0 && item.r !== null).map((item) => item.r)
+  const lossR = closed.filter((item) => item.pnl < 0 && item.r !== null).map((item) => item.r)
+  const avgWinR = winR.length ? sum(winR) / winR.length : null
+  const avgLossR = lossR.length ? Math.abs(sum(lossR) / lossR.length) : null // shown as a positive size
+  const expectancyR = rValues.length ? sum(rValues) / rValues.length : null
   const avgWin = wins.length ? grossProfit / wins.length : null
   const avgLoss = losses.length ? grossLoss / losses.length : null
 
@@ -157,8 +162,14 @@ export const computeAnalytics = (trades) => {
     winRate: closed.length ? wins.length / closed.length : null,
     expectancy: closed.length ? netPnl / closed.length : null,
     profitFactor: grossLoss > 0 ? grossProfit / grossLoss : grossProfit > 0 ? Infinity : null,
-    avgRrr: rValues.length ? sum(rValues) / rValues.length : null,
+    // Average R per trade is the EXPECTANCY in R. It is not a reward-to-risk ratio.
+    expectancyR,
+    avgRrr: expectancyR, // legacy name, same value as expectancyR
     rrrSample: rValues.length,
+    avgWinR,
+    avgLossR,
+    // Reward-to-risk = average winner / average loser, both in R (needs stops on those trades)
+    rewardRisk: avgWinR !== null && avgLossR !== null && avgLossR > 0 ? avgWinR / avgLossR : null,
     avgWin,
     avgLoss,
     payoffRatio: avgWin !== null && avgLoss !== null ? avgWin / avgLoss : null,
