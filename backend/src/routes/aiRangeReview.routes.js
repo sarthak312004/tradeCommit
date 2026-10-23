@@ -11,7 +11,8 @@ import { verifyJWT } from "../middlewares/auth.middleware.js";
 // POST /  { start, end }              returns the saved review if it is current; otherwise, if the range holds at least
 //                                     5 trades (the one unlock rule, also for refreshing a changed range) and the trader is
 //                                     within the caps (1 a day, 3 a week, shared with the old weekly reviews) and the shared
-//                                     daily budget, queues a Gemini call and saves the result. Failed calls use no allowance.
+//                                     daily budget, queues a Gemini call and saves the result. Failed calls use no allowance and are
+//                                     refunded by the per-IP limiter too.
 //                                     403 = not enough trades yet, 429 = cap reached / mentor busy,
 //                                     400 = bad range, no strategy or no trades.
 // GET  /carry-forward                 the one change the latest saved review (weekly or range) asked the trader to carry

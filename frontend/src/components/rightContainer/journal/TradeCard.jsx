@@ -120,19 +120,19 @@ function TradeCard({ trade, currency = DEFAULT_CURRENCY, detailFields = [], fiel
         onClick={() => onSelect(trade)}
         onKeyDown={handleCardKeyDown}
         aria-busy={isSaving}
-        className={`tc-surface tc-trade-card relative flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-zinc-200 bg-white px-4 py-3 text-left shadow-card transition-[box-shadow,border-color,background-color,border-radius] hover:border-zinc-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-600 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas dark:border-zinc-800 dark:bg-panel dark:shadow-none dark:hover:border-zinc-700 dark:hover:bg-panel-hi dark:focus-visible:ring-sky-400 dark:focus-visible:ring-offset-night ${
+        className={`tc-surface tc-trade-card relative flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-zinc-300/50 bg-white/70 px-4 py-2.5 text-left transition-[box-shadow,border-color,background-color,border-radius] hover:border-zinc-300 hover:bg-white group-hover/chip:bg-white group-has-[:focus-visible]/chip:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-600 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas dark:border-white/[0.07] dark:bg-panel dark:hover:border-zinc-700 dark:hover:bg-panel-hi dark:group-hover/chip:bg-panel-hi dark:group-has-[:focus-visible]/chip:bg-panel-hi dark:focus-visible:ring-sky-400 dark:focus-visible:ring-offset-night ${
           hasDetails ? 'group-hover/chip:rounded-b-none group-has-[:focus-visible]/chip:rounded-b-none' : ''
-        } ${open ? 'rounded-b-none border-zinc-300 dark:border-zinc-700 dark:bg-panel-hi' : ''}`}
+        } ${open ? 'rounded-b-none border-zinc-300 bg-white dark:border-zinc-700 dark:bg-panel-hi' : ''}`}
       >
         {/* left: what was traded */}
         <div className="min-w-0">
           <div className="flex min-w-0 items-center gap-2">
-            <p className="truncate text-[15px] font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{trade.symbol}</p>
+            <p className="truncate text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{trade.symbol}</p>
             <span className={`shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-semibold ${sideChip[side] ?? 'bg-zinc-500/10 text-zinc-600 dark:text-zinc-300'}`}>
               {direction}
             </span>
           </div>
-          <p className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-zinc-600 dark:text-zinc-400">
+          <p className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-zinc-600 dark:text-zinc-400">
             <span aria-hidden="true" className={`h-1.5 w-1.5 shrink-0 rounded-full ${isOpen ? 'bg-amber-500 dark:bg-amber-400' : 'bg-zinc-400 dark:bg-zinc-500'}`} />
             <span className="truncate">
               {trade.status}
@@ -152,10 +152,10 @@ function TradeCard({ trade, currency = DEFAULT_CURRENCY, detailFields = [], fiel
               </span>
             ) : (
               <>
-                <p className={`text-[15px] font-semibold leading-5 tabular-nums ${pnl === null ? 'text-zinc-500 dark:text-zinc-400' : toneText[pnlTone]}`}>
+                <p className={`text-sm font-semibold leading-5 tabular-nums ${pnl === null ? 'text-zinc-500 dark:text-zinc-400' : toneText[pnlTone]}`}>
                   {pnl === null ? '-' : formatMoney(pnl, { signed: true, currency })}
                 </p>
-                <p className="mt-1 text-xs tabular-nums text-zinc-600 dark:text-zinc-400">
+                <p className="mt-0.5 text-xs tabular-nums text-zinc-600 dark:text-zinc-400">
                   {secondary.length ? secondary.join(' \u00b7 ') : isOpen ? 'No exit yet' : '\u00a0'}
                 </p>
               </>

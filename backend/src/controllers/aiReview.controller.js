@@ -175,10 +175,16 @@ export const createAiReview = asyncHandler(async (req, res) => {
 
   const saved = await AiReview.findOne({ journal: week.journal._id, weekStart: week.weekStart }).lean();
   // a current review is always returned as is: the same inputs would only spend quota to get the same answer
-  if (saved && saved.inputHash === week.inputHash) return respond(saved);
+  if (saved && saved.inputHash === week.inputHash) {
+    res.locals.skipRateLimit = true; // nothing was generated, so this request must not count toward the IP limit
+    return respond(saved);
+  }
 
   // a double click joins the generation that is already running
-  if (inFlight.has(key)) return respond(await inFlight.get(key));
+  if (inFlight.has(key)) {
+    res.locals.skipRateLimit = true;
+    return respond(await inFlight.get(key));
+  }
 
   const access = await evaluateAccess({ week, saved, ownerId });
   if (!access.canGenerate) {
@@ -186,7 +192,10 @@ export const createAiReview = asyncHandler(async (req, res) => {
   }
 
   // no awaits between these checks and the set() calls below, so two requests cannot both start
-  if (inFlight.has(key)) return respond(await inFlight.get(key));
+  if (inFlight.has(key)) {
+    res.locals.skipRateLimit = true;
+    return respond(await inFlight.get(key));
+  }
   if (isUserBusy(ownerId)) throw new ApiError(429, "Your other review is still being written. Wait for it to finish, then try again.");
 
   const job = generate(week).finally(() => {

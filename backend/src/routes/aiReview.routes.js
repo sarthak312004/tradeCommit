@@ -10,7 +10,9 @@ import { verifyJWT } from "../middlewares/auth.middleware.js";
 //                              the shared daily budget, queues a Gemini call and saves the result.
 //                              403 = not enough new trades yet, 429 = your cap reached / mentor busy, 400 = no strategy or no trades.
 //                              A review that fails (Gemini rate limit, busy queue, timeout, unusable answer) is never charged:
-//                              the allowance reservation is deleted and the error says so.
+//                              the allowance reservation is deleted and the error says so. The per-IP limiter (20/hour) also
+//                              refunds failed attempts and answers served from a saved review, so only real generations count.
+//                              Gemini is tried across a model chain (GEMINI_MODEL, then GEMINI_FALLBACK_MODELS) before giving up.
 // GET  /quota                 the trader's allowance (1 a day, 3 a week) shared by weekly and date-range reviews:
 //                              { usage, blocked, reason, nextAvailableAt, message, generating }. Never calls Gemini.
 const router = Router({ mergeParams: true });

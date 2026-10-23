@@ -68,7 +68,7 @@ const feedbackLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 10 })
 app.use("/api/v1/feedback", (req, res, next) => (req.method === "POST" ? feedbackLimiter(req, res, next) : next()))
 
 // AI mentor reviews call Gemini's free tier, which has tight per-minute and per-day quotas: keep raw volume low per IP.
-const aiReviewLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 20, message: "Too many AI review requests, please try again later" })
+const aiReviewLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 20, refundFailed: true, message: "The AI mentor is receiving a lot of requests right now. Please try again in a few minutes." })
 app.use("/api/v1/journals/:journalId/ai-review", (req, res, next) => (req.method === "POST" ? aiReviewLimiter(req, res, next) : next()))
 app.use("/api/v1/journals/:journalId/ai-range-reviews", (req, res, next) => (req.method === "POST" ? aiReviewLimiter(req, res, next) : next()))
 
@@ -104,6 +104,9 @@ if (fs.existsSync(path.join(distDir, 'index.html'))) {
 
 app.use((error, req, res, next) => {
     const statusCode = Number.isInteger(error.statusCode) ? error.statusCode : 500
+    if (Number.isFinite(error.retryAfterMs) && error.retryAfterMs > 0) {
+        res.setHeader('Retry-After', String(Math.max(1, Math.ceil(error.retryAfterMs / 1000))))
+    }
     if (statusCode >= 500) console.error(error)
 
     // Errors we throw on purpose (ApiError, e.g. "Email service is not configured") are safe to show.

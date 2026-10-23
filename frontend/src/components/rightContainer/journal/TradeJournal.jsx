@@ -336,7 +336,7 @@ function TradeJournal({ view = 'trades', journal, onAddTrade, onUpdateTrade, onD
       ) : (
         // auto-fill grid of chips: as many >=24rem columns as fit. items-start keeps every chip at its own height,
         // because the hover panel floats over the chips below instead of pushing them down
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,24rem),1fr))] items-start gap-3">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,24rem),1fr))] items-start gap-2.5">
           {visibleTrades.map((currentTrade) => (
             <TradeCard
               key={currentTrade.id}

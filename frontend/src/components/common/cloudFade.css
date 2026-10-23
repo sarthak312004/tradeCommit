@@ -1,0 +1,52 @@
+/* A soft cloud of mist along the bottom edge of a scrolling page: cards drift into it instead of being cut off.
+   The blur layer softens whatever scrolls underneath, the colour layer melts it into the page background.
+   It only shows while there is more to scroll, so the last card is never veiled. Decoration only: it never
+   takes clicks, and it is hidden from assistive tech. */
+
+.tc-cloud {
+  --tc-cloud-bg: 223 221 214; /* canvas */
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 6.5rem;
+  z-index: 15;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 320ms ease;
+}
+
+.dark .tc-cloud {
+  --tc-cloud-bg: 17 17 17; /* night */
+}
+
+.tc-cloud[data-on='true'] {
+  opacity: 1;
+}
+
+/* blur: strongest at the very bottom, gone at the top of the cloud */
+.tc-cloud::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  -webkit-backdrop-filter: blur(5px);
+  backdrop-filter: blur(5px);
+  -webkit-mask-image: linear-gradient(to top, #000 0%, rgb(0 0 0 / 0.55) 45%, transparent 100%);
+  mask-image: linear-gradient(to top, #000 0%, rgb(0 0 0 / 0.55) 45%, transparent 100%);
+}
+
+/* colour: a few overlapping soft puffs on top of an even fade, so the edge feels airy rather than ruled */
+.tc-cloud::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(60% 85% at 14% 112%, rgb(var(--tc-cloud-bg) / 0.95), transparent 72%),
+    radial-gradient(55% 80% at 52% 118%, rgb(var(--tc-cloud-bg) / 0.95), transparent 72%),
+    radial-gradient(60% 85% at 90% 110%, rgb(var(--tc-cloud-bg) / 0.95), transparent 72%),
+    linear-gradient(to top, rgb(var(--tc-cloud-bg) / 0.92) 0%, rgb(var(--tc-cloud-bg) / 0.55) 40%, rgb(var(--tc-cloud-bg) / 0) 100%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tc-cloud {
+    transition: none;
+  }
+}

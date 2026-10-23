@@ -53,6 +53,8 @@ Alternatively, create a manual Render Web Service with:
 | `MAIL_FROM_NAME` | `TradeCommit` |
 | `GOOGLE_CLIENT_ID` | optional; leave empty to hide the Google button |
 | `GEMINI_API_KEY` | Google AI Studio API key; required for weekly AI mentor reviews |
+| `GEMINI_MODEL` | Optional. Primary model, default `gemini-flash-latest` |
+| `GEMINI_FALLBACK_MODELS` | Optional, comma separated. Tried in order when the primary is rate limited (429), missing (404) or overloaded (503). Default `gemini-flash-latest,gemini-flash-lite-latest` |
 | `CORS_ORIGIN` | leave empty; Vercel proxies requests to this service |
 
 Wait for the service to be live and copy its URL, for example

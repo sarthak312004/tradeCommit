@@ -28,7 +28,16 @@ export const shiftDays = (key, days) => {
 /** Monday of the week that holds `key` (weeks run Monday to Sunday). */
 export const mondayOf = (key) => shiftDays(key, -((parseKey(key).getDay() + 6) % 7))
 
-export const errorText = (error) => (error instanceof TypeError ? "Can't reach the server. Check your connection and try again." : error?.message || 'Something went wrong')
+export const errorText = (error) => {
+  if (error instanceof TypeError) return "We couldn't connect just now. Please check your connection and try again."
+  if ([429, 502, 503, 504].includes(error?.status)) {
+    return "The AI mentor is a little busy right now. Your review wasn't charged. Please try again in a few minutes."
+  }
+  if (error?.status >= 500) {
+    return "We couldn't finish your feedback just now. Your review wasn't charged. Please try again in a few minutes."
+  }
+  return error?.message || "We couldn't complete that request. Please try again."
+}
 
 export const DISCIPLINE = {
   followed: { label: 'Followed your rules', tone: 'positive' },

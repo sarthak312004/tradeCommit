@@ -5,7 +5,10 @@ export const readJson = async (response) => {
   const payload = await response.json().catch(() => null)
   if (!response.ok) {
     if (response.status === 401) window.dispatchEvent(new Event('auth-expired'))
-    throw new Error(payload?.message ?? 'Request failed')
+    const error = new Error(payload?.message ?? 'Request failed')
+    error.status = response.status
+    error.retryAfter = response.headers.get('Retry-After')
+    throw error
   }
   return payload?.data
 }

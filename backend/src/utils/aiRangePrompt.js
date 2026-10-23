@@ -14,27 +14,42 @@ export const RANGE_SYSTEM_PROMPT = `${SYSTEM_PROMPT}
 
 IMPORTANT: THIS REVIEW COVERS A DATE RANGE CHOSEN BY THE TRADER, NOT ONE WEEK. Wherever the instructions above say "week", read "review period" (it can be a few days or several months). Specifically:
 - The trades are listed by date. Some trades may belong to a longer swing campaign: judge each one by the rules that applied when it was entered, and do not call a trade held over several days "late" or "overstaying" unless the strategy or the notes say so. Trades still open at the end of the period are not losses; say they are open.
-- Use the "WEEK-BY-WEEK INSIDE THIS PERIOD" table to find trends: is discipline, win rate or risk per trade improving or getting worse as the period goes on? Say which weeks stand out and why, citing T-numbers.
+- Use the "WEEK-BY-WEEK INSIDE THIS PERIOD" table (it is MONTH-BY-MONTH when the period is long) to find trends: is discipline, win rate or risk per trade improving or getting worse as the period goes on? Say which weeks or months stand out and why, citing T-numbers.
 - With more trades you may draw firmer conclusions than for a single week, but only from what the data shows. Still avoid recommending strategy changes from one or two trades.
 - Earlier trades of the period that have no T-number are given as short lines for context. Never cite them by T-number.
 - headline: one sentence verdict of the period. nextWeek: 2 or 3 concrete actions for the NEXT period of trading (the field keeps its name; it is not limited to seven days), the first being the flywheel carry-forward change.
-- A longer period is where anti-edge patterns show: look for the same leak recurring in several weeks of the table, and say when it appears only once.
+- A longer period is where anti-edge patterns show: look for the same leak recurring in several rows of that table, and say when it appears only once.
 - planAlignment.days (only when plans are present): list at most 40 days, choosing the ones that matter most (unplanned trades, differences from the plan, notable executions); skip routine days.`;
 
+// Up to this many weeks with trades are listed one by one; a longer period (up to five years) is summarised per month
+// so the prompt stays a sensible size.
+const MAX_WEEK_ROWS = 26;
+
 const weekBreakdown = (rangeTrades, currency) => {
-  const groups = new Map();
+  const weeks = new Map();
   for (const trade of rangeTrades) {
     const key = mondayOf(dateKey(trade.date));
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(trade);
+    if (!weeks.has(key)) weeks.set(key, []);
+    weeks.get(key).push(trade);
   }
-  return [...groups.entries()]
+  const byMonth = weeks.size > MAX_WEEK_ROWS;
+  let groups = weeks;
+  if (byMonth) {
+    groups = new Map();
+    for (const trade of rangeTrades) {
+      const key = dateKey(trade.date).slice(0, 7);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(trade);
+    }
+  }
+  const lines = [...groups.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([weekStart, trades]) => {
       const stats = computeAnalytics(trades);
       const evidence = computeWeekEvidence(trades);
-      return `week of ${weekStart}: ${stats.totalTrades} trades (${stats.openTrades} open), net ${money(stats.netPnl, currency)}, win rate ${pct(stats.winRate)}, expectancy ${rText(stats.expectancyR)}, stop logged on ${evidence.stopLossLogged} of ${evidence.tradeCount}, trades after a same-day loss ${evidence.tradesTakenAfterSameDayLoss}`;
+      return `${byMonth ? "month" : "week of"} ${weekStart}: ${stats.totalTrades} trades (${stats.openTrades} open), net ${money(stats.netPnl, currency)}, win rate ${pct(stats.winRate)}, expectancy ${rText(stats.expectancyR)}, stop logged on ${evidence.stopLossLogged} of ${evidence.tradeCount}, trades after a same-day loss ${evidence.tradesTakenAfterSameDayLoss}`;
     });
+  return { byMonth, lines };
 };
 
 /**
@@ -59,6 +74,7 @@ export const buildRangePrompt = ({ journal, rangeStart, rangeEnd, rangeTrades, p
   });
 
   const periodStats = computeAnalytics(rangeTrades);
+  const breakdown = weekBreakdown(rangeTrades, currency);
   const overall = computeAnalytics(allTradesToDate);
   const evidence = computeWeekEvidence(rangeTrades);
   const leak = computeLeakEvidence(rangeTrades, { planEntries: planners.length ? planEntries : null, labelOf: (trade) => labelByTrade.get(String(trade._id)) ?? null });
@@ -124,8 +140,8 @@ export const buildRangePrompt = ({ journal, rangeStart, rangeEnd, rangeTrades, p
     "=== NUMBERS FOR THIS WHOLE PERIOD (same metrics as the Analysis tab) ===",
     statsBlock(periodStats, currency),
     "",
-    "=== WEEK-BY-WEEK INSIDE THIS PERIOD (oldest first) ===",
-    ...weekBreakdown(rangeTrades, currency),
+    `=== ${breakdown.byMonth ? "MONTH-BY-MONTH" : "WEEK-BY-WEEK"} INSIDE THIS PERIOD (oldest first) ===`,
+    ...breakdown.lines,
     "",
     "=== WHOLE JOURNAL UP TO THE END OF THIS PERIOD (same metrics as the Analysis tab) ===",
     statsBlock(overall, currency),

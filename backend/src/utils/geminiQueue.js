@@ -1,9 +1,11 @@
 import { ApiError } from "./ApiError.js";
+import { BUSY_MESSAGE } from "./gemini.js";
 
 // A small in-process queue in front of Gemini. The free tier limits requests per minute for the whole API key,
-// not per user, so every call goes through here: a few at a time, spaced apart, and the whole queue pauses when
-// Gemini answers 429. A request that would wait too long is turned away with a clear "try again" message instead
-// of hanging. In-memory is fine for one server instance; use a shared queue (Redis) if you scale to several.
+// not per user, so every call goes through here: a few at a time and spaced apart. generateJson() already walks a
+// chain of models when one is rate limited, so a 429 reaching this queue means EVERY model is limited right now:
+// the queue then pauses briefly (so a burst of people does not hammer Gemini) and the request is turned away with a
+// clear "try again" message. In-memory is fine for one server instance; use a shared queue (Redis) to scale out.
 
 const int = (name, fallback) => {
   const value = Number.parseInt(process.env[name] ?? "", 10);
@@ -11,10 +13,11 @@ const int = (name, fallback) => {
 };
 
 const maxConcurrent = () => int("AI_MAX_CONCURRENT", 2);
-const minIntervalMs = () => int("AI_MIN_INTERVAL_MS", 6000); // 6s between starts = at most ~10 requests a minute
+const minIntervalMs = () => int("AI_MIN_INTERVAL_MS", 4000);
 const maxWaitMs = () => int("AI_MAX_QUEUE_WAIT_MS", 60_000);
 const maxQueued = () => int("AI_MAX_QUEUE", 15);
-const DEFAULT_PAUSE_MS = 30_000;
+const MAX_PAUSE_MS = 2 * 60_000; // never lock everyone out for longer than this because of one 429
+const DEFAULT_PAUSE_MS = 20_000;
 
 const waiting = [];
 let active = 0;
@@ -22,10 +25,7 @@ let lastStartAt = 0;
 let pausedUntil = 0;
 let timer = null;
 
-const busyError = (waitMs) => {
-  const minutes = Math.max(1, Math.ceil(waitMs / 60_000));
-  return new ApiError(429, `The AI mentor is very busy right now. Please try again in ${minutes === 1 ? "a minute" : `about ${minutes} minutes`}. Your review allowance was not used.`);
-};
+const busyError = () => Object.assign(new ApiError(429, BUSY_MESSAGE), { rateLimited: true });
 
 const arm = (job) => {
   clearTimeout(job.timeout);
@@ -33,7 +33,7 @@ const arm = (job) => {
     const index = waiting.indexOf(job);
     if (index === -1) return;
     waiting.splice(index, 1);
-    job.reject(busyError(Math.max(pausedUntil - Date.now(), minIntervalMs() * (waiting.length + 1))));
+    job.reject(busyError());
   }, maxWaitMs());
 };
 
@@ -41,18 +41,10 @@ const run = async (job) => {
   try {
     job.resolve(await job.task());
   } catch (error) {
-    // Gemini said "slow down": pause everyone, and give this one request a single retry if the pause is short.
-    if (error?.statusCode === 429) {
-      const pauseMs = Math.min(error.retryAfterMs ?? DEFAULT_PAUSE_MS, 10 * 60_000);
+    if (error?.statusCode === 429 || error?.rateLimited) {
+      const pauseMs = Math.min(error.retryAfterMs ?? DEFAULT_PAUSE_MS, MAX_PAUSE_MS);
       pausedUntil = Math.max(pausedUntil, Date.now() + pauseMs);
-      if (!job.retried && pauseMs <= maxWaitMs()) {
-        job.retried = true;
-        waiting.unshift(job);
-        arm(job);
-        return;
-      }
-      job.reject(busyError(pauseMs));
-      return;
+      console.error(`[gemini-queue] rate limited; pausing the queue for ${Math.ceil(pauseMs / 1000)}s`);
     }
     job.reject(error);
   } finally {
@@ -84,11 +76,10 @@ function pump() {
 /** Runs `task` (which calls Gemini) when the queue allows it. Rejects with a 429 ApiError when the wait would be too long. */
 export const runQueued = (task) =>
   new Promise((resolve, reject) => {
-    const pauseLeft = pausedUntil - Date.now();
-    if (pauseLeft > maxWaitMs()) return reject(busyError(pauseLeft));
-    if (waiting.length >= maxQueued()) return reject(busyError(minIntervalMs() * waiting.length));
+    if (pausedUntil - Date.now() > maxWaitMs()) return reject(busyError());
+    if (waiting.length >= maxQueued()) return reject(busyError());
 
-    const job = { task, resolve, reject, retried: false, timeout: null };
+    const job = { task, resolve, reject, timeout: null };
     waiting.push(job);
     arm(job);
     pump();

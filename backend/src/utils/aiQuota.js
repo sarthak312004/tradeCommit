@@ -130,7 +130,7 @@ export const evaluateAccess = async ({ week, saved, ownerId }) => {
   }
 
   if (budgetUsed >= limits.dailyBudget) {
-    return { ...base, canGenerate: false, reason: "busy", message: "The free AI mentor has reached its capacity for today. Please come back tomorrow." };
+    return { ...base, canGenerate: false, reason: "busy", message: "The AI mentor is receiving a lot of requests right now. Please try again in a few minutes." };
   }
 
   return { ...base, canGenerate: true, reason: null, message: "" };
@@ -147,7 +147,7 @@ export const releaseUsage = (id) => AiUsage.deleteOne({ _id: id });
 // Tells the trader, in the error they see, that a failed attempt cost them nothing.
 const withAllowanceNote = (error) => {
   const intentional = error && error.success === false && typeof error.message === "string";
-  if (intentional && !/allowance/i.test(error.message)) {
+  if (intentional && !/allowance|charged/i.test(error.message)) {
     const message = error.message.trim();
     error.message = `${message}${/[.!?]$/.test(message) ? "" : "."} Your review allowance was not used.`;
   }

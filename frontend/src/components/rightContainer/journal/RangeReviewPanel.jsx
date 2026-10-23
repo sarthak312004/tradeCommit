@@ -8,8 +8,10 @@ import { Review } from './ReviewReport'
 import ReviewDownloadButton from './ReviewDownloadButton'
 import { EmptyState, ReviewSkeleton, allowanceText, buttonPrimary, buttonQuiet, errorText, mondayOf, resolveLock, shiftDays } from './reviewParts'
 
-// Longest range one review may cover. The server enforces the same limit (AI_RANGE_MAX_DAYS, default 366).
-export const MAX_RANGE_DAYS = 366
+// Longest range one review may cover: five years plus a few days of slack. The server enforces the same limit
+// (AI_RANGE_MAX_DAYS, default 1830).
+export const MAX_RANGE_DAYS = 1830
+const MAX_RANGE_YEARS = Math.floor(MAX_RANGE_DAYS / 365)
 
 const dateInputClass =
   'h-9 w-full rounded-lg border border-zinc-300 bg-transparent px-2.5 text-xs text-zinc-800 outline-none transition-colors [color-scheme:light] focus:border-sky-500/60 focus:ring-1 focus:ring-sky-500/30 dark:border-white/[0.14] dark:text-zinc-100 dark:[color-scheme:dark]'
@@ -52,7 +54,7 @@ const chip = (active) =>
   }`
 
 /** Preset chips, plus two date fields only when "Custom" is picked. */
-function RangePicker({ range, onChange, disabled, earliestTradeDate, summary }) {
+function RangePicker({ range, onChange, disabled, earliestTradeDate, summary, showWorkHint }) {
   const today = todayKey()
   const custom = range.preset === 'custom'
   const days = range.from && range.to && range.from <= range.to ? daysBetween(range.from, range.to) : 0
@@ -94,13 +96,16 @@ function RangePicker({ range, onChange, disabled, earliestTradeDate, summary }) 
         </div>
       )}
 
-      <p className={`text-xs ${tooLong || !days ? 'text-rose-700 dark:text-rose-300' : 'text-zinc-500 dark:text-zinc-400'}`} role={tooLong ? 'alert' : undefined}>
-        {!range.from || !range.to
-          ? 'Pick a start and an end date.'
-          : tooLong
-            ? `A review can cover up to ${MAX_RANGE_DAYS} days. Pick a shorter range.`
-            : `${formatDateKey(range.from, { withYear: true })} - ${formatDateKey(range.to, { withYear: true })}${summary ? ` · ${summary}` : ''}`}
-      </p>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <p className={`text-xs ${tooLong || !days ? 'text-rose-700 dark:text-rose-300' : 'text-zinc-500 dark:text-zinc-400'}`} role={tooLong ? 'alert' : undefined}>
+          {!range.from || !range.to
+            ? 'Pick a start and an end date.'
+            : tooLong
+              ? `A review can cover up to ${MAX_RANGE_YEARS} years. Pick a shorter range.`
+              : `${formatDateKey(range.from, { withYear: true })} - ${formatDateKey(range.to, { withYear: true })}${summary ? ` · ${summary}` : ''}`}
+        </p>
+        {showWorkHint && <p className="ml-auto text-[10px] text-zinc-600 dark:text-zinc-300">Keep working while this loads.</p>}
+      </div>
     </div>
   )
 }
@@ -370,7 +375,7 @@ function RangeReviewPanel({ journalId, currency, seed, journalRange, earliestTra
 
   return (
     <div className="space-y-8">
-      <RangePicker range={range} onChange={changeRange} disabled={busy} earliestTradeDate={earliestTradeDate} summary={data ? plural(data.tradeCount, 'trade') : ''} />
+      <RangePicker range={range} onChange={changeRange} disabled={busy} earliestTradeDate={earliestTradeDate} summary={data ? plural(data.tradeCount, 'trade') : ''} showWorkHint={busy} />
       {renderBody()}
     </div>
   )
