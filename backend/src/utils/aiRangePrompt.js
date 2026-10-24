@@ -1,5 +1,6 @@
 import { computeAnalytics, computeLeakEvidence, computeWeekEvidence, dateKey, mondayOf, weeklyHistory } from "./tradeStats.js";
-import { buildPlanSection, checkboxLine, commitmentBlock, leakLines, money, pct, plain, rText, statsBlock, SYSTEM_PROMPT, tradeDetail, tradeLine } from "./aiMentorPrompt.js";
+import { buildPlanSection, checkboxLine, commitmentBlock, leakLines, money, pct, plain, rText, statsBlock, SYSTEM_PROMPT, tradeDetail, tradeLine, withReadableTrades } from "./aiMentorPrompt.js";
+import { computeLeakReport, leakReportLines } from "./leakReport.js";
 import { htmlToPlainText } from "./richText.js";
 import { inspectMentorData, MODE_SPECIFIC_MENTOR_INSTRUCTIONS } from "./mentorDataQuality.js";
 
@@ -19,6 +20,7 @@ IMPORTANT: THIS REVIEW COVERS A DATE RANGE CHOSEN BY THE TRADER, NOT ONE WEEK. W
 - Earlier trades of the period that have no T-number are given as short lines for context. Never cite them by T-number.
 - headline: one sentence verdict of the period. nextWeek: 2 or 3 concrete actions for the NEXT period of trading (the field keeps its name; it is not limited to seven days), the first being the flywheel carry-forward change.
 - A longer period is where anti-edge patterns show: look for the same leak recurring in several rows of that table, and say when it appears only once.
+- The MONEY AND TIME LEAKS block counts every trade of the period, but the T-numbers listed next to a leak can only be the most recent trades shown in full detail. Do not try to make the counts match the listed T-numbers; quote the counts as written.
 - planAlignment.days (only when plans are present): list at most 40 days, choosing the ones that matter most (unplanned trades, differences from the plan, notable executions); skip routine days.`;
 
 // Up to this many weeks with trades are listed one by one; a longer period (up to five years) is summarised per month
@@ -77,7 +79,9 @@ export const buildRangePrompt = ({ journal, rangeStart, rangeEnd, rangeTrades, p
   const breakdown = weekBreakdown(rangeTrades, currency);
   const overall = computeAnalytics(allTradesToDate);
   const evidence = computeWeekEvidence(rangeTrades);
-  const leak = computeLeakEvidence(rangeTrades, { planEntries: planners.length ? planEntries : null, labelOf: (trade) => labelByTrade.get(String(trade._id)) ?? null });
+  const labelOf = (trade) => labelByTrade.get(String(trade._id)) ?? null;
+  const leak = computeLeakEvidence(rangeTrades, { planEntries: planners.length ? planEntries : null, labelOf });
+  const leakReport = withReadableTrades(computeLeakReport(rangeTrades, { labelOf, planEntries: planners.length ? planEntries : null, lookedBackfilled: leak.lookedBackfilled, currency }), tradeLabels);
   const history = weeklyHistory(allTradesToDate, mondayOf(rangeStart));
   const defaults = (context.attributes ?? []).map((attribute) => `${attribute.label} (${attribute.type})`);
 
@@ -137,6 +141,9 @@ export const buildRangePrompt = ({ journal, rangeStart, rangeEnd, rangeTrades, p
     "=== Facts computed from the logs (ground truth) ===",
     ...evidenceLines,
     "",
+    "=== MONEY AND TIME LEAKS FOUND BY THE APP (ground truth, shown to the trader as written; explain them, never recompute them) ===",
+    ...leakReportLines(leakReport, currency),
+    "",
     "=== NUMBERS FOR THIS WHOLE PERIOD (same metrics as the Analysis tab) ===",
     statsBlock(periodStats, currency),
     "",
@@ -157,5 +164,5 @@ export const buildRangePrompt = ({ journal, rangeStart, rangeEnd, rangeTrades, p
     .filter((line) => line !== null)
     .join("\n");
 
-  return { prompt, tradeLabels, hasPlanContext: Boolean(planSection), hasLast: Boolean(lastCommitment), closedCount: overall.closedTrades };
+  return { prompt, tradeLabels, leakReport, hasPlanContext: Boolean(planSection), hasLast: Boolean(lastCommitment), closedCount: overall.closedTrades };
 };

@@ -64,9 +64,10 @@ function createReviewPdf(PdfConstructor, review, { from, to, generatedAt, stats,
   write(review.headline, { size: 15, bold: true, gap: 3, color: [24, 39, 57] })
   write(review.summary, { size: 10, gap: 2 })
 
-  heading('Discipline')
-  write(`${review.discipline.verdict.replaceAll('_', ' ')}${review.discipline.score === null ? '' : ` - ${review.discipline.score}%`}`, { bold: true })
-  if (nonEmpty(review.discipline.explanation)) write(review.discipline.explanation)
+  if (nonEmpty(review.discipline?.explanation)) {
+    heading('About your rules')
+    write(review.discipline.explanation)
+  }
 
   if (stats) {
     heading('Period stats')
@@ -114,11 +115,14 @@ function createReviewPdf(PdfConstructor, review, { from, to, generatedAt, stats,
     review.ruleChecks.forEach((item) => bullet(`${item.rule} - ${item.status.replaceAll('_', ' ')}${nonEmpty(item.evidence) ? `: ${item.evidence}` : ''}${item.trades?.length ? ` (Trades: ${item.trades.join(', ')})` : ''}`))
   }
 
-  heading('Strategy check')
-  write(review.strategyFeedback.verdict, { bold: true })
-  if (nonEmpty(review.strategyFeedback.reasoning)) write(review.strategyFeedback.reasoning)
-  review.strategyFeedback.suggestedChanges.forEach((change) => bullet(change))
-  if (nonEmpty(review.strategyFeedback.marketAdaptation)) write(`Market adaptation: ${review.strategyFeedback.marketAdaptation}`)
+  if (review.leakReport?.items?.length) {
+    heading('Where you lost money and time')
+    write('Measured from your logs. Each amount is what those trades netted; it is not proof of cause and amounts can overlap.', { size: 9, color: [107, 114, 128] })
+    review.leakReport.items.forEach((leak) => {
+      const amount = Number.isFinite(leak.amount) ? ` [${formatMoney(leak.amount, { currency, signed: true })}]` : ''
+      bullet(`${leak.title}${amount}${nonEmpty(leak.detail) ? ` - ${leak.detail}` : ''}${nonEmpty(leak.fix) ? ` How to stop it: ${leak.fix}` : ''}${leak.trades?.length ? ` (Trades: ${leak.trades.join(', ')})` : ''}`)
+    })
+  }
 
   if (review.planAlignment) {
     heading('Plan vs execution')

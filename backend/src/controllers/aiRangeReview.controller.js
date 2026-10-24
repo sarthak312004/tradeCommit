@@ -144,13 +144,13 @@ const generate = async (range) => {
   const ownerId = range.journal.owner;
   // the flywheel link: what the previous review asked the trader to carry into this period
   const lastCommitment = await findLastCommitment({ journalId: range.journal._id, ownerId, before: range.rangeStart });
-  const { prompt, tradeLabels, hasPlanContext, hasLast, closedCount } = buildRangePrompt({ ...range, lastCommitment });
+  const { prompt, tradeLabels, leakReport, hasPlanContext, hasLast, closedCount } = buildRangePrompt({ ...range, lastCommitment });
 
   // Reserved first (shared daily budget), counted only once the review is saved. Any failure on the way, such as a
   // Gemini rate limit, a full queue, a timeout or an unusable answer, deletes the reservation: no allowance is used.
   return withUsageReservation({ ownerId, journalId: range.journal._id, weekStart: range.rangeStart }, async () => {
     const { result, model } = await runQueued(() => generateJson({ system: RANGE_SYSTEM_PROMPT, prompt, schema: REVIEW_SCHEMA }));
-    const review = sanitizeReview(result, tradeLabels, { hasPlanContext, weekStart: range.rangeStart, weekEnd: range.rangeEnd, maxPlanDays: MAX_PLAN_DAYS_IN_REVIEW, hasLast, closedCount });
+    const review = sanitizeReview(result, tradeLabels, { hasPlanContext, weekStart: range.rangeStart, weekEnd: range.rangeEnd, maxPlanDays: MAX_PLAN_DAYS_IN_REVIEW, hasLast, closedCount, leakReport });
     if (!review.summary || !review.headline) throw new ApiError(502, "The AI returned an incomplete review. Please try again.");
 
     return AiRangeReview.findOneAndUpdate(
@@ -275,7 +275,7 @@ export const listAiReviewHistory = asyncHandler(async (req, res) => {
   const before = req.query?.before ? new Date(req.query.before) : null;
   if (before && Number.isNaN(before.getTime())) throw new ApiError(400, "before must be an ISO date");
   const when = before ? { updatedAt: { $lt: before } } : {};
-  const pick = "review.headline review.discipline review.strategyFeedback.verdict reviewedTradeCount model updatedAt";
+  const pick = "review.headline review.leakReport.items.id reviewedTradeCount model updatedAt";
 
   const [ranges, weeks] = await Promise.all([
     AiRangeReview.find({ journal: journal._id, owner: ownerId, ...when }).sort({ updatedAt: -1 }).limit(limit + 1).select(`rangeStart rangeEnd stats ${pick}`).lean(),
@@ -288,8 +288,11 @@ export const listAiReviewHistory = asyncHandler(async (req, res) => {
     start: kind === "range" ? doc.rangeStart : doc.weekStart,
     end: kind === "range" ? doc.rangeEnd : addDays(doc.weekStart, 6),
     headline: doc.review?.headline ?? "",
-    discipline: { verdict: doc.review?.discipline?.verdict ?? "cannot_assess", score: doc.review?.discipline?.score ?? null },
-    strategyVerdict: doc.review?.strategyFeedback?.verdict ?? null,
+    // legacy placeholders for browsers still running an older version of the app; the score and strategy verdict are gone
+    discipline: { verdict: "cannot_assess", score: null },
+    strategyVerdict: null,
+    // how many money/time leaks the app found in that review (null for reviews written before leak reports existed)
+    leakCount: Array.isArray(doc.review?.leakReport?.items) ? doc.review.leakReport.items.length : null,
     tradeCount: doc.reviewedTradeCount ?? 0,
     stats: doc.stats ?? null,
     model: doc.model ?? null,

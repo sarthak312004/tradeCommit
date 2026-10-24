@@ -7,7 +7,7 @@ import { focusRing } from '../../common/controlStyles'
 import ListenControls from './ListenControls'
 import ReviewDownloadButton from './ReviewDownloadButton'
 import { Review } from './ReviewReport'
-import { DISCIPLINE, EmptyState, Pill, ReviewSkeleton, buttonPrimary, buttonQuiet, errorText, moneyTone } from './reviewParts'
+import { EmptyState, Pill, ReviewSkeleton, buttonPrimary, buttonQuiet, errorText, moneyTone } from './reviewParts'
 
 const FILTERS = [
   { id: 'all', label: 'All' },
@@ -28,7 +28,6 @@ function KindBadge({ item }) {
 }
 
 function HistoryRow({ item, currency, onOpen }) {
-  const discipline = DISCIPLINE[item.discipline.verdict] ?? DISCIPLINE.cannot_assess
   const stats = item.stats
   return (
     <button
@@ -43,10 +42,7 @@ function HistoryRow({ item, currency, onOpen }) {
       </span>
       <span className="line-clamp-2 text-sm font-medium text-zinc-900 dark:text-zinc-100">{item.headline || 'Mentor review'}</span>
       <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <Pill tone={discipline.tone}>
-          {discipline.label}
-          {item.discipline.score !== null ? ` ${item.discipline.score}%` : ''}
-        </Pill>
+        {item.leakCount > 0 && <Pill tone="warning">{item.leakCount === 1 ? '1 leak found' : `${item.leakCount} leaks found`}</Pill>}
         <span className="text-xs tabular-nums text-zinc-600 dark:text-zinc-400">{plural(item.tradeCount, 'trade')}</span>
         {stats?.closed > 0 && (
           <span className={`text-xs font-medium tabular-nums ${moneyTone[toneOf(stats.netPnl)]}`}>{formatMoney(stats.netPnl, { currency, signed: true })}</span>
@@ -246,7 +242,7 @@ function ReviewHistoryPanel({ journalId, currency, onUpdate }) {
               </div>
             )}
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <ListenControls review={data.review} period={period} />
+              <ListenControls review={data.review} period={period} currency={currency} />
               <div className="flex items-center gap-1">
                 {data.generatedAt && <span className="text-[11px] text-zinc-500 dark:text-zinc-400">Written {writtenAt(data.generatedAt)}</span>}
                 <ReviewDownloadButton review={data.review} period={period} from={selected.start} to={selected.end} generatedAt={data.generatedAt} stats={stats} currency={currency} />

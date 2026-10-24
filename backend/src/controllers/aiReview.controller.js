@@ -129,14 +129,14 @@ const generate = async (week) => {
   const ownerId = week.journal.owner;
   // the flywheel link: what the previous review asked the trader to carry into this week
   const lastCommitment = await findLastCommitment({ journalId: week.journal._id, ownerId, before: week.weekStart });
-  const { prompt, tradeLabels, hasPlanContext, hasLast, closedCount } = buildMentorPrompt({ ...week, lastCommitment });
+  const { prompt, tradeLabels, leakReport, hasPlanContext, hasLast, closedCount } = buildMentorPrompt({ ...week, lastCommitment });
 
   // The generation is reserved first so concurrent traders cannot overshoot the shared daily budget, but it only
   // counts once the review is saved. If Gemini is rate limited, the queue is full, the call times out or the answer
   // is unusable, the reservation is deleted and the trader's daily/weekly allowance is untouched.
   return withUsageReservation({ ownerId, journalId: week.journal._id, weekStart: week.weekStart }, async () => {
     const { result, model } = await runQueued(() => generateJson({ system: SYSTEM_PROMPT, prompt, schema: REVIEW_SCHEMA }));
-    const review = sanitizeReview(result, tradeLabels, { hasPlanContext, weekStart: week.weekStart, weekEnd: week.weekEnd, hasLast, closedCount });
+    const review = sanitizeReview(result, tradeLabels, { hasPlanContext, weekStart: week.weekStart, weekEnd: week.weekEnd, hasLast, closedCount, leakReport });
     if (!review.summary || !review.headline) throw new ApiError(502, "The AI returned an incomplete review. Please try again.");
 
     return AiReview.findOneAndUpdate(

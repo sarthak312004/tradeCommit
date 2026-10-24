@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { CheckIcon, ChevronDownIcon } from '../../../utils/Icons.jsx'
-import { formatDateKey } from '../../../utils/tradeAnalytics'
+import { formatDateKey, formatMoney } from '../../../utils/tradeAnalytics'
 import { SERIF } from '../../auth/authStyles'
 import { stepEnter } from '../../feedback/formParts'
 import { focusRing } from '../../common/controlStyles'
 import { distinctNextActions } from '../../../utils/reviewActions'
-import { Clamp, Collapsible, DISCIPLINE, PERIOD_WORDS, PLAN_STATUS, Pill, RULE_STATUS, STRATEGY_VERDICT, TradeChips, WeekStats, listBox } from './reviewParts'
+import { Clamp, Collapsible, PERIOD_WORDS, PLAN_STATUS, Pill, RULE_STATUS, TradeChips, WeekStats, listBox } from './reviewParts'
 
 const COMMITMENT = {
   kept: { label: 'Kept', tone: 'positive' },
@@ -29,66 +29,18 @@ const LOOP = [
 
 /**
  * One AI mentor review, written to be read top to bottom with no tabs:
- *   1. the verdict (score ring, two pills, headline, short summary, the period's numbers)
+ *   1. the headline, a short summary and the period's numbers (no score and no verdict on the strategy)
  *   2. what to do next, as a checklist (the part people act on)
  *   3. what went well / what to fix, side by side
  *   4. the rules, problems first (rules that were followed stay folded away)
- *   5. folds for the heavier detail: strategy check and plan vs execution
- *   6. the mentor's note
- * With a `flywheel` block (new reviews) the anti-edge section "Close the loop" comes right after the verdict. Reviews
- * saved before it existed have no such block and render exactly as before.
+ *   5. where you lost money and time: leaks measured by the app from the logs, with how to stop each one
+ *   6. a fold for plan vs execution, then the mentor's note
+ * With a `flywheel` block (new reviews) the anti-edge section "Close the loop" comes right after the header. Reviews
+ * saved before it existed have no such block and render exactly as before. Reviews saved before leak reports existed
+ * have no `leakReport` and simply skip that section.
  */
 
 const eyebrow = 'text-[11px] font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400'
-
-const RING = {
-  positive: 'stroke-emerald-500 dark:stroke-emerald-400',
-  warning: 'stroke-amber-500 dark:stroke-amber-400',
-  negative: 'stroke-rose-500 dark:stroke-rose-400',
-  neutral: 'stroke-zinc-400 dark:stroke-zinc-500'
-}
-
-function ScoreRing({ score, tone }) {
-  const radius = 24
-  const circumference = 2 * Math.PI * radius
-  return (
-    <div className="relative h-16 w-16 shrink-0" role="img" aria-label={score === null ? 'No discipline score' : `Discipline score ${score} out of 100`}>
-      <svg viewBox="0 0 64 64" className="h-full w-full -rotate-90" aria-hidden="true">
-        <circle cx="32" cy="32" r={radius} fill="none" strokeWidth="5" className="stroke-zinc-200 dark:stroke-white/10" />
-        {score !== null && (
-          <circle
-            cx="32"
-            cy="32"
-            r={radius}
-            fill="none"
-            strokeWidth="5"
-            strokeLinecap="round"
-            strokeDasharray={circumference}
-            strokeDashoffset={circumference * (1 - score / 100)}
-            className={`${RING[tone] ?? RING.neutral} transition-[stroke-dashoffset] duration-700 motion-reduce:transition-none`}
-          />
-        )}
-      </svg>
-      <span className="absolute inset-0 grid place-items-center text-[17px] font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">{score === null ? '–' : score}</span>
-    </div>
-  )
-}
-
-function Verdict({ review, discipline, strategy }) {
-  const score = review.discipline.verdict === 'cannot_assess' || !Number.isFinite(review.discipline.score) ? null : Math.max(0, Math.min(100, review.discipline.score))
-  return (
-    <div className="flex items-center gap-4">
-      <ScoreRing score={score} tone={discipline.tone} />
-      <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-2">
-          <Pill tone={discipline.tone}>{discipline.label}</Pill>
-          <Pill tone={strategy.tone}>{strategy.label}</Pill>
-        </div>
-        <p className="mt-1.5 text-xs text-zinc-500 dark:text-zinc-400">{score === null ? 'Not enough logged to judge your rules' : `${score}% of checkable rules followed`}</p>
-      </div>
-    </div>
-  )
-}
 
 /**
  * The anti-edge part of the review, written to close the loop between the planner, the journal and the strategy:
@@ -312,11 +264,7 @@ function Rules({ review }) {
         <h3 className={eyebrow}>Your rules</h3>
         <span className="text-[11px] tabular-nums text-zinc-500 dark:text-zinc-400">{summary}</span>
       </div>
-      <div className="mb-4 flex h-1.5 overflow-hidden rounded-full bg-zinc-200 dark:bg-white/[0.08]" role="img" aria-label={summary}>
-        <span className="bg-emerald-500 dark:bg-emerald-400" style={{ width: `${(counts.followed / checks.length) * 100}%` }} />
-        <span className="bg-rose-500 dark:bg-rose-400" style={{ width: `${(counts.broken / checks.length) * 100}%` }} />
-      </div>
-      {review.discipline.explanation && <Clamp className="mb-4 text-sm leading-6 text-zinc-700 dark:text-zinc-300">{review.discipline.explanation}</Clamp>}
+      {review.discipline?.explanation && <Clamp className="mb-4 text-sm leading-6 text-zinc-700 dark:text-zinc-300">{review.discipline.explanation}</Clamp>}
 
       {attention.length > 0 && (
         <ul className={listBox}>
@@ -374,29 +322,65 @@ function Fold({ title, badge, children, defaultOpen = false }) {
   )
 }
 
-function StrategyFold({ review, strategy }) {
-  const { suggestedChanges, marketAdaptation, reasoning, verdict } = review.strategyFeedback
+const KIND = {
+  money: { label: 'Money', tone: 'negative' },
+  time: { label: 'Time', tone: 'warning' },
+  both: { label: 'Money and time', tone: 'negative' }
+}
+
+function LeakRow({ leak, currency }) {
+  const kind = KIND[leak.kind] ?? KIND.money
   return (
-    <Fold title="Strategy check" badge={<Pill tone={strategy.tone}>{strategy.label}</Pill>} defaultOpen={verdict === 'rethink'}>
-      {reasoning && <Clamp className="text-sm leading-6 text-zinc-700 dark:text-zinc-300">{reasoning}</Clamp>}
-      {suggestedChanges.length > 0 && (
-        <div>
-          <h4 className={`${eyebrow} mb-2.5`}>Worth testing</h4>
-          <ol className="space-y-2.5">
-            {suggestedChanges.map((change, index) => (
-              <li key={change} className="flex gap-3 text-sm leading-6 text-zinc-700 dark:text-zinc-300">
-                <span aria-hidden="true" className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-zinc-100 text-[11px] font-medium tabular-nums text-zinc-700 dark:bg-white/[0.08] dark:text-zinc-300">{index + 1}</span>
-                <span>{change}</span>
-              </li>
-            ))}
-          </ol>
-        </div>
+    <li className="border-l-2 border-rose-500/50 pl-4 dark:border-rose-400/40">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <p className="min-w-0 text-sm font-medium leading-6 text-zinc-900 dark:text-zinc-100">{leak.title}</p>
+        <span className="flex shrink-0 items-center gap-2">
+          <Pill tone={kind.tone}>{kind.label}</Pill>
+          {Number.isFinite(leak.amount) && <span className="text-sm font-semibold tabular-nums text-rose-600 dark:text-rose-400">{formatMoney(leak.amount, { currency, signed: true })}</span>}
+        </span>
+      </div>
+      {leak.detail && <Clamp className="mt-1 text-[13px] leading-6 text-zinc-600 dark:text-zinc-400">{leak.detail}</Clamp>}
+      {leak.fix && (
+        <p className="mt-2 text-[13px] leading-6 text-zinc-800 dark:text-zinc-200">
+          <span className="font-medium">How to stop it: </span>
+          {leak.fix}
+        </p>
       )}
-      {marketAdaptation && (
-        <div className="rounded-lg bg-zinc-100 px-4 py-3.5 dark:bg-white/[0.05]">
-          <h4 className={eyebrow}>Adapting to the market</h4>
-          <p className="mt-1.5 text-sm leading-6 text-zinc-700 dark:text-zinc-300">{marketAdaptation}</p>
-        </div>
+      <TradeChips trades={leak.trades} />
+    </li>
+  )
+}
+
+/**
+ * Where money and time went, measured by the app from the trade logs (not written by the AI, so the same trades always
+ * show the same list). Replaces the old strategy verdict: it points at behaviour to fix, not at the strategy.
+ */
+function LeaksSection({ report, currency }) {
+  const items = report.items ?? []
+  const count = items.length
+  return (
+    <Fold title="Where you lost money and time" badge={count > 0 ? <Pill tone="negative">{count} found</Pill> : null} defaultOpen>
+      {report.tooFewTrades ? (
+        <p className="text-sm leading-6 text-zinc-600 dark:text-zinc-400">Fewer than 3 closed trades here, which is too few to measure a pattern. Close and log more trades and this list will fill in.</p>
+      ) : count > 0 ? (
+        <>
+          <p className="text-[13px] leading-6 text-zinc-600 dark:text-zinc-400">
+            Each amount is what those exact trades netted in your logs. It shows where the money went, not proof of cause, and amounts can overlap, so do not add them up.
+            {report.confidence === 'early' ? ' With under 30 closed trades, read these as early signals.' : ''}
+          </p>
+          <ul className="space-y-6">
+            {items.map((leak) => (
+              <LeakRow key={leak.id || leak.title} leak={leak} currency={currency} />
+            ))}
+          </ul>
+        </>
+      ) : (
+        <p className="text-sm leading-6 text-zinc-600 dark:text-zinc-400">No money or time leak showed up in these trades. That is a read of this sample, not a clean bill of health.</p>
+      )}
+      {report.orderChecksSkipped && (
+        <p className="rounded-lg bg-zinc-100 px-4 py-3 text-[13px] leading-6 text-zinc-600 dark:bg-white/[0.05] dark:text-zinc-400">
+          Checks that depend on the order of trades (re-entries, trades after a loss, busy days) were skipped because many trades share one date. Real trade dates would let the review check them.
+        </p>
       )}
     </Fold>
   )
@@ -439,8 +423,6 @@ function PlanFold({ review }) {
 /** `stats` ({ trades, closed, netPnl, winRate, expectancyR, rewardRisk }) is the period's numbers; when given they sit under the summary. */
 export function Review({ review, period = 'week', stats = null, currency }) {
   const words = PERIOD_WORDS[period] ?? PERIOD_WORDS.week
-  const discipline = DISCIPLINE[review.discipline.verdict] ?? DISCIPLINE.cannot_assess
-  const strategy = STRATEGY_VERDICT[review.strategyFeedback.verdict] ?? STRATEGY_VERDICT.keep
   const hasPlan = Boolean(review.planAlignment && (review.planAlignment.summary || review.planAlignment.days?.length))
   const hasNoticed = review.strengths.length > 0 || review.issues.length > 0
   const flywheel = review.flywheel ?? null
@@ -449,7 +431,6 @@ export function Review({ review, period = 'week', stats = null, currency }) {
   return (
     <article className="space-y-9">
       <header className="space-y-5">
-        <Verdict review={review} discipline={discipline} strategy={strategy} />
         <h2 className={`${SERIF} text-[26px] font-medium leading-[1.15] tracking-[-0.025em] text-zinc-900 dark:text-zinc-50`}>{review.headline}</h2>
         <Clamp className="text-[15px] leading-7 text-zinc-700 dark:text-zinc-300">{review.summary}</Clamp>
         {stats && <WeekStats week={stats} currency={currency} />}
@@ -469,7 +450,7 @@ export function Review({ review, period = 'week', stats = null, currency }) {
       <Rules review={review} />
 
       <div className="space-y-3">
-        <StrategyFold review={review} strategy={strategy} />
+        {review.leakReport && <LeaksSection report={review.leakReport} currency={currency} />}
         {hasPlan && <PlanFold review={review} />}
       </div>
 

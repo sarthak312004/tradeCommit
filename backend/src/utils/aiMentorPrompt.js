@@ -1,6 +1,7 @@
 import { addDays, computeAnalytics, computeLeakEvidence, computeWeekEvidence, dateKey, sampleStrength, tradePnl, tradeR, tradeRisk, weeklyHistory } from "./tradeStats.js";
 import { htmlToPlainText } from "./richText.js";
 import { inspectMentorData, MODE_SPECIFIC_MENTOR_INSTRUCTIONS } from "./mentorDataQuality.js";
+import { computeLeakReport, leakReportLines } from "./leakReport.js";
 
 const MAX_WEEK_TRADES = 40; // trades sent in full detail
 const MAX_HISTORY_TRADES = 40; // earlier trades sent as one short line each
@@ -26,14 +27,11 @@ export const REVIEW_SCHEMA = {
   properties: {
     headline: str,
     summary: str,
+    // no verdict and no score: a percentage of rules "followed" moved from review to review and gave a false sense of precision
     discipline: {
       type: "OBJECT",
-      properties: {
-        verdict: { type: "STRING", enum: ["followed", "mostly_followed", "partly_followed", "not_followed", "cannot_assess"] },
-        score: { type: "INTEGER" },
-        explanation: str,
-      },
-      required: ["verdict", "score", "explanation"],
+      properties: { explanation: str },
+      required: ["explanation"],
     },
     ruleChecks: {
       type: "ARRAY",
@@ -45,16 +43,6 @@ export const REVIEW_SCHEMA = {
     },
     strengths: { type: "ARRAY", items: titled() },
     issues: { type: "ARRAY", items: titled({ trades: strList }) },
-    strategyFeedback: {
-      type: "OBJECT",
-      properties: {
-        verdict: { type: "STRING", enum: ["keep", "tweak", "rethink"] },
-        reasoning: str,
-        suggestedChanges: strList,
-        marketAdaptation: str,
-      },
-      required: ["verdict", "reasoning", "suggestedChanges", "marketAdaptation"],
-    },
     // only present when a planner is connected to the journal
     planAlignment: {
       type: "OBJECT",
@@ -105,7 +93,7 @@ export const REVIEW_SCHEMA = {
     nextWeek: strList,
     mentorNote: str,
   },
-  required: ["headline", "summary", "discipline", "ruleChecks", "strengths", "issues", "strategyFeedback", "flywheel", "nextWeek", "mentorNote"],
+  required: ["headline", "summary", "discipline", "ruleChecks", "strengths", "issues", "flywheel", "nextWeek", "mentorNote"],
 };
 
 /* ------------------------------- prompt ------------------------------- */
@@ -117,8 +105,8 @@ Your job:
 1. Read the trader's written strategy and break it into concrete, checkable rules (entry conditions, risk per trade, stop-loss use, position sizing, trading hours, instruments, max trades, news days, anything else they wrote).
 2. Compare each rule with what the trader ACTUALLY did in this week's trade logs (prices, stops, sizes, notes, custom properties) and decide: followed, broken, or unclear (the logs don't contain enough to tell). Cite the trades involved using their T-numbers (e.g. "T3").
 3. Separate outcome from process. A loss that followed every rule is a good trade. A win that broke the rules is a warning, not a success. Say so plainly.
-4. Judge the strategy itself, not only the trader. Look across the weekly history and the journal-wide numbers. If the same rule keeps being broken, ask whether the rule is unrealistic. If the rules were followed over a meaningful sample and results are still weak, say the strategy may need adjusting and say exactly what to test. If evidence is thin, say "keep" and explain that more trades are needed. Never recommend changes based on one or two trades.
-5. Market adaptation: you have NO live market data. Only comment on market conditions when the trader's own logs show a pattern (for example: longs lose while shorts win, one instrument or weekday keeps losing, stops get hit more often than before, win rate shifted versus earlier weeks). Describe it as "your results suggest" and never claim to know what the market did.
+4. Money and time leaks: the prompt contains a block "MONEY AND TIME LEAKS FOUND BY THE APP". The app measured them from the logs and shows the same list to the trader, so treat every number in it as ground truth: quote the amounts and counts exactly as written, never recompute them, and never add new leaks of your own to that list. Your job is to explain, from the trader's own notes and properties, what the trades in each leak have in common. If the notes do not explain it, say the reason is not recorded. A leak amount is what those trades netted; it shows where money went and does not prove what caused it, so do not say a leak "caused" the loss.
+5. Do not give an overall verdict on the trader's strategy and do not tell the trader to keep, tweak or abandon it. Do not comment on market conditions: you have no market data. Say only what the trader's own logs show.
 
 6. Plan vs execution (ONLY when the prompt contains a "TRADER'S TRADE PLANS" block, meaning the trader connected a planner to this journal). The plans are what the trader intended to do on each day; the trade logs are what they actually did. Compare them by content (instrument, direction, entry zone, stop, target, size), not just by date: a plan for one day may be executed the next day. Apply these rules strictly:
 - A plan is a CONDITIONAL idea ("if price breaks X, buy"), not an obligation. A plan with no matching trade almost always means the entry never triggered, or the trader chose to skip it. You cannot tell which, so say "not triggered or skipped". This is NOT an inconsistency, NOT a missed trade, and NOT a discipline failure. Skipping a setup that did not look right is often good discipline. Only treat it as a problem if the trader's own notes say the setup triggered and they hesitated, or the written strategy explicitly says every valid setup must be taken.
@@ -141,10 +129,10 @@ ANTI-EDGE AND THE FLYWHEEL (this is the heart of the review; build the whole ans
 A trader improves when a loop keeps turning: PLAN the trade, EXECUTE it, RECORD it honestly, REVIEW it, then REFINE the rules that feed the next plan. Most traders stall because the review never changes the next plan. Your job is to close that loop with ONE specific change, not to hand out praise or a long to-do list.
 - "Anti-edge" means a repeatable pattern in THIS trader's own logs that pulls results below what their own written rules produce: a kind of trade, a behaviour, a setup condition or a logging habit that costs expectancy. Find it by comparing groups the "Facts computed from the logs" block already splits for you (first entries versus re-entries after a same-day loss, trades after a same-day loss versus others, checkbox ticked versus not ticked, planned days versus unplanned days) and by reading the notes. Rank by cost: the pattern with the largest measured effect on P&L or R comes first. Put the amount in "cost" (for example "3 trades, -INR 2,909"). If the cost cannot be measured from the data, say so in that field.
 - flywheel.lastCommitment: when the prompt has a "LAST REVIEW'S COMMITMENT" block, judge from the trades whether the trader did it: "kept", "partly_kept", "not_kept", or "cannot_tell" when the logs do not show it. Say what in the trades shows that. Without that block use status "none" and an empty evidence string. This is the link that makes the loop turn, so be exact and fair.
-- flywheel.leaks: 0 to 3 anti-edge patterns, biggest cost first, each with the trades involved. A strong week may have none: then return an empty list instead of inventing weaknesses.
+- flywheel.leaks: 0 to 3 anti-edge patterns, biggest cost first, each with the trades involved. When the MONEY AND TIME LEAKS block lists leaks, choose from them (largest first), reuse their cost text exactly, and use detail to say what the notes show about why. Add a pattern of your own only when the trader's notes make it clear and it is not already in that block. A strong week may have none: then return an empty list instead of inventing weaknesses.
 - flywheel.edgeSignal: what the numbers do and do not support. confidence is "early" when the sample is under 30 closed trades, "building" for 30 to 99, "solid" only from 100 and only when the result holds across weeks. Use the win-rate range from the facts block. Never write that the edge is "clear", "proven", "confirmed" or "robust" below 100 closed trades; say "early read" and what a bigger sample must show.
 - flywheel.weakestLink: which stage of the loop is weakest right now and why: "plan" (no plan, plan not specific enough to check), "execute" (rules not followed), "record" (stops, notes or properties missing or contradicting each other, so the review cannot see the truth) or "review" (last period's commitment was ignored or never set). Choose from evidence, one stage only.
-- flywheel.carryForward: exactly ONE change. rule: one sentence to add to or tighten in the written strategy, phrased so a trade can be checked against it. planLine: one line the trader writes in their next plan BEFORE trading to apply it. checkpoint: how the next review will judge it, with a number the trader can count (for example "no re-entry on an instrument after its stop-out, over the next 10 trades"). The first item of nextWeek must be this same change.
+- flywheel.carryForward: exactly ONE change. rule: one sentence to add to or tighten in the written strategy, phrased so a trade can be checked against it. Never base it on one or two trades. planLine: one line the trader writes in their next plan BEFORE trading to apply it. checkpoint: how the next review will judge it, with a number the trader can count (for example "no re-entry on an instrument after its stop-out, over the next 10 trades"). The first item of nextWeek must be this same change.
 - Before you propose any limit or threshold, test it against the trades you cite: it must actually block or change the trade you are pointing at. Count the entries in the sequence first (the original entry, then each re-entry) and set the limit so the later trade is caught.
 
 STAY INSIDE THE EVIDENCE (a review that overreaches costs the trader trust, so these are hard rules):
@@ -163,10 +151,9 @@ Tone: direct, warm, specific, like a mentor who respects the trader. No hype, no
 Output rules:
 - headline: one sentence verdict of the week (max 140 characters).
 - summary: 2 to 4 sentences.
-- discipline.verdict: "followed", "mostly_followed", "partly_followed", "not_followed", or "cannot_assess". discipline.score is 0 to 100: the share of checkable rules (followed or broken, not unclear) that were followed. The app recomputes it from your ruleChecks, so make the ruleChecks honest and make the two agree. Use cannot_assess with score 0 when the logs don't allow a fair judgement.
+- discipline.explanation: 1 to 3 sentences on how closely the trades followed the written rules, naming the rules that mattered most. No score, no percentage, no rating word like "excellent" or "poor".
 - ruleChecks: 3 to 8 of the most important rules from the strategy. "trades" lists T-numbers, or an empty list for week-wide rules.
-- strengths: 1 to 2 items about what the logs genuinely support (not what a backtest guarantees), each with the T-numbers involved when they are specific trades. issues: 0 to 2 items that are NOT already in flywheel.leaks, for example logging gaps where checkbox properties contradict the written notes. Do not repeat a leak here.
-- strategyFeedback.verdict: "keep", "tweak", or "rethink". suggestedChanges: 0 to 3 specific, testable edits to the written strategy (empty list when verdict is keep). marketAdaptation: 1 to 3 sentences grounded in the trader's own data, or say plainly that the data is too thin to tell.
+- strengths: 1 to 2 items about what the logs genuinely support (not what a backtest guarantees), each with the T-numbers involved when they are specific trades. issues: 0 to 2 items that are NOT already in flywheel.leaks or in the MONEY AND TIME LEAKS block, for example logging gaps where checkbox properties contradict the written notes. Do not repeat a leak here.
 - planAlignment: ONLY when the TRADER'S TRADE PLANS block is present, otherwise omit it. summary: 1 to 3 sentences on how closely execution matched the plans, treating plans that were not triggered or skipped and unplanned trades as neutral facts. days: one item per day that has a plan or a trade, using the date as written in the prompt. status is "executed_as_planned", "executed_with_differences", "plan_not_taken" (not triggered or skipped), or "unplanned_trade". detail: 1 or 2 sentences. trades: T-numbers involved, or an empty list.
 - flywheel: always present, following the rules above. Text fields are plain sentences. leaks[].cost is short ("-INR 2,909 over 3 trades"). carryForward fields are one sentence each.
 - nextWeek: exactly 2 or 3 concrete actions for next week. The first one is flywheel.carryForward.rule turned into an action. The others come from leaks or logging gaps and are countable.
@@ -296,6 +283,12 @@ export const leakLines = (leak, currency, { hasPlanner = false } = {}) => {
   return lines;
 };
 
+/** The leak report keeps T-numbers while it is built; the saved review shows readable trade names like every other section. */
+export const withReadableTrades = (report, tradeLabels) => ({
+  ...report,
+  items: report.items.map((item) => ({ ...item, trades: item.trades.map((ref) => tradeLabels[ref] ?? null).filter(Boolean) })),
+});
+
 /** What the previous review asked the trader to carry into this period (from utils/flywheel.js), or null. */
 export const commitmentBlock = (last) =>
   last
@@ -399,7 +392,9 @@ export const buildMentorPrompt = ({ journal, weekStart, weekEnd, weekTrades, pri
   });
 
   const weekStats = computeAnalytics(weekTrades);
-  const leak = computeLeakEvidence(weekTrades, { planEntries: planners.length ? planEntries : null, labelOf: (trade) => labelByTrade.get(String(trade._id)) ?? null });
+  const labelOf = (trade) => labelByTrade.get(String(trade._id)) ?? null;
+  const leak = computeLeakEvidence(weekTrades, { planEntries: planners.length ? planEntries : null, labelOf });
+  const leakReport = withReadableTrades(computeLeakReport(weekTrades, { labelOf, planEntries: planners.length ? planEntries : null, lookedBackfilled: leak.lookedBackfilled, currency }), tradeLabels);
   const overall = computeAnalytics(allTradesToDate);
   const evidence = computeWeekEvidence(weekTrades);
   const history = weeklyHistory(allTradesToDate, weekStart);
@@ -453,6 +448,9 @@ export const buildMentorPrompt = ({ journal, weekStart, weekEnd, weekTrades, pri
     "=== Facts computed from the logs (ground truth) ===",
     ...evidenceLines,
     "",
+    "=== MONEY AND TIME LEAKS FOUND BY THE APP (ground truth, shown to the trader as written; explain them, never recompute them) ===",
+    ...leakReportLines(leakReport, currency),
+    "",
     "=== THIS WEEK'S NUMBERS (same metrics as the Analysis tab) ===",
     statsBlock(weekStats, currency),
     "",
@@ -470,7 +468,7 @@ export const buildMentorPrompt = ({ journal, weekStart, weekEnd, weekTrades, pri
     .filter((line) => line !== null)
     .join("\n");
 
-  return { prompt, tradeLabels, hasPlanContext: Boolean(planSection), hasLast: Boolean(lastCommitment), closedCount: overall.closedTrades };
+  return { prompt, tradeLabels, leakReport, hasPlanContext: Boolean(planSection), hasLast: Boolean(lastCommitment), closedCount: overall.closedTrades };
 };
 
 /* ---------------------------- sanitising ---------------------------- */
@@ -521,10 +519,35 @@ const sanitizeFlywheel = (raw, labels, { hasLast, closedCount }) => {
   };
 };
 
+// the report is built by our own code, so this only keeps the stored shape small and predictable
+const sanitizeLeakReport = (report) => {
+  if (!report || !Array.isArray(report.items)) return null;
+  return {
+    closedCount: Number.isFinite(report.closedCount) ? report.closedCount : 0,
+    confidence: oneOf(report.confidence, CONFIDENCE, "early"),
+    orderChecksSkipped: Boolean(report.orderChecksSkipped),
+    tooFewTrades: Boolean(report.tooFewTrades),
+    items: list(report.items, 5, (item) =>
+      text(item?.title, 160)
+        ? {
+            id: text(item.id, 60),
+            kind: oneOf(item.kind, ["money", "time", "both"], "money"),
+            title: text(item.title, 160),
+            detail: text(item.detail, 700),
+            amount: Number.isFinite(item.amount) ? item.amount : null,
+            count: Number.isFinite(item.count) ? item.count : 0,
+            trades: list(item.trades, 8, (name) => text(name, 120) || null),
+            fix: text(item.fix, 400),
+            confidence: oneOf(item.confidence, CONFIDENCE, "early"),
+          }
+        : null
+    ),
+  };
+};
+
 /** Never trust the model's JSON blindly: clamp lengths, enforce the enums, resolve trade references. */
-export const sanitizeReview = (raw, tradeLabels, { hasPlanContext = false, weekStart = "", weekEnd = "", maxPlanDays = 14, hasLast = false, closedCount = 0 } = {}) => {
+export const sanitizeReview = (raw, tradeLabels, { hasPlanContext = false, weekStart = "", weekEnd = "", maxPlanDays = 14, hasLast = false, closedCount = 0, leakReport = null } = {}) => {
   const discipline = raw?.discipline ?? {};
-  const feedback = raw?.strategyFeedback ?? {};
 
   const ruleChecks = list(raw?.ruleChecks, 8, (item) => {
       const rule = text(item?.rule, 220);
@@ -537,29 +560,21 @@ export const sanitizeReview = (raw, tradeLabels, { hasPlanContext = false, weekS
       };
     });
 
-  // The score is arithmetic, not a feeling: followed rules / (followed + broken). "Can't tell" rules are left out of it.
-  const followedCount = ruleChecks.filter((check) => check.status === "followed").length;
-  const brokenCount = ruleChecks.filter((check) => check.status === "broken").length;
-  const checkable = followedCount + brokenCount;
-  const computedScore = checkable ? Math.round((followedCount / checkable) * 100) : null;
-  const verdict = computedScore === null ? "cannot_assess" : computedScore >= 95 ? "followed" : computedScore >= 75 ? "mostly_followed" : computedScore >= 40 ? "partly_followed" : "not_followed";
-  const score = computedScore;
-
   return {
     headline: text(raw?.headline, 200),
     summary: text(raw?.summary, 900),
-    discipline: { verdict, score, explanation: text(discipline.explanation, 700) },
+    // verdict and score are legacy placeholders so a browser still running an older version of the app does not crash
+    // on a new review; this version of the app never shows them
+    discipline: { verdict: "cannot_assess", score: null, explanation: text(discipline.explanation, 700) },
     ruleChecks,
     strengths: list(raw?.strengths, 3, (item) => (text(item?.title, 120) ? { title: text(item.title, 120), detail: text(item.detail, 600) } : null)),
     issues: list(raw?.issues, 4, (item) =>
       text(item?.title, 120) ? { title: text(item.title, 120), detail: text(item.detail, 700), trades: resolveTrades(item.trades, tradeLabels) } : null
     ),
-    strategyFeedback: {
-      verdict: oneOf(feedback.verdict, ["keep", "tweak", "rethink"], "keep"),
-      reasoning: text(feedback.reasoning, 900),
-      suggestedChanges: list(feedback.suggestedChanges, 3, (item) => text(item, 400) || null),
-      marketAdaptation: text(feedback.marketAdaptation, 700),
-    },
+    // legacy empty placeholder (see above); the strategy verdict no longer exists
+    strategyFeedback: { verdict: "keep", reasoning: "", suggestedChanges: [], marketAdaptation: "" },
+    // computed by the app from the logs, not written by the AI
+    leakReport: sanitizeLeakReport(leakReport),
     flywheel: sanitizeFlywheel(raw?.flywheel, tradeLabels, { hasLast, closedCount }),
     planAlignment: hasPlanContext ? sanitizePlanAlignment(raw?.planAlignment, tradeLabels, weekStart, weekEnd, maxPlanDays) : null,
     nextWeek: list(raw?.nextWeek, 3, (item) => text(item, 300) || null),

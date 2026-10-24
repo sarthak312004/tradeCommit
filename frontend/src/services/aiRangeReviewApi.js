@@ -32,8 +32,8 @@ export const getRangeReview = (journalId, reviewId) => requestJson(`${base(journ
 
 /**
  * Every past review of the journal, weekly and date-range together, newest first. Light rows, free to browse.
- * Resolves to { currency, items: [{ kind: 'week' | 'range', id, start, end, headline, discipline: { verdict, score },
- *   strategyVerdict, tradeCount, stats, generatedAt }], hasMore, nextBefore }. Pass `before: nextBefore` for the next page.
+ * Resolves to { currency, items: [{ kind: 'week' | 'range', id, start, end, headline, leakCount (null for older reviews),
+ *   tradeCount, stats, generatedAt }], hasMore, nextBefore }. Pass `before: nextBefore` for the next page.
  */
 export const listReviewHistory = (journalId, { limit = 20, before } = {}) =>
   requestJson(`${base(journalId)}?limit=${limit}${before ? `&before=${encodeURIComponent(before)}` : ''}`, { cache: 'no-store' })

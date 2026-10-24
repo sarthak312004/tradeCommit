@@ -39,20 +39,6 @@ export const errorText = (error) => {
   return error?.message || "We couldn't complete that request. Please try again."
 }
 
-export const DISCIPLINE = {
-  followed: { label: 'Followed your rules', tone: 'positive' },
-  mostly_followed: { label: 'Mostly followed', tone: 'positive' },
-  partly_followed: { label: 'Partly followed', tone: 'warning' },
-  not_followed: { label: 'Did not follow', tone: 'negative' },
-  cannot_assess: { label: 'Not enough to judge', tone: 'neutral' }
-}
-
-export const STRATEGY_VERDICT = {
-  keep: { label: 'Keep the strategy', tone: 'positive' },
-  tweak: { label: 'Tweak the strategy', tone: 'warning' },
-  rethink: { label: 'Rethink the strategy', tone: 'negative' }
-}
-
 export const RULE_STATUS = {
   followed: { label: 'Followed', dot: 'bg-emerald-600 dark:bg-emerald-300' },
   broken: { label: 'Broken', dot: 'bg-rose-600 dark:bg-rose-300' },

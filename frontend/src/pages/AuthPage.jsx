@@ -222,10 +222,10 @@ function AiMentorPreview() {
 
       <div className="mt-4 flex items-end justify-between gap-3">
         <div>
-          <p className={previewLabel}>strategy discipline</p>
-          <p className="mt-1 text-3xl font-semibold tracking-tight">82<span className="text-base font-medium text-zinc-600 dark:text-zinc-400">/100</span></p>
+          <p className={previewLabel}>biggest leak this week</p>
+          <p className="mt-1 text-lg font-semibold tracking-tight">3 re-entries after a stop-out</p>
         </div>
-        <span className="whitespace-nowrap rounded-full border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-[10px] font-medium leading-4 text-emerald-800 dark:border-emerald-400/15 dark:bg-emerald-400/10 dark:text-emerald-300">Mostly followed</span>
+        <span className="whitespace-nowrap rounded-full border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-[10px] font-medium leading-4 text-emerald-800 dark:border-emerald-400/15 dark:bg-emerald-400/10 dark:text-emerald-300">Fix first</span>
       </div>
 
       <ul className="mt-4 space-y-2 border-t border-zinc-200/80 pt-4 dark:border-white/[0.07]">
@@ -537,7 +537,7 @@ export default function AuthPage() {
                 <h2 id="mentor-title" className={`${SERIF} max-w-xl text-balance text-[30px] font-medium leading-[1.04] tracking-[-.035em] sm:text-4xl`}>A mentor that has read every trade you took this week.</h2>
                 <p className="mt-4 max-w-lg text-[15px] leading-6 text-zinc-600 sm:mt-5 dark:text-zinc-400">Write your strategy once. Each week the AI mentor checks your trades against your own rules, compares your plans with what you actually did, and tells you where to focus next.</p>
                 <ul className="mt-5 space-y-2.5 text-[14px] text-zinc-700 dark:text-zinc-300">
-                  {["Rule-by-rule check of your strategy, with a discipline score", "Plan vs execution when a planner is linked to the journal", "What went well, where to work, and actions for next week"].map((point) => (
+                  {["Rule-by-rule check of your strategy, and the mistakes that cost you money and time", "Plan vs execution when a planner is linked to the journal", "What went well, where to work, and actions for next week"].map((point) => (
                     <li key={point} className="flex items-start gap-2.5"><span className="mt-0.5 shrink-0 text-emerald-700 dark:text-emerald-400"><Icon name="check" size={16} /></span>{point}</li>
                   ))}
                 </ul>

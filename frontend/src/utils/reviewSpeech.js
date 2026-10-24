@@ -7,21 +7,6 @@ import { distinctNextActions } from './reviewActions'
 // The speech hook re-splits smaller for voices that cut off long text (Google's online voices in Chrome).
 const MAX_CHUNK = 300
 
-// wording for a weekly review vs a date-range review ("this week" / "in this period")
-const DISCIPLINE = (when) => ({
-  followed: `You followed your rules ${when}.`,
-  mostly_followed: `You mostly followed your rules ${when}.`,
-  partly_followed: `You only partly followed your rules ${when}.`,
-  not_followed: `You did not follow your rules ${when}.`,
-  cannot_assess: "There wasn't enough in your logs to judge your discipline."
-})
-
-const STRATEGY = {
-  keep: 'My advice is to keep your strategy as it is.',
-  tweak: 'My advice is to tweak your strategy.',
-  rethink: 'My advice is to rethink your strategy.'
-}
-
 const RULE_STATUS = { followed: 'You followed it.', broken: 'You broke it.', unclear: "I can't verify it from your logs." }
 
 const PLAN_STATUS = {
@@ -99,7 +84,7 @@ export const chunkText = (text, max = MAX_CHUNK) => {
 }
 
 /** Returns [{ label, text }]: one entry per spoken chunk, labelled with the section it belongs to. */
-export const buildReviewSpeech = (review, period = 'week') => {
+export const buildReviewSpeech = (review, period = 'week', currency = '') => {
   if (!review) return []
   const isRange = period === 'range'
 
@@ -132,12 +117,7 @@ export const buildReviewSpeech = (review, period = 'week') => {
     }
   }
 
-  const discipline = review.discipline ?? {}
-  add('Discipline', [
-    (DISCIPLINE(isRange ? 'in this period' : 'this week')[discipline.verdict] ?? DISCIPLINE('').cannot_assess),
-    discipline.score !== null && discipline.score !== undefined ? `That is about ${discipline.score} percent of the rules I could check.` : '',
-    discipline.explanation
-  ])
+  if (review.discipline?.explanation) add('Your rules', ['About your rules.', review.discipline.explanation])
 
   if (review.ruleChecks?.length) {
     add(
@@ -159,13 +139,14 @@ export const buildReviewSpeech = (review, period = 'week') => {
     add('Where to work', ['Where to work.', ...review.issues.map((item) => `${endSentence(item.title)} ${item.detail ?? ''}`)])
   }
 
-  const strategy = review.strategyFeedback ?? {}
-  add('Your strategy', [
-    STRATEGY[strategy.verdict] ?? '',
-    strategy.reasoning,
-    strategy.suggestedChanges?.length ? `Worth testing. ${strategy.suggestedChanges.map(endSentence).join(' ')}` : '',
-    strategy.marketAdaptation ? `On adapting to the market. ${strategy.marketAdaptation}` : ''
-  ])
+  const leaks = review.leakReport?.items ?? []
+  if (leaks.length) {
+    const amountText = (leak) => (Number.isFinite(leak.amount) ? `Those trades netted ${Math.abs(Math.round(leak.amount))}${currency ? ` ${currency}` : ''} ${leak.amount < 0 ? 'in losses' : 'in profit'}. ` : '')
+    add('Where you lost money and time', [
+      'Where you lost money and time.',
+      ...leaks.map((leak) => `${endSentence(leak.title)} ${amountText(leak)}${leak.fix ? `How to stop it. ${endSentence(leak.fix)}` : ''}`)
+    ])
+  }
 
   const nextActions = distinctNextActions(review)
   if (nextActions.length) {

@@ -358,7 +358,7 @@ function RangeReviewPanel({ journalId, currency, seed, journalRange, earliestTra
           </p>
         )}
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <ListenControls review={review} period="range" />
+          <ListenControls review={review} period="range" currency={currency} />
           <div className="flex items-center gap-1">
             {data.generatedAt && (
               <span className="text-[11px] text-zinc-500 dark:text-zinc-400">
