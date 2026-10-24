@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { ChevronLeftIcon, ChevronRightIcon, PlusIcon } from '../../../utils/Icons.jsx'
-import { addMonths, buildMonthGrid, formatMonthTitle, getWeekdayLabels, startOfMonth, todayKey } from '../../../utils/calendar'
+import { addMonths, buildMonthGrid, formatMonthTitle, fromDateKey, getWeekdayLabels, startOfMonth, todayKey } from '../../../utils/calendar'
+import { useIsCompact } from '../../../hooks/useMediaQuery'
 import { focusRing, segmentedGroup } from '../../common/controlStyles'
 
 const MAX_VISIBLE_CHIPS = 3
@@ -9,7 +10,7 @@ const MAX_VISIBLE_CHIPS = 3
 const navItem = `inline-flex h-full cursor-pointer items-center justify-center text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100 hover:text-zinc-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-600 dark:text-zinc-300 dark:hover:bg-white/[0.07] dark:hover:text-zinc-50 dark:focus-visible:ring-sky-400`
 
 /** Fixed h-6 pill: the label is truncated inside it, so it can never grow taller than the cell or clip a descender. */
-function EntryChip({ entry, onOpen }) {
+function EntryChip({ entry, onOpen, large = false }) {
   return (
     <button
       type="button"
@@ -19,7 +20,7 @@ function EntryChip({ entry, onOpen }) {
         onOpen(entry)
       }}
       title={entry.syncState === 'saving' ? 'Saving plan…' : entry.title}
-      className={`flex h-6 w-full min-w-0 cursor-pointer items-center gap-1.5 overflow-hidden rounded-md bg-zinc-900/[0.06] px-2 text-left text-[11px] font-medium leading-none text-zinc-800 transition-colors hover:bg-zinc-900/[0.1] hover:text-zinc-900 disabled:cursor-wait disabled:opacity-70 dark:bg-white/[0.08] dark:text-zinc-200 dark:hover:bg-white/[0.13] dark:hover:text-zinc-50 ${focusRing}`}
+      className={`flex w-full min-w-0 cursor-pointer items-center overflow-hidden rounded-md bg-zinc-900/[0.06] text-left font-medium leading-none ${large ? 'h-9 gap-2 px-3 text-xs' : 'h-6 gap-1.5 px-2 text-[11px]'} text-zinc-800 transition-colors hover:bg-zinc-900/[0.1] hover:text-zinc-900 disabled:cursor-wait disabled:opacity-70 dark:bg-white/[0.08] dark:text-zinc-200 dark:hover:bg-white/[0.13] dark:hover:text-zinc-50 ${focusRing}`}
     >
       <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-sky-700 dark:bg-sky-400" />
       <span className="min-w-0 flex-1 truncate">{entry.title}</span>
@@ -29,6 +30,43 @@ function EntryChip({ entry, onOpen }) {
 
 const moreButton =
   'h-5 cursor-pointer rounded px-2 text-[11px] font-medium text-zinc-700 hover:text-zinc-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-600 dark:text-zinc-400 dark:hover:text-zinc-100 dark:focus-visible:ring-sky-400'
+
+/** Phone-sized day: just the number and a few dots. The day's plans are listed under the grid. */
+function CompactDayCell({ day, entries, isToday, isSelected, isActive, onPick }) {
+  const surface = isSelected
+    ? 'bg-white shadow-card dark:bg-white/[0.08] dark:shadow-none'
+    : day.inMonth
+      ? 'active:bg-zinc-900/[0.08] dark:active:bg-white/[0.08]'
+      : 'bg-zinc-900/[0.03] dark:bg-white/[0.02]'
+  const count = entries.length
+
+  return (
+    <button
+      type="button"
+      onClick={() => onPick(day.key)}
+      data-selected={isSelected || undefined}
+      data-tour={isToday ? 'planner-today' : undefined}
+      aria-label={`${day.key}${count ? `, ${count} ${count === 1 ? 'plan' : 'plans'}` : ''}`}
+      aria-current={isToday ? 'date' : undefined}
+      aria-pressed={count ? isActive : undefined}
+      className={`flex h-[52px] min-w-0 cursor-pointer flex-col items-center rounded-lg pt-1 transition-colors ${surface} ${isActive ? 'ring-2 ring-sky-600 dark:ring-sky-400' : ''} ${focusRing}`}
+    >
+      <span
+        className={`flex h-6 min-w-6 items-center justify-center rounded-full px-1 text-xs font-semibold tabular-nums ${
+          isToday ? 'bg-sky-700 text-white dark:bg-sky-400 dark:text-zinc-950' : day.inMonth ? 'text-zinc-800 dark:text-zinc-200' : 'text-zinc-600 dark:text-zinc-400'
+        }`}
+      >
+        {day.day}
+      </span>
+      <span aria-hidden="true" className="mt-1 flex h-2 items-center justify-center gap-[3px]">
+        {entries.slice(0, 3).map((entry) => (
+          <span key={entry.id} className="h-1.5 w-1.5 rounded-full bg-sky-700 dark:bg-sky-400" />
+        ))}
+        {count > 3 && <span className="text-[9px] font-semibold leading-none text-zinc-700 dark:text-zinc-300">+{count - 3}</span>}
+      </span>
+    </button>
+  )
+}
 
 function DayCell({ day, entries, isToday, isSelected, isExpanded, onToggleExpand, onCreate, onOpenEntry }) {
   const visible = isExpanded ? entries : entries.slice(0, MAX_VISIBLE_CHIPS)
@@ -120,6 +158,8 @@ function DayCell({ day, entries, isToday, isSelected, isExpanded, onToggleExpand
 function PlannerCalendar({ entries, selectedDate = null, onCreateForDate, onOpenEntry }) {
   const [month, setMonth] = useState(() => startOfMonth(new Date()))
   const [expandedDay, setExpandedDay] = useState(null)
+  const isCompact = useIsCompact()
+  const [activeDay, setActiveDay] = useState(null) // phones: the day whose plans are listed under the grid
 
   const days = useMemo(() => buildMonthGrid(month), [month])
   const weekdays = useMemo(() => getWeekdayLabels(), [])
@@ -136,13 +176,26 @@ function PlannerCalendar({ entries, selectedDate = null, onCreateForDate, onOpen
 
   const goToMonth = (next) => {
     setExpandedDay(null)
+    setActiveDay(null)
     setMonth(next)
   }
+
+  // a day with plans opens its list; an empty day goes straight to the new-plan form, like on a bigger screen
+  const handlePickDay = (key) => {
+    if ((entriesByDate.get(key) ?? []).length === 0) {
+      setActiveDay(null)
+      onCreateForDate(key)
+      return
+    }
+    setActiveDay((current) => (current === key ? null : key))
+  }
+
+  const activeEntries = isCompact && activeDay ? entriesByDate.get(activeDay) ?? [] : []
 
   return (
     <section
       aria-label="Planner calendar"
-      className="rounded-2xl border border-zinc-200 bg-white/70 p-4 shadow-card sm:p-5 dark:border-zinc-800 dark:bg-white/[0.035] dark:shadow-none"
+      className="rounded-2xl border border-zinc-200 bg-white/70 p-3 shadow-card sm:p-5 dark:border-zinc-800 dark:bg-white/[0.035] dark:shadow-none"
     >
       <div className="mb-4 flex min-h-8 flex-wrap items-center justify-between gap-3">
         <h2 aria-live="polite" className="text-lg font-semibold leading-8 tracking-tight text-zinc-900 dark:text-zinc-50">{formatMonthTitle(month)}</h2>
@@ -167,23 +220,58 @@ function PlannerCalendar({ entries, selectedDate = null, onCreateForDate, onOpen
         {weekdays.map((label) => (
           // zinc-600 on the card = 7:1, zinc-400 on dark = 6.9:1 (the old zinc-400 / zinc-500 were 2.3:1 and 3.6:1)
           <div key={label} className="pb-2 text-center text-[11px] font-medium uppercase leading-4 tracking-wider text-zinc-600 dark:text-zinc-400">
-            {label}
+            {isCompact ? label.charAt(0) : label}
           </div>
         ))}
-        {days.map((day) => (
-          <DayCell
-            key={day.key}
-            day={day}
-            entries={entriesByDate.get(day.key) ?? []}
-            isToday={day.key === today}
-            isSelected={day.key === selectedDate}
-            isExpanded={expandedDay === day.key}
-            onToggleExpand={(key) => setExpandedDay((current) => (current === key ? null : key))}
-            onCreate={onCreateForDate}
-            onOpenEntry={onOpenEntry}
-          />
-        ))}
+        {days.map((day) =>
+          isCompact ? (
+            <CompactDayCell
+              key={day.key}
+              day={day}
+              entries={entriesByDate.get(day.key) ?? []}
+              isToday={day.key === today}
+              isSelected={day.key === selectedDate}
+              isActive={day.key === activeDay}
+              onPick={handlePickDay}
+            />
+          ) : (
+            <DayCell
+              key={day.key}
+              day={day}
+              entries={entriesByDate.get(day.key) ?? []}
+              isToday={day.key === today}
+              isSelected={day.key === selectedDate}
+              isExpanded={expandedDay === day.key}
+              onToggleExpand={(key) => setExpandedDay((current) => (current === key ? null : key))}
+              onCreate={onCreateForDate}
+              onOpenEntry={onOpenEntry}
+            />
+          )
+        )}
       </div>
+
+      {activeEntries.length > 0 && (
+        <div aria-label="Plans on the selected day" role="region" className="mt-3 rounded-xl border border-zinc-200 bg-white/80 p-3 dark:border-white/[0.10] dark:bg-white/[0.04]">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <h3 className="min-w-0 truncate text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+              {fromDateKey(activeDay).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}
+            </h3>
+            <button
+              type="button"
+              onClick={() => onCreateForDate(activeDay)}
+              className={`inline-flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg bg-sky-700 px-3 text-xs font-semibold text-white transition-colors hover:bg-sky-800 dark:bg-sky-400 dark:text-zinc-950 dark:hover:bg-sky-300 ${focusRing}`}
+            >
+              <PlusIcon className="h-3 w-3" />
+              Add plan
+            </button>
+          </div>
+          <div className="space-y-1.5">
+            {activeEntries.map((entry) => (
+              <EntryChip key={entry.id} entry={entry} onOpen={onOpenEntry} large />
+            ))}
+          </div>
+        </div>
+      )}
     </section>
   )
 }

@@ -14,7 +14,7 @@ const SPOT_PADDING = 6
 const isPlannerPath = (pathname) => pathname.startsWith('/planner/')
 const pageOf = (tourId) => (tourId === 'planner' ? 'planner' : 'journals')
 
-function TourSession({ tourId, hasJournal, username, name, isSidebarOpen, setIsSidebarOpen, onEnd }) {
+function TourSession({ tourId, hasJournal, username, name, isSidebarOpen, setIsSidebarOpen, autoCloseSidebar, onEnd }) {
   const [steps] = useState(() => buildSteps(tourId, hasJournal))
   const [nav, setNav] = useState({ index: 0, direction: 1 })
   const step = steps[nav.index]
@@ -31,7 +31,9 @@ function TourSession({ tourId, hasJournal, username, name, isSidebarOpen, setIsS
   // steps that point into the sidebar need it open
   useEffect(() => {
     if (step.sidebar && !isSidebarOpen) setIsSidebarOpen(true)
-  }, [step.sidebar, isSidebarOpen, setIsSidebarOpen])
+    // on phones the sidebar is a menu on top of the page: put it away for steps that point at the page itself
+    else if (autoCloseSidebar && !step.sidebar && isSidebarOpen) setIsSidebarOpen(false)
+  }, [step.sidebar, isSidebarOpen, setIsSidebarOpen, autoCloseSidebar])
 
   const end = (completed) => {
     const covered = new Set([tourId])
@@ -131,7 +133,7 @@ function TourSession({ tourId, hasJournal, username, name, isSidebarOpen, setIsS
  *   journal  the first time a journal is on screen (a new account has none until it creates one)
  *   planner  the first time a planner is opened
  */
-function ProductTour({ isSidebarOpen, setIsSidebarOpen, onTourEnd }) {
+function ProductTour({ isSidebarOpen, setIsSidebarOpen, autoCloseSidebar = false, onTourEnd }) {
   const { pathname } = useLocation()
   const { profile } = useProfile()
   const { selectedJournal } = useContext(journalContext)
@@ -177,6 +179,7 @@ function ProductTour({ isSidebarOpen, setIsSidebarOpen, onTourEnd }) {
       name={name}
       isSidebarOpen={isSidebarOpen}
       setIsSidebarOpen={setIsSidebarOpen}
+      autoCloseSidebar={autoCloseSidebar}
       onEnd={() => {
         const endedTour = activeTour
         setActiveTour(null)

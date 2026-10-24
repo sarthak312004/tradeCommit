@@ -1,9 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronDownIcon, TrashIcon } from '../../../utils/Icons.jsx'
+import { ChevronDownIcon, EyeIcon, EyeOffIcon, TrashIcon } from '../../../utils/Icons.jsx'
 import { DEFAULT_CURRENCY } from '../../../utils/currencies'
 import { formatDateKey, formatMoney, formatR, getTradePnl, getTradeR, toDateKey, toneOf } from '../../../utils/tradeAnalytics'
 import { DEFAULT_CARD_FIELDS, formatSignedPercent, getTradeReturn } from '../../../utils/tradeCardFields'
 import TradeCardFieldEditor, { PencilIcon } from './TradeCardFieldEditor'
+import { useHidePnl } from '../../../hooks/useHidePnl'
+
+// details that give the result away, hidden together with the P&L
+const RESULT_FIELD_IDS = new Set(['rMultiple', 'returnPct'])
+const MASK = '\u2022\u2022\u2022\u2022'
 
 const sideChip = {
   long: 'bg-emerald-500/[0.14] text-emerald-800 dark:text-emerald-300',
@@ -45,6 +50,7 @@ function TradeCard({ trade, currency = DEFAULT_CURRENCY, detailFields = [], fiel
   const [deleteError, setDeleteError] = useState('')
   const [isPinned, setIsPinned] = useState(false) // opened with the arrow (touch screens)
   const [isEditing, setIsEditing] = useState(false) // picking which details to show (keeps the panel open)
+  const [isPnlHidden, togglePnl] = useHidePnl() // shared by every chip, remembered in this browser
   const wrapperRef = useRef(null)
   const pencilRef = useRef(null)
   const side = String(trade.side ?? trade.direction ?? '').toLowerCase()
@@ -65,10 +71,12 @@ function TradeCard({ trade, currency = DEFAULT_CURRENCY, detailFields = [], fiel
     () => detailFields
       .map((field) => {
         const detail = field.get(trade, currency)
-        return detail ? { id: field.id, label: field.label, wide: field.wide, ...detail } : null
+        if (!detail) return null
+        const masked = isPnlHidden && RESULT_FIELD_IDS.has(field.id)
+        return { id: field.id, label: field.label, wide: field.wide, ...detail, ...(masked ? { text: MASK, tone: 'neutral' } : {}) }
       })
       .filter(Boolean),
-    [detailFields, trade, currency]
+    [detailFields, trade, currency, isPnlHidden]
   )
   // the panel is there even with nothing chosen, so the pencil is always reachable
   const hasDetails = !isDeleteConfirmationOpen
@@ -144,6 +152,22 @@ function TradeCard({ trade, currency = DEFAULT_CURRENCY, detailFields = [], fiel
 
         {/* right: the result, then the small actions */}
         <div className="flex shrink-0 items-center gap-1">
+          {!trade.syncState && (
+            <button
+              type="button"
+              title={isPnlHidden ? 'Show P&L' : 'Hide P&L'}
+              aria-label={isPnlHidden ? 'Show P&L on all trades' : 'Hide P&L on all trades'}
+              aria-pressed={isPnlHidden}
+              onClick={(event) => {
+                event.stopPropagation()
+                togglePnl()
+              }}
+              className="flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-zinc-500 opacity-0 transition-opacity hover:bg-zinc-100 hover:text-zinc-800 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-600 group-hover/chip:opacity-100 pointer-coarse:opacity-100 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-zinc-100 dark:focus-visible:ring-sky-400"
+            >
+              {isPnlHidden ? <EyeOffIcon className="h-3.5 w-3.5" /> : <EyeIcon className="h-3.5 w-3.5" />}
+            </button>
+          )}
+
           <div className="min-w-0 text-right">
             {isSaving ? (
               <span role="status" className="flex items-center justify-end gap-1.5 text-xs text-zinc-600 dark:text-zinc-400">
@@ -152,11 +176,11 @@ function TradeCard({ trade, currency = DEFAULT_CURRENCY, detailFields = [], fiel
               </span>
             ) : (
               <>
-                <p className={`text-sm font-semibold leading-5 tabular-nums ${pnl === null ? 'text-zinc-500 dark:text-zinc-400' : toneText[pnlTone]}`}>
-                  {pnl === null ? '-' : formatMoney(pnl, { signed: true, currency })}
+                <p className={`text-sm font-semibold leading-5 tabular-nums ${pnl === null ? 'text-zinc-500 dark:text-zinc-400' : isPnlHidden ? toneText.neutral : toneText[pnlTone]}`}>
+                  {pnl === null ? '-' : isPnlHidden ? MASK : formatMoney(pnl, { signed: true, currency })}
                 </p>
                 <p className="mt-0.5 text-xs tabular-nums text-zinc-600 dark:text-zinc-400">
-                  {secondary.length ? secondary.join(' \u00b7 ') : isOpen ? 'No exit yet' : '\u00a0'}
+                  {isPnlHidden && secondary.length ? MASK : secondary.length ? secondary.join(' \u00b7 ') : isOpen ? 'No exit yet' : '\u00a0'}
                 </p>
               </>
             )}

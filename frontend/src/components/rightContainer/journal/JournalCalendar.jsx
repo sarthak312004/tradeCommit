@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { ChevronLeftIcon, ChevronRightIcon, PlusIcon } from '../../../utils/Icons.jsx'
-import { addMonths, buildMonthGrid, formatMonthTitle, getWeekdayLabels, startOfMonth, todayKey } from '../../../utils/calendar'
+import { addMonths, buildMonthGrid, formatMonthTitle, fromDateKey, getWeekdayLabels, startOfMonth, todayKey } from '../../../utils/calendar'
+import { useIsCompact } from '../../../hooks/useMediaQuery'
 import { focusRing, segmentedGroup } from '../../common/controlStyles'
 import { toDateKey } from '../../../utils/tradeAnalytics'
 
@@ -15,7 +16,7 @@ const sideDot = {
 }
 
 /** Fixed h-6 pill, same shape as the planner chip. The dot shows the side; a spinner / red dot shows save state. */
-function TradeChip({ trade, onOpen }) {
+function TradeChip({ trade, onOpen, large = false }) {
   const side = String(trade.side ?? trade.direction ?? '').toLowerCase()
   const isSaving = trade.syncState === 'saving'
   const isFailed = trade.syncState === 'failed'
@@ -30,7 +31,7 @@ function TradeChip({ trade, onOpen }) {
       }}
       title={isFailed ? `${label} (not saved)` : label}
       aria-busy={isSaving}
-      className={`flex h-6 w-full min-w-0 cursor-pointer items-center gap-1.5 overflow-hidden rounded-md border border-zinc-200 bg-zinc-100 px-2 text-left text-[11px] font-medium leading-none text-zinc-800 transition-colors hover:border-zinc-300 hover:bg-zinc-200 hover:text-zinc-900 dark:border-transparent dark:bg-white/[0.08] dark:text-zinc-200 dark:hover:border-transparent dark:hover:bg-white/[0.13] dark:hover:text-zinc-50 ${focusRing}`}
+      className={`flex w-full min-w-0 cursor-pointer items-center overflow-hidden rounded-md border ${large ? 'h-9 gap-2 px-3 text-xs' : 'h-6 gap-1.5 px-2 text-[11px]'} border-zinc-200 bg-zinc-100 text-left font-medium leading-none text-zinc-800 transition-colors hover:border-zinc-300 hover:bg-zinc-200 hover:text-zinc-900 dark:border-transparent dark:bg-white/[0.08] dark:text-zinc-200 dark:hover:border-transparent dark:hover:bg-white/[0.13] dark:hover:text-zinc-50 ${focusRing}`}
     >
       {isSaving ? (
         <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0 animate-spin rounded-full border-[1.5px] border-zinc-300 border-t-zinc-600 dark:border-zinc-600 dark:border-t-zinc-300" />
@@ -44,6 +45,47 @@ function TradeChip({ trade, onOpen }) {
 
 const moreButton =
   'h-5 cursor-pointer rounded px-2 text-[11px] font-medium text-zinc-700 hover:text-zinc-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-600 dark:text-zinc-400 dark:hover:text-zinc-100 dark:focus-visible:ring-sky-400'
+
+const dotClass = (trade) => {
+  const side = String(trade.side ?? trade.direction ?? '').toLowerCase()
+  return trade.syncState === 'failed' ? 'bg-amber-500' : sideDot[side] ?? 'bg-sky-700 dark:bg-sky-400'
+}
+
+/** Phone-sized day: just the number and a few side-coloured dots. The day's trades are listed under the grid. */
+function CompactDayCell({ day, trades, isToday, isSelected, isActive, onPick }) {
+  const surface = isSelected
+    ? 'bg-white shadow-card dark:bg-white/[0.08] dark:shadow-none'
+    : day.inMonth
+      ? 'active:bg-zinc-900/[0.08] dark:active:bg-white/[0.08]'
+      : 'bg-zinc-900/[0.03] dark:bg-white/[0.02]'
+  const count = trades.length
+
+  return (
+    <button
+      type="button"
+      onClick={() => onPick(day.key)}
+      data-selected={isSelected || undefined}
+      aria-label={`${day.key}${count ? `, ${count} ${count === 1 ? 'trade' : 'trades'}` : ''}`}
+      aria-current={isToday ? 'date' : undefined}
+      aria-pressed={count ? isActive : undefined}
+      className={`flex h-[52px] min-w-0 cursor-pointer flex-col items-center rounded-lg pt-1 transition-colors ${surface} ${isActive ? 'ring-2 ring-sky-600 dark:ring-sky-400' : ''} ${focusRing}`}
+    >
+      <span
+        className={`flex h-6 min-w-6 items-center justify-center rounded-full px-1 text-xs font-semibold tabular-nums ${
+          isToday ? 'bg-sky-700 text-white dark:bg-sky-400 dark:text-zinc-950' : day.inMonth ? 'text-zinc-800 dark:text-zinc-200' : 'text-zinc-600 dark:text-zinc-400'
+        }`}
+      >
+        {day.day}
+      </span>
+      <span aria-hidden="true" className="mt-1 flex h-2 items-center justify-center gap-[3px]">
+        {trades.slice(0, 3).map((trade) => (
+          <span key={trade.id} className={`h-1.5 w-1.5 rounded-full ${dotClass(trade)}`} />
+        ))}
+        {count > 3 && <span className="text-[9px] font-semibold leading-none text-zinc-700 dark:text-zinc-300">+{count - 3}</span>}
+      </span>
+    </button>
+  )
+}
 
 function DayCell({ day, trades, isToday, isSelected, isExpanded, onToggleExpand, onCreate, onOpenTrade }) {
   const visible = isExpanded ? trades : trades.slice(0, MAX_VISIBLE_CHIPS)
@@ -63,7 +105,7 @@ function DayCell({ day, trades, isToday, isSelected, isExpanded, onToggleExpand,
     <div
       onClick={() => onCreate(day.key)}
       data-selected={isSelected || undefined}
-            className={`group relative flex min-h-[84px] min-w-0 cursor-pointer flex-col rounded-xl p-1.5 transition-colors sm:min-h-[116px] sm:p-2 ${surface}`}
+      className={`group relative flex min-h-[84px] min-w-0 cursor-pointer flex-col rounded-xl p-1.5 transition-colors sm:min-h-[116px] sm:p-2 ${surface}`}
     >
       <div className="flex h-6 items-center justify-between">
         <button
@@ -134,6 +176,8 @@ function DayCell({ day, trades, isToday, isSelected, isExpanded, onToggleExpand,
 function JournalCalendar({ trades, selectedDate = null, onCreateForDate, onOpenTrade, headerHint }) {
   const [month, setMonth] = useState(() => startOfMonth(new Date()))
   const [expandedDay, setExpandedDay] = useState(null)
+  const isCompact = useIsCompact()
+  const [activeDay, setActiveDay] = useState(null) // phones: the day whose trades are listed under the grid
 
   const days = useMemo(() => buildMonthGrid(month), [month])
   const weekdays = useMemo(() => getWeekdayLabels(), [])
@@ -154,13 +198,26 @@ function JournalCalendar({ trades, selectedDate = null, onCreateForDate, onOpenT
 
   const goToMonth = (next) => {
     setExpandedDay(null)
+    setActiveDay(null)
     setMonth(next)
   }
+
+  // a day with trades opens its list; an empty day goes straight to the new-trade form, like on a bigger screen
+  const handlePickDay = (key) => {
+    if ((tradesByDate.get(key) ?? []).length === 0) {
+      setActiveDay(null)
+      onCreateForDate(key)
+      return
+    }
+    setActiveDay((current) => (current === key ? null : key))
+  }
+
+  const activeTrades = isCompact && activeDay ? tradesByDate.get(activeDay) ?? [] : []
 
   return (
     <section
       aria-label="Journal calendar"
-      className="tc-surface rounded-2xl border border-zinc-200 bg-white/70 p-4 shadow-card sm:p-5 dark:border-zinc-800 dark:bg-white/[0.035] dark:shadow-none"
+      className="tc-surface rounded-2xl border border-zinc-200 bg-white/70 p-3 shadow-card sm:p-5 dark:border-zinc-800 dark:bg-white/[0.035] dark:shadow-none"
     >
       <div className="mb-4 flex min-h-8 flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
@@ -187,23 +244,58 @@ function JournalCalendar({ trades, selectedDate = null, onCreateForDate, onOpenT
       <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
         {weekdays.map((label) => (
           <div key={label} className="pb-2 text-center text-[11px] font-medium uppercase leading-4 tracking-wider text-zinc-600 dark:text-zinc-400">
-            {label}
+            {isCompact ? label.charAt(0) : label}
           </div>
         ))}
-        {days.map((day) => (
-          <DayCell
-            key={day.key}
-            day={day}
-            trades={tradesByDate.get(day.key) ?? []}
-            isToday={day.key === today}
-            isSelected={day.key === selectedDate}
-            isExpanded={expandedDay === day.key}
-            onToggleExpand={(key) => setExpandedDay((current) => (current === key ? null : key))}
-            onCreate={onCreateForDate}
-            onOpenTrade={onOpenTrade}
-          />
-        ))}
+        {days.map((day) =>
+          isCompact ? (
+            <CompactDayCell
+              key={day.key}
+              day={day}
+              trades={tradesByDate.get(day.key) ?? []}
+              isToday={day.key === today}
+              isSelected={day.key === selectedDate}
+              isActive={day.key === activeDay}
+              onPick={handlePickDay}
+            />
+          ) : (
+            <DayCell
+              key={day.key}
+              day={day}
+              trades={tradesByDate.get(day.key) ?? []}
+              isToday={day.key === today}
+              isSelected={day.key === selectedDate}
+              isExpanded={expandedDay === day.key}
+              onToggleExpand={(key) => setExpandedDay((current) => (current === key ? null : key))}
+              onCreate={onCreateForDate}
+              onOpenTrade={onOpenTrade}
+            />
+          )
+        )}
       </div>
+
+      {activeTrades.length > 0 && (
+        <div aria-label="Trades on the selected day" role="region" className="mt-3 rounded-xl border border-zinc-200 bg-white/80 p-3 dark:border-white/[0.10] dark:bg-white/[0.04]">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <h3 className="min-w-0 truncate text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+              {fromDateKey(activeDay).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}
+            </h3>
+            <button
+              type="button"
+              onClick={() => onCreateForDate(activeDay)}
+              className={`inline-flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg bg-sky-700 px-3 text-xs font-semibold text-white transition-colors hover:bg-sky-800 dark:bg-sky-400 dark:text-zinc-950 dark:hover:bg-sky-300 ${focusRing}`}
+            >
+              <PlusIcon className="h-3 w-3" />
+              Log trade
+            </button>
+          </div>
+          <div className="space-y-1.5">
+            {activeTrades.map((trade) => (
+              <TradeChip key={trade.id} trade={trade} onOpen={onOpenTrade} large />
+            ))}
+          </div>
+        </div>
+      )}
     </section>
   )
 }

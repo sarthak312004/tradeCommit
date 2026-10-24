@@ -5,6 +5,7 @@ import { fetchPrefetched } from './utils/prefetch'
 import { SessionError, SessionLoading } from './components/common/SessionScreen'
 import ProductTour from './components/tour/ProductTour'
 import { journalContext } from './context/Context'
+import { MOBILE_MEDIA_QUERY, useIsMobile } from './hooks/useMediaQuery'
 
 const AUTH_CHECK_TIMEOUT_MS = 60_000
 
@@ -19,6 +20,11 @@ const withTimeout = (promise) => {
 
 function Home() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
+  // below `md` the sidebar is a slide-over menu that sits on top of the page instead of beside it
+  const isMobile = useIsMobile()
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false)
+  const navOpen = isMobile ? isMobileNavOpen : isSidebarOpen
+  const setNavOpen = isMobile ? setIsMobileNavOpen : setIsSidebarOpen
   // which sidebar create form is open ('journals' | 'planners' | null); lifted here so the big "create" buttons
   // on the empty pages can open the same forms the sidebar's + buttons do
   const [openFormSection, setOpenFormSection] = useState(null)
@@ -68,8 +74,20 @@ function Home() {
   }, [authCheckAttempt])
 
   const openCreateForm = useCallback((section) => {
-    setIsSidebarOpen(true)
+    setNavOpen(true)
     setOpenFormSection(section)
+  }, [setNavOpen])
+
+  const openMobileNav = useCallback(() => setIsMobileNavOpen(true), [])
+
+  // Growing past the breakpoint (rotating a tablet) must not leave the slide-over "open".
+  useEffect(() => {
+    const media = window.matchMedia(MOBILE_MEDIA_QUERY)
+    const closeOnDesktop = (event) => {
+      if (!event.matches) setIsMobileNavOpen(false)
+    }
+    media.addEventListener('change', closeOnDesktop)
+    return () => media.removeEventListener('change', closeOnDesktop)
   }, [])
 
   // a new user who just finished (or skipped) the tour lands straight in the "new journal" form instead of an empty page
@@ -104,19 +122,30 @@ function Home() {
   return (
     <>
       <div className="fixed inset-0 flex overflow-hidden bg-canvas text-zinc-900 transition-colors duration-200 dark:bg-night dark:text-zinc-100">
+        {isMobile && (
+          <div
+            aria-hidden="true"
+            onClick={() => setIsMobileNavOpen(false)}
+            className={`fixed inset-0 z-[35] bg-black/40 transition-opacity duration-300 motion-reduce:transition-none ${isMobileNavOpen ? 'opacity-100' : 'pointer-events-none opacity-0'}`}
+          />
+        )}
+
         <Sidebar
           isSidebarOpen={isSidebarOpen}
           setIsSidebarOpen={setIsSidebarOpen}
+          isMobile={isMobile}
+          isMobileOpen={isMobileNavOpen}
+          onMobileClose={() => setIsMobileNavOpen(false)}
           openFormSection={openFormSection}
           setOpenFormSection={setOpenFormSection}
         />
 
         <main className="tc-ambient flex min-h-0 flex-1 flex-col overflow-hidden">
-          <Outlet context={{ isSidebarOpen, openCreateForm }} />
+          <Outlet context={{ isSidebarOpen, openCreateForm, openMobileNav }} />
         </main>
       </div>
 
-      <ProductTour isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} onTourEnd={handleTourEnd} />
+      <ProductTour isSidebarOpen={navOpen} setIsSidebarOpen={setNavOpen} autoCloseSidebar={isMobile} onTourEnd={handleTourEnd} />
     </>
   )
 }

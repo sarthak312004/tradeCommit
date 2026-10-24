@@ -280,3 +280,9 @@ export const DownloadIcon = (props) => (
 		<path d="M4 20h16" />
 	</Icon>
 )
+
+export const MenuIcon = (props) => (
+	<Icon {...props}>
+		<path d="M4 6h16M4 12h16M4 18h16" />
+	</Icon>
+)

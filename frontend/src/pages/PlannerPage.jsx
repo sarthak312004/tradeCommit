@@ -10,7 +10,7 @@ import { CalendarIcon } from '../utils/Icons.jsx'
 import { loadPlanForm, preloadPlanForm } from '../utils/formLoaders'
 import { getCarryForward } from '../services/aiRangeReviewApi'
 
-const pageBody = 'subtle-scrollbar min-h-0 flex-1 overflow-y-auto p-6 md:p-8'
+const pageBody = 'subtle-scrollbar min-h-0 flex-1 overflow-y-auto p-3 sm:p-6 md:p-8'
 const PlanForm = lazy(loadPlanForm)
 
 function PlannerWorkspace({ planner }) {

@@ -163,6 +163,7 @@ function SidebarItemCard({ id, label, noun, Icon, badge, isSelected, onSelect, o
 					<button
 						type="button"
 						onClick={onSelect}
+						data-nav-select=""
 						aria-current={isSelected ? "true" : undefined}
 						className={`flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md py-1 pl-2 pr-1 text-left focus-visible:ring-inset ${focusRing}`}
 					>

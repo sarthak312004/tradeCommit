@@ -11,14 +11,16 @@ import SidebarSection from "./SidebarSection"
 import { ThemeCycleButton, ThemeSegmented } from "./ThemeToggle"
 import { useFeedbackPrompt } from "../../hooks/useFeedbackPrompt"
 import { useTheme } from "../../hooks/useTheme"
-import { CalendarIcon, ChevronsLeftIcon, FileIcon, LogoutIcon, MessageSquareIcon, PlusIcon } from "../../utils/Icons.jsx"
+import { CalendarIcon, ChevronsLeftIcon, CloseIcon, FileIcon, LogoutIcon, MessageSquareIcon, PlusIcon } from "../../utils/Icons.jsx"
 import { plannerApi } from "../../services/plannerApi"
 import { preloadPlannerPage } from "../../utils/plannerPageLoader"
 import { EASE, FADE_BASE, fade, focusRing, ghostBtn } from "./sidebarStyles"
 
 const FeedbackDialog = lazy(() => import("../feedback/FeedbackDialog"))
 
-function Sidebar({ isSidebarOpen, setIsSidebarOpen, openFormSection, setOpenFormSection }) {
+function Sidebar({ isSidebarOpen: isSidebarOpenProp, setIsSidebarOpen, isMobile = false, isMobileOpen = false, onMobileClose, openFormSection, setOpenFormSection }) {
+  // on phones the sidebar is a slide-over menu: always the full (expanded) layout, shown or hidden as a whole
+  const isSidebarOpen = isMobile ? true : isSidebarOpenProp
   const { journals, selectedJournal, selectJournal } = useContext(journalContext)
   const { planners } = useContext(plannerContext)
   const { theme, setTheme } = useTheme()
@@ -47,7 +49,22 @@ function Sidebar({ isSidebarOpen, setIsSidebarOpen, openFormSection, setOpenForm
     return () => window.removeEventListener("keydown", onKeyDown)
   }, [isLogoutConfirmOpen, isLoggingOut])
 
-  const toggleSidebar = () => setIsSidebarOpen((prev) => !prev)
+  const toggleSidebar = () => (isMobile ? onMobileClose?.() : setIsSidebarOpen((prev) => !prev))
+
+  // Escape puts the slide-over away (unless a dialog opened from it is using the key)
+  useEffect(() => {
+    if (!isMobile || !isMobileOpen || isLogoutConfirmOpen || isFeedbackOpen) return undefined
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") onMobileClose?.()
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [isMobile, isMobileOpen, isLogoutConfirmOpen, isFeedbackOpen, onMobileClose])
+
+  // choosing a journal or planner is the end of the menu's job on a phone
+  const handleSectionsClick = (event) => {
+    if (isMobile && event.target.closest("[data-nav-select]")) onMobileClose?.()
+  }
 
   // Uses the existing POST /api/v1/auth/logout controller (clears cookies + refresh token).
   const handleLogout = async () => {
@@ -94,9 +111,17 @@ function Sidebar({ isSidebarOpen, setIsSidebarOpen, openFormSection, setOpenForm
   return (
     <aside
       aria-label="Sidebar"
-      className={`${
-        isSidebarOpen ? "w-[260px]" : "w-[56px]"
-      } relative flex shrink-0 flex-col overflow-hidden border-r border-zinc-600/40 bg-sidebar transition-[width] duration-300 ${EASE} will-change-[width] motion-reduce:transition-none dark:border-white/[0.10] dark:bg-side`}
+      inert={isMobile && !isMobileOpen}
+      className={
+        isMobile
+          ? // slides in with `left` (not a transform) so the dialogs rendered inside it keep covering the whole screen
+            `fixed inset-y-0 z-40 flex w-[260px] flex-col overflow-hidden border-r border-zinc-600/40 bg-sidebar transition-[left,visibility] duration-300 ${EASE} motion-reduce:transition-none dark:border-white/[0.10] dark:bg-side ${
+              isMobileOpen ? "visible left-0 shadow-2xl" : "invisible -left-[264px]"
+            }`
+          : `${
+              isSidebarOpen ? "w-[260px]" : "w-[56px]"
+            } relative flex shrink-0 flex-col overflow-hidden border-r border-zinc-600/40 bg-sidebar transition-[width] duration-300 ${EASE} will-change-[width] motion-reduce:transition-none dark:border-white/[0.10] dark:bg-side`
+      }
     >
       {/* ------------------------------ Header ------------------------------ */}
       <div className="flex h-12 shrink-0 items-center">
@@ -120,18 +145,18 @@ function Sidebar({ isSidebarOpen, setIsSidebarOpen, openFormSection, setOpenForm
           <button
             type="button"
             onClick={toggleSidebar}
-            title="Collapse sidebar"
-            aria-label="Collapse sidebar"
+            title={isMobile ? "Close menu" : "Collapse sidebar"}
+            aria-label={isMobile ? "Close menu" : "Collapse sidebar"}
             aria-expanded={isSidebarOpen}
-            className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${ghostBtn} ${FADE_BASE} ${fade(isSidebarOpen)}`}
+            className={`flex shrink-0 items-center justify-center rounded-md ${isMobile ? "h-9 w-9" : "h-7 w-7"} ${ghostBtn} ${FADE_BASE} ${fade(isSidebarOpen)}`}
           >
-            <ChevronsLeftIcon className="h-4 w-4" />
+            {isMobile ? <CloseIcon className="h-4 w-4" /> : <ChevronsLeftIcon className="h-4 w-4" />}
           </button>
         </div>
       </div>
 
       {/* ------------------------------ Sections ------------------------------ */}
-      <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex min-h-0 flex-1 flex-col" onClick={handleSectionsClick}>
         <SidebarSection
           title="Journals"
           tourId="sidebar-journals"

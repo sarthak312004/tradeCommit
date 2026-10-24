@@ -1,11 +1,15 @@
+import { useOutletContext } from 'react-router'
 import ProfileMenu from '../profile/ProfileMenu'
 import HeaderBackdropPicker from './header/HeaderBackdropPicker'
 import HeaderScene from './header/HeaderScene'
 import { useHeaderBackdrop } from '../../hooks/useHeaderBackdrop'
 import { useIsDark } from '../../hooks/useIsDark'
+import { MenuIcon } from '../../utils/Icons.jsx'
 
 function TopBar({ label = 'Journal', title }) {
   const { backdrop, chooseScene, clear, uploadImage } = useHeaderBackdrop()
+  // on phones the sidebar is a slide-over menu, opened from the hamburger in this bar
+  const { openMobileNav } = useOutletContext() ?? {}
   const dark = useIsDark()
   const hasImage = backdrop.mode === 'image'
   const hasScene = backdrop.mode === 'scene'
@@ -16,7 +20,7 @@ function TopBar({ label = 'Journal', title }) {
 
   return (
     <header
-      className={`relative z-30 flex min-h-[72px] items-center justify-between gap-4 border-b border-zinc-300 px-6 py-3 shadow-sm dark:border-white/[0.10] dark:shadow-none ${
+      className={`relative z-30 flex min-h-[64px] items-center justify-between gap-2 border-b border-zinc-300 px-3 py-3 shadow-sm sm:min-h-[72px] sm:gap-4 sm:px-6 dark:border-white/[0.10] dark:shadow-none ${
         hasImage || hasScene ? 'bg-transparent dark:bg-transparent' : 'bg-white/70 dark:bg-panel'
       }`}
     >
@@ -41,10 +45,25 @@ function TopBar({ label = 'Journal', title }) {
         </div>
       )}
 
-      <div className="relative min-w-0">
-        <p className={`truncate text-[11px] font-medium uppercase leading-4 tracking-[0.14em] ${labelColor}`}>{label}</p>
-        {/* fixed line-height + normal tracking: crisp glyphs, and the title baseline never shifts with font fallback */}
-        <h1 className={`mt-0.5 truncate text-2xl font-semibold leading-8 tracking-tight ${titleColor}`}>{title}</h1>
+      <div className="relative flex min-w-0 items-center gap-1.5">
+        {openMobileNav && (
+          <button
+            type="button"
+            onClick={openMobileNav}
+            aria-label="Open menu"
+            title="Open menu"
+            className={`-ml-1 flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-600 md:hidden dark:focus-visible:ring-sky-400 ${
+              hasImage ? 'text-white hover:bg-white/15' : 'text-zinc-800 hover:bg-black/[0.07] dark:text-zinc-100 dark:hover:bg-white/10'
+            }`}
+          >
+            <MenuIcon className="h-5 w-5" />
+          </button>
+        )}
+        <div className="min-w-0">
+          <p className={`truncate text-[11px] font-medium uppercase leading-4 tracking-[0.14em] ${labelColor}`}>{label}</p>
+          {/* fixed line-height + normal tracking: crisp glyphs, and the title baseline never shifts with font fallback */}
+          <h1 className={`mt-0.5 truncate text-xl font-semibold leading-8 tracking-tight sm:text-2xl ${titleColor}`}>{title}</h1>
+        </div>
       </div>
 
       <div className={`relative flex items-center gap-1 ${hasImage ? 'text-white' : ''}`}>

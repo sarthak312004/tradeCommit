@@ -7,7 +7,7 @@ import { preloadPlannerPage } from '../utils/plannerPageLoader'
 
 const PlannerPage = lazy(preloadPlannerPage)
 
-const pageBody = 'subtle-scrollbar min-h-0 flex-1 overflow-y-auto p-6 md:p-8'
+const pageBody = 'subtle-scrollbar min-h-0 flex-1 overflow-y-auto p-3 sm:p-6 md:p-8'
 
 function PlannerLoading({ planner }) {
   const month = startOfMonth(new Date())
