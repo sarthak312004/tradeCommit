@@ -23,6 +23,7 @@ const TradeForm = lazy(loadTradeForm)
 const TradeAnalysis = lazy(() => import('./TradeAnalysis'))
 const JournalContextDialog = lazy(() => import('./JournalContextDialog'))
 const ExportJournalDialog = lazy(() => import('./ExportJournalDialog'))
+const ImportTradesDialog = lazy(() => import('./import/ImportTradesDialog'))
 // the mentor is reachable from every tab, so its code is warmed up when the orb is hovered or focused
 const loadAiMentor = () => import('./AiMentorDialog')
 const AiMentorDialog = lazy(loadAiMentor)
@@ -74,7 +75,7 @@ function AnalysisLoading() {
   )
 }
 
-function TradeJournal({ view = 'trades', journal, onAddTrade, onUpdateTrade, onDeleteTrade, onUploadTradeImage, onSaveContext, onRetryTrade, onDiscardTrade, onOpenCreateForm }) {
+function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades, onOpenJournal, onAddTrade, onUpdateTrade, onDeleteTrade, onUploadTradeImage, onSaveContext, onRetryTrade, onDiscardTrade, onOpenCreateForm }) {
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [editingTrade, setEditingTrade] = useState(null)
   const navigate = useNavigate()
@@ -83,6 +84,7 @@ function TradeJournal({ view = 'trades', journal, onAddTrade, onUpdateTrade, onD
   const [range, setRange] = useState(ALL_TIME)
   const [isContextOpen, setIsContextOpen] = useState(false)
   const [isExportOpen, setIsExportOpen] = useState(false)
+  const [isImportOpen, setIsImportOpen] = useState(false)
   const [isMentorOpen, setIsMentorOpen] = useState(false)
   const [isMentorMounted, setIsMentorMounted] = useState(false)
   const [hasReadyMentorReview, setHasReadyMentorReview] = useState(false)
@@ -237,7 +239,7 @@ function TradeJournal({ view = 'trades', journal, onAddTrade, onUpdateTrade, onD
             + Add trade
           </button>
 
-          <JournalActionsMenu onExport={() => setIsExportOpen(true)} />
+          <JournalActionsMenu onImport={onImportTrades ? () => setIsImportOpen(true) : undefined} onExport={() => setIsExportOpen(true)} />
         </div>
       </div>
 
@@ -281,6 +283,22 @@ function TradeJournal({ view = 'trades', journal, onAddTrade, onUpdateTrade, onD
       {isExportOpen && (
         <Suspense fallback={null}>
           <ExportJournalDialog journal={journal} onClose={() => setIsExportOpen(false)} />
+        </Suspense>
+      )}
+
+      {isImportOpen && (
+        <Suspense fallback={null}>
+          <ImportTradesDialog
+            // journals still being created have no server id yet, so they cannot receive trades
+            journals={journals.filter((item) => !item.syncState)}
+            currentJournalId={journal.id}
+            onImport={onImportTrades}
+            onOpenJournal={(id) => {
+              setIsImportOpen(false)
+              onOpenJournal?.(id)
+            }}
+            onClose={() => setIsImportOpen(false)}
+          />
         </Suspense>
       )}
 

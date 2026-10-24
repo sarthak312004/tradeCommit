@@ -1,0 +1,5 @@
+Date,Symbol,Direction,Quantity,Entry Price,Exit Price,Stop Loss,Exit Date,Product,Notes
+06-01-2025,RELIANCE,Long,50,1215.5,1238,1204,06-01-2025,MIS,Breakout above the opening range
+08-01-2025,TCS,Long,20,4120,4310,4040,14-01-2025,CNC,Swing from weekly support
+15-01-2025,NIFTY,Short,75,23150,,23240,,,Still open
+20-01-2025,INFY,Long,10,1500,1510,,,,

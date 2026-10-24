@@ -3,6 +3,7 @@ import { journalContext } from "./Context"
 
 import { DEFAULT_CURRENCY } from "../utils/currencies"
 import { fetchPrefetched } from "../utils/prefetch"
+import { MAX_IMPORT_BATCH_SIZE } from "../services/importApi"
 
 const API_BASE = "/api/v1/journals"
 const TEMP_PREFIX = "pending-"
@@ -394,6 +395,74 @@ function JournalContextProvider({children}){
         )))
     }
 
+    // Saves the trades a person reviewed in the import dialog: `groups` is [{ journalId, trades }], one entry per
+    // journal. The server validates and skips trades that already exist, then the affected journals are re-read so
+    // the new trades show up with their saved ids and properties. Trades still being saved in the form are kept.
+    const importTrades = async (groups) => {
+        if (groups.some((group) => isPending(group.journalId))) throw new Error("A journal is still being created. Try again in a moment.")
+        const entries = groups.flatMap(({ journalId, trades }) => trades.map((trade) => ({ journalId, trade })))
+        if (entries.length === 0) throw new Error("Select at least one trade to import")
+
+        const totals = new Map()
+        let processed = 0
+        const refreshImportedJournals = async () => {
+            const journalIds = [...totals]
+                .filter(([, result]) => result.imported > 0)
+                .map(([journalId]) => journalId)
+            await Promise.all(journalIds.map(async (journalId) => {
+                try {
+                    const rows = await readJson(await fetch(`${API_BASE}/${journalId}/trades`, { credentials: "include" }))
+                    const saved = (rows ?? []).map(normalizeTradeForFrontend)
+                    setJournals((current) => current.map((journal) => journal.id === journalId
+                        ? { ...journal, trades: [...journal.trades.filter((trade) => trade.syncState), ...saved], updated: "Just now" }
+                        : journal))
+                } catch {
+                    // The trades are saved; they appear on the next reload if this refresh failed.
+                }
+            }))
+        }
+
+        try {
+            for (let start = 0; start < entries.length; start += MAX_IMPORT_BATCH_SIZE) {
+                const batchGroups = new Map()
+                for (const { journalId, trade } of entries.slice(start, start + MAX_IMPORT_BATCH_SIZE)) {
+                    const batch = batchGroups.get(journalId) ?? []
+                    batch.push(trade)
+                    batchGroups.set(journalId, batch)
+                }
+                const batch = [...batchGroups].map(([journalId, trades]) => ({ journalId, trades }))
+                const response = await fetch("/api/v1/imports/commit", {
+                    method: "POST",
+                    credentials: "include",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ groups: batch })
+                })
+                const result = await readJson(response)
+                processed += batch.reduce((sum, group) => sum + group.trades.length, 0)
+                for (const item of result?.journals ?? []) {
+                    const total = totals.get(item.journalId) ?? { journalId: item.journalId, imported: 0, duplicates: 0 }
+                    total.imported += item.imported
+                    total.duplicates += item.duplicates
+                    totals.set(item.journalId, total)
+                }
+            }
+        } catch (error) {
+            if (processed > 0) {
+                await refreshImportedJournals()
+                throw new Error(`Part of the file was imported before an error: ${error.message} You can retry; already imported trades will be skipped.`, { cause: error })
+            }
+            throw error
+        }
+
+        await refreshImportedJournals()
+        const journals = [...totals.values()]
+        return {
+            imported: journals.reduce((sum, item) => sum + item.imported, 0),
+            duplicates: journals.reduce((sum, item) => sum + item.duplicates, 0),
+            journals,
+        }
+    }
+
     const selectedJournal = journals.find((journal) => journal.id === selectedJournalId) ?? null
 
     return (
@@ -413,6 +482,7 @@ function JournalContextProvider({children}){
             retryTradeSave,
             discardTradeSave,
             deleteTrade,
+            importTrades,
         }}>
             {children}
         </journalContext.Provider>

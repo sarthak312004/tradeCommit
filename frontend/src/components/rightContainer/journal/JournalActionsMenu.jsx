@@ -1,19 +1,22 @@
 import { useEffect, useRef, useState } from 'react'
 import { DownloadIcon, MoreIcon } from '../../../utils/Icons.jsx'
 import { controlNeutral } from '../../common/controlStyles'
+import { UploadIcon } from './import/importIcons.jsx'
 
 /**
  * The 3-dot button in the journal header. It opens a small menu of extra actions for the selected journal.
  * Add more entries to `items` later (import, duplicate, archive...) and they show up here.
  *
+ * @param {Function} onImport  opens the import dialog (CSV / Excel)
  * @param {Function} onExport  opens the export dialog
  */
-function JournalActionsMenu({ onExport }) {
+function JournalActionsMenu({ onImport, onExport }) {
   const [isOpen, setIsOpen] = useState(false)
   const containerRef = useRef(null)
   const buttonRef = useRef(null)
 
   const items = [
+    ...(onImport ? [{ id: 'import', label: 'Import trades', hint: 'From a CSV or Excel file', Icon: UploadIcon, onSelect: onImport }] : []),
     { id: 'export', label: 'Export journal', hint: 'Excel, CSV, PDF, JSON or ZIP', Icon: DownloadIcon, onSelect: onExport }
   ]
 
@@ -65,12 +68,11 @@ function JournalActionsMenu({ onExport }) {
               key={id}
               type="button"
               role="menuitem"
-              autoFocus
               onClick={() => {
                 setIsOpen(false)
                 onSelect()
               }}
-              className="flex w-full cursor-pointer items-start gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors hover:bg-zinc-100 focus:bg-zinc-100 focus:outline-none dark:hover:bg-white/[0.06] dark:focus:bg-white/[0.06]"
+              className="flex w-full cursor-pointer items-start gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors hover:bg-zinc-100 focus-visible:bg-zinc-100 focus-visible:outline-none dark:hover:bg-white/[0.06] dark:focus-visible:bg-white/[0.06]"
             >
               <Icon className="mt-0.5 h-4 w-4 shrink-0 text-zinc-600 dark:text-zinc-300" />
               <span className="min-w-0">

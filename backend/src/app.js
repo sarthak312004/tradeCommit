@@ -27,7 +27,10 @@ if (allowedOrigins.length > 0) {
     }))
 }
 
-app.use(express.json({limit:"16kb"}))
+// Import commits are sent in batches of up to 1000 trades, so they need more than the 16kb limit used by other routes.
+const jsonDefault = express.json({limit:"16kb"})
+const jsonImport = express.json({limit:"12mb"})
+app.use((req, res, next) => (req.path.startsWith('/api/v1/imports') ? jsonImport : jsonDefault)(req, res, next))
 app.use(express.urlencoded({extended: true, limit:"16kb"})) 
 app.use(cookieParser())
 
@@ -48,6 +51,7 @@ import { aiReviewRouter } from './routes/aiReview.routes.js'
 import { aiRangeReviewRouter } from './routes/aiRangeReview.routes.js'
 import { marketRouter } from './routes/market.routes.js'
 import { progressRouter } from './routes/progress.routes.js'
+import { importRouter } from './routes/import.routes.js'
 
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20 })
 app.use("/api/v1/auth/login", authLimiter)
@@ -85,6 +89,7 @@ app.use("/api/v1/planners", plannerRouter)
 app.use("/api/v1/feedback", feedbackRouter)
 app.use("/api/v1/market", marketRouter)
 app.use("/api/v1/progress", progressRouter)
+app.use("/api/v1/imports", importRouter)
 
 app.use("/api", (req, res) => {
     res.status(404).json({ statusCode: 404, success: false, message: "Route not found", errors: [] })

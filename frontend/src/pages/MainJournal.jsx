@@ -9,7 +9,7 @@ function MainJournal() {
   const { pathname } = useLocation()
   const { openCreateForm } = useOutletContext()
   const view = pathname.startsWith('/calendar') ? 'calendar' : pathname.startsWith('/analysis') ? 'analysis' : 'trades'
-  const { selectedJournal, addTrade, updateTrade, deleteTrade, uploadTradeImage, updateJournalContext, retryTradeSave, discardTradeSave } = useContext(journalContext)
+  const { journals, selectJournal, importTrades, selectedJournal, addTrade, updateTrade, deleteTrade, uploadTradeImage, updateJournalContext, retryTradeSave, discardTradeSave } = useContext(journalContext)
 
   return (
     <>
@@ -19,6 +19,9 @@ function MainJournal() {
           key={selectedJournal?.id ?? 'empty-journal'}
           view={view}
           journal={selectedJournal}
+          journals={journals}
+          onImportTrades={importTrades}
+          onOpenJournal={selectJournal}
           onAddTrade={addTrade}
           onUpdateTrade={updateTrade}
           onDeleteTrade={deleteTrade}
