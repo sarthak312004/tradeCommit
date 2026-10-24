@@ -188,7 +188,7 @@ function JournalContextProvider({children}){
                 body: JSON.stringify({ name: trimmed, currency })
             })
 
-            const created = normalizeJournalForFrontend(await readJson(response))
+            const created = { ...normalizeJournalForFrontend(await readJson(response)), createdInSession: true }
             setJournals((current) => current.map((journal) => journal.id === tempId ? created : journal))
             setSelectedJournalId((currentId) => currentId === tempId ? created.id : currentId)
             return created

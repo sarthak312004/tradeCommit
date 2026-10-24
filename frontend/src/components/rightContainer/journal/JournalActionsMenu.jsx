@@ -10,7 +10,7 @@ import { UploadIcon } from './import/importIcons.jsx'
  * @param {Function} onImport  opens the import dialog (CSV / Excel)
  * @param {Function} onExport  opens the export dialog
  */
-function JournalActionsMenu({ onImport, onExport }) {
+function JournalActionsMenu({ onImport, onExport, onMenuOpen }) {
   const [isOpen, setIsOpen] = useState(false)
   const containerRef = useRef(null)
   const buttonRef = useRef(null)
@@ -46,7 +46,10 @@ function JournalActionsMenu({ onImport, onExport }) {
       <button
         ref={buttonRef}
         type="button"
-        onClick={() => setIsOpen((open) => !open)}
+        onClick={() => {
+          if (!isOpen) onMenuOpen?.()
+          setIsOpen((open) => !open)
+        }}
         aria-haspopup="menu"
         aria-expanded={isOpen}
         aria-label="More journal actions"

@@ -85,6 +85,16 @@ function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades,
   const [isContextOpen, setIsContextOpen] = useState(false)
   const [isExportOpen, setIsExportOpen] = useState(false)
   const [isImportOpen, setIsImportOpen] = useState(false)
+  const importHintKey = journal?.id ? `tradecommit:import-hint:${journal.id}` : null
+  const [isImportHintDismissed, setIsImportHintDismissed] = useState(() =>
+    !importHintKey || window.localStorage.getItem(importHintKey) === '1'
+  )
+  const showImportHint = Boolean(
+    journal?.createdInSession &&
+    !isImportHintDismissed &&
+    (journal?.trades?.length ?? 0) === 0 &&
+    onImportTrades
+  )
   const [isMentorOpen, setIsMentorOpen] = useState(false)
   const [isMentorMounted, setIsMentorMounted] = useState(false)
   const [hasReadyMentorReview, setHasReadyMentorReview] = useState(false)
@@ -102,6 +112,11 @@ function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades,
   const handleMentorReviewReady = useCallback(() => {
     setHasReadyMentorReview(true)
   }, [])
+
+  const dismissImportHint = () => {
+    if (importHintKey) window.localStorage.setItem(importHintKey, '1')
+    setIsImportHintDismissed(true)
+  }
 
   // Start loading the form as soon as the journal is mounted, so an immediate first click is ready.
   useEffect(() => {
@@ -156,11 +171,11 @@ function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades,
 
   // The form closes right away. The card shows up (or updates) immediately and the save finishes in the
   // background; if it fails, the card offers Retry / Discard. `options.prepare` finishes screenshot uploads.
-  const handleSubmitTrade = (trade, options) => (
-    editingTrade
-      ? onUpdateTrade(journal.id, editingTrade.id, trade, options)
-      : onAddTrade(journal.id, trade, options)
-  )
+  const handleSubmitTrade = (trade, options) => {
+    if (editingTrade) return onUpdateTrade(journal.id, editingTrade.id, trade, options)
+    dismissImportHint()
+    return onAddTrade(journal.id, trade, options)
+  }
 
   if (!journal) {
     return <EmptyWorkspace onCreate={onOpenCreateForm} />
@@ -239,7 +254,46 @@ function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades,
             + Add trade
           </button>
 
-          <JournalActionsMenu onImport={onImportTrades ? () => setIsImportOpen(true) : undefined} onExport={() => setIsExportOpen(true)} />
+          <div className="relative">
+            <JournalActionsMenu
+              onImport={onImportTrades ? () => {
+                dismissImportHint()
+                setIsImportOpen(true)
+              } : undefined}
+              onExport={() => setIsExportOpen(true)}
+              onMenuOpen={dismissImportHint}
+            />
+            {showImportHint && (
+              <div
+                role="status"
+                className="absolute right-0 top-full z-30 mt-2 w-64 rounded-xl border border-sky-200 bg-white p-3 shadow-lg dark:border-sky-400/25 dark:bg-panel-hi"
+              >
+                <span aria-hidden="true" className="absolute -top-1.5 right-3 h-3 w-3 rotate-45 border-l border-t border-sky-200 bg-white dark:border-sky-400/25 dark:bg-panel-hi" />
+                <button
+                  type="button"
+                  onClick={dismissImportHint}
+                  aria-label="Dismiss import tip"
+                  className="absolute right-2 top-2 flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 dark:text-zinc-400 dark:hover:bg-white/[0.08] dark:hover:text-zinc-100"
+                >
+                  <span aria-hidden="true">×</span>
+                </button>
+                <p className="pr-5 text-xs font-semibold text-zinc-900 dark:text-zinc-100">Already have trades?</p>
+                <p className="mt-1 text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
+                  Import your trade history from a CSV or Excel file using this menu.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    dismissImportHint()
+                    setIsImportOpen(true)
+                  }}
+                  className="mt-2 cursor-pointer text-xs font-semibold text-sky-800 underline-offset-2 hover:underline dark:text-sky-300"
+                >
+                  Import trades
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
