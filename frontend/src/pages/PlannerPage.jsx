@@ -5,6 +5,7 @@ import { usePlanEntries } from '../hooks/usePlanEntries'
 import TopBar from '../components/rightContainer/TopBar'
 import PlannerCalendar from '../components/rightContainer/planner/PlannerCalendar'
 import PlannerJournalLink from '../components/rightContainer/planner/PlannerJournalLink'
+import ScrollFade from '../components/common/ScrollFade'
 import { todayKey } from '../utils/calendar'
 import { CalendarIcon } from '../utils/Icons.jsx'
 import { loadPlanForm, preloadPlanForm } from '../utils/formLoaders'
@@ -42,10 +43,18 @@ function PlannerWorkspace({ planner }) {
   return (
     <>
       <TopBar label={`Trade planner · ${planner.type}`} title={planner.name} />
-      <div className={pageBody}>
+      <ScrollFade className="flex min-h-0 flex-1 flex-col" scrollClassName={pageBody}>
         <div className="mb-4 flex flex-wrap items-center gap-2">
           <PlannerJournalLink planner={planner} />
-          {!isLoading && (
+        </div>
+        {error && <p role="alert" className="mb-4 text-sm text-rose-500">{error}</p>}
+        {isLoading && <p role="status" className="mb-2 text-xs text-zinc-500 dark:text-zinc-400">Loading plans…</p>}
+        <PlannerCalendar
+          entries={entries}
+          selectedDate={formState?.entry?.date ?? formState?.date ?? null}
+          onCreateForDate={(date) => setFormState({ entry: null, date })}
+          onOpenEntry={(entry) => setFormState({ entry })}
+          headerHint={!isLoading && (
             <div className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-zinc-200 bg-white/80 py-1 pl-2.5 pr-1 text-xs text-zinc-600 shadow-sm dark:border-white/[0.10] dark:bg-white/[0.03] dark:text-zinc-300">
               <CalendarIcon aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-sky-600 dark:text-sky-400" />
               <span>Click a date to plan</span>
@@ -60,16 +69,8 @@ function PlannerWorkspace({ planner }) {
               </button>
             </div>
           )}
-        </div>
-        {error && <p role="alert" className="mb-4 text-sm text-rose-500">{error}</p>}
-        {isLoading && <p role="status" className="mb-2 text-xs text-zinc-500 dark:text-zinc-400">Loading plans…</p>}
-        <PlannerCalendar
-          entries={entries}
-          selectedDate={formState?.entry?.date ?? formState?.date ?? null}
-          onCreateForDate={(date) => setFormState({ entry: null, date })}
-          onOpenEntry={(entry) => setFormState({ entry })}
         />
-      </div>
+      </ScrollFade>
 
       {formState && (
         <Suspense fallback={null}>

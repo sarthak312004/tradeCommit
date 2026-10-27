@@ -7,6 +7,7 @@ import { createBrowserRouter, Navigate, RouterProvider } from 'react-router'
 import MainJournal from './pages/MainJournal.jsx'
 import AuthPage from './pages/AuthPage.jsx'
 import LazyPlannerPage from './pages/LazyPlannerPage.jsx'
+import MarketResearchPage from './pages/MarketResearchPage.jsx'
 import OnboardingPage from './pages/OnboardingPage.jsx'
 import { PlannerContextProvider } from './context/plannerContextProvider.jsx'
 import { Analytics } from '@vercel/analytics/react'
@@ -39,6 +40,10 @@ const router = createBrowserRouter([
       {
         path:'planner/:plannerId',
         element:<LazyPlannerPage/>
+      },
+      {
+        path:'market-research',
+        element:<MarketResearchPage/>
       }
     ]
   },

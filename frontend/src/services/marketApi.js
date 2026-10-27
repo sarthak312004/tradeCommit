@@ -20,3 +20,7 @@ export const fetchQuote = (symbol, { prefer, exact, signal } = {}) =>
 
 /** Autocomplete: [{ symbol, display, name, exchange, type, exact }] */
 export const searchSymbols = (query, { prefer, signal } = {}) => get('/search', { q: query, prefer }, signal)
+
+/** Market headlines for the optional deep-mode research panel. */
+export const fetchMarketNews = (region, { signal } = {}) =>
+  get('/news', { region }, signal)

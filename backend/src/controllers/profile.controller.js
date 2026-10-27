@@ -25,6 +25,8 @@ const MIN_PASSWORD_LENGTH = 8;
 const MAX_PASSWORD_LENGTH = 72; // bcrypt ignores everything after 72 bytes
 
 const SESSION_EXPIRED = "Your verification expired. Please start again.";
+const FOCUS_THEMES = new Set(["sage", "ocean", "amber"]);
+const SPOTIFY_URL_PATTERN = /^\/(playlist|album|track|episode|show)\/[A-Za-z0-9]+\/?$/;
 
 // What the client gets for the header picture: always a complete, valid object.
 const toHeaderBackdrop = (user) => {
@@ -33,6 +35,11 @@ const toHeaderBackdrop = (user) => {
   if (saved?.mode === "image" && saved.imageUrl) return { mode: "image", scene: null, imageUrl: saved.imageUrl };
   return { mode: "none", scene: null, imageUrl: null };
 };
+
+const toFocusPreferences = (user) => ({
+  spotifyUrl: user?.focusPreferences?.spotifyUrl ?? "",
+  focusTheme: FOCUS_THEMES.has(user?.focusPreferences?.focusTheme) ? user.focusPreferences.focusTheme : "sage",
+});
 
 // the old picture is only removed after the new choice is saved, and a failed delete never fails the request
 const discardHeaderImage = (imageUrl, userId) => {
@@ -61,6 +68,47 @@ export const setHeaderBackdrop = asyncHandler(async (req, res) => {
   discardHeaderImage(previousImage, user._id);
 
   return res.status(200).json(new ApiResponse(200, { headerBackdrop: next }, "Header background saved"));
+});
+
+// PUT /api/v1/auth/focus-preferences { spotifyUrl, focusTheme }
+export const setFocusPreferences = asyncHandler(async (req, res) => {
+  const spotifyUrl = typeof req.body?.spotifyUrl === "string" ? req.body.spotifyUrl.trim() : null;
+  const focusTheme = req.body?.focusTheme;
+
+  if (spotifyUrl === null || spotifyUrl.length > 500) {
+    throw new ApiError(400, "Enter a valid Spotify link");
+  }
+  if (spotifyUrl) {
+    let parsed;
+    try {
+      parsed = new URL(spotifyUrl);
+    } catch {
+      throw new ApiError(400, "Enter a valid Spotify link");
+    }
+    if (
+      parsed.protocol !== "https:" ||
+      !["open.spotify.com", "spotify.com", "www.spotify.com"].includes(parsed.hostname) ||
+      !SPOTIFY_URL_PATTERN.test(parsed.pathname)
+    ) {
+      throw new ApiError(400, "Enter a Spotify playlist, album, track, episode, or show link");
+    }
+  }
+  if (!FOCUS_THEMES.has(focusTheme)) throw new ApiError(400, "Choose a valid focus theme");
+
+  const updated = await User.findByIdAndUpdate(
+    req.user._id,
+    {
+      $set: {
+        "focusPreferences.spotifyUrl": spotifyUrl,
+        "focusPreferences.focusTheme": focusTheme,
+      },
+    },
+    { new: true, projection: "focusPreferences" }
+  );
+  if (!updated) throw new ApiError(404, "User not found");
+
+  const preferences = { spotifyUrl, focusTheme };
+  return res.status(200).json(new ApiResponse(200, { focusPreferences: preferences }, "Focus preferences saved"));
 });
 
 // POST /api/v1/auth/header-backdrop/image   multipart, field "image"
@@ -102,6 +150,7 @@ export const getProfile = asyncHandler(async (req, res) => {
         onboardingTradingStyle: user.onboardingTradingStyle ?? null,
         createdAt: user.createdAt,
         headerBackdrop: toHeaderBackdrop(user),
+        focusPreferences: toFocusPreferences(user),
       },
       "Profile fetched"
     )

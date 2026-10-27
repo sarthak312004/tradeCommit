@@ -101,6 +101,10 @@ const userSchema = new mongoose.Schema(
             scene:{ type:String, default:null },
             imageUrl:{ type:String, default:null }
         },
+        focusPreferences:{
+            spotifyUrl:{ type:String, default:"" },
+            focusTheme:{ type:String, enum:["sage","ocean","amber"], default:"sage" }
+        },
         refreshToken:{
             type: String
         }

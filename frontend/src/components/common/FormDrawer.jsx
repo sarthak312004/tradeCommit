@@ -22,9 +22,10 @@ const EXPANDED_WIDTH = 1400 // clamped by max-w-full on small screens
  * Esc closes the drawer and Ctrl/Cmd + Enter submits it. Pass `canClose={false}` / `canSubmit={false}`
  * to switch those off while a request is running.
  */
-function FormDrawer({ ref, ariaTitle, breadcrumb, onSubmit, onClose, footer, children, canClose = true, canSubmit = true }) {
+function FormDrawer({ ref, ariaTitle, breadcrumb, onSubmit, onClose, footer, children, canClose = true, canSubmit = true, deepMode = false, deepTheme = 'sage', headerExtra = null }) {
   const [drawerWidth, setDrawerWidth] = useState(DEFAULT_WIDTH)
   const [expanded, setExpanded] = useState(false)
+  const isFullScreen = deepMode || expanded
   const [isDragging, setIsDragging] = useState(false)
   const isResizingRef = useRef(false)
   const closeTimerRef = useRef(null)
@@ -88,7 +89,7 @@ function FormDrawer({ ref, ariaTitle, breadcrumb, onSubmit, onClose, footer, chi
   return (
     <div
       ref={overlayRef}
-      className="fixed inset-0 z-50 flex justify-end overflow-hidden bg-black/30 p-2 backdrop-blur-[2px] md:p-3"
+      className={`fixed inset-0 z-50 flex justify-end overflow-hidden transition-colors duration-700 ${deepMode ? 'bg-[#f5f4f0]/95 p-0 backdrop-blur-xl dark:bg-[#111311]/95' : 'bg-black/30 p-2 backdrop-blur-[2px] md:p-3'}`}
       role="dialog"
       aria-modal="true"
       aria-label={ariaTitle}
@@ -98,11 +99,13 @@ function FormDrawer({ ref, ariaTitle, breadcrumb, onSubmit, onClose, footer, chi
         tabIndex={-1}
         onSubmit={onSubmit}
         style={{
-          width: `${expanded ? EXPANDED_WIDTH : drawerWidth}px`,
-          // no width easing while the user drags the edge, otherwise it feels laggy
-          transition: isDragging ? 'none' : grow
+          width: isFullScreen ? '100vw' : `${drawerWidth}px`,
+          height: isFullScreen ? '100dvh' : '100%',
+          borderRadius: deepMode ? 0 : undefined,
+          transition: isDragging ? 'none' : `${grow}, height 450ms cubic-bezier(0.22,1,0.36,1), border-radius 450ms ease, background-color 700ms ease`,
+          maxWidth: '100vw'
         }}
-        className="relative flex h-full max-w-full flex-col overflow-hidden rounded-xl border border-zinc-300 bg-white shadow-2xl outline-none dark:border-white/[0.14] dark:bg-panel"
+        className={`relative flex h-full max-w-full flex-col overflow-hidden border outline-none ${deepMode ? 'border-transparent bg-[#f7f6f2] shadow-none dark:bg-[#111311]' : 'rounded-xl border-zinc-300 bg-white shadow-2xl dark:border-white/[0.14] dark:bg-panel'}`}
       >
         <div
           role="separator"
@@ -120,28 +123,33 @@ function FormDrawer({ ref, ariaTitle, breadcrumb, onSubmit, onClose, footer, chi
             <button
               type="button"
               onClick={() => setExpanded((value) => !value)}
-              aria-label={expanded ? 'Collapse panel' : 'Expand panel'}
+              aria-label={isFullScreen ? 'Exit full screen' : 'Expand panel'}
               aria-pressed={expanded}
-              title={expanded ? 'Collapse' : 'Expand'}
-              className={`${iconButtonClass} hidden md:flex`}
+              title={isFullScreen ? 'Exit full screen' : 'Expand'}
+              className={`${iconButtonClass} hidden md:flex ${deepMode ? 'opacity-60 hover:opacity-100' : ''}`}
+              disabled={deepMode}
             >
-              {expanded ? <MinimizeIcon className="h-[15px] w-[15px]" /> : <MaximizeIcon className="h-[15px] w-[15px]" />}
+              {isFullScreen ? <MinimizeIcon className="h-[15px] w-[15px]" /> : <MaximizeIcon className="h-[15px] w-[15px]" />}
             </button>
-            <p className="truncate pl-1 text-xs text-zinc-600 dark:text-zinc-400">{breadcrumb}</p>
+            <p className={`truncate pl-1 text-xs ${deepMode ? 'text-stone-500 dark:text-stone-400' : 'text-zinc-600 dark:text-zinc-400'}`}>{breadcrumb}</p>
           </div>
+          <div className="flex min-w-0 items-center gap-2">{headerExtra}</div>
           <button type="button" onClick={requestClose} aria-label="Close" title="Close" className={iconButtonClass}>
             <CloseIcon className="h-4 w-4" />
           </button>
         </div>
 
         {/* page body */}
-        <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-color:#d4d4d8_transparent] [scrollbar-width:thin] dark:[scrollbar-color:#3f3f46_transparent]">
-          <div className={`mx-auto w-full px-6 pb-16 pt-4 sm:px-10 ${expanded ? 'max-w-[1080px]' : 'max-w-[920px]'}`}>
+        <div
+          data-focus-theme={deepMode ? deepTheme : undefined}
+          className={`min-h-0 flex-1 overflow-y-auto [scrollbar-color:#d4d4d8_transparent] [scrollbar-width:thin] dark:[scrollbar-color:#3f3f46_transparent] ${deepMode ? 'deep-mode-scroll' : ''}`}
+        >
+          <div className={`mx-auto w-full px-6 pb-16 pt-4 sm:px-10 ${isFullScreen ? 'max-w-[1160px]' : 'max-w-[920px]'}`}>
             {children}
           </div>
         </div>
 
-        <footer className={`${footerClass} justify-between`}>
+        <footer className={`${footerClass} justify-between ${deepMode ? 'deep-mode-footer' : ''}`}>
           {footer}
         </footer>
       </form>

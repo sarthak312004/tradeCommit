@@ -35,3 +35,23 @@ export const headerBackdropApi = {
     return readJson(await fetch(`${BASE}/header-backdrop/image`, { method: 'POST', credentials: 'include', body: form }))
   },
 }
+
+/** Playlist and focus palette preferences follow the signed-in account across sessions. */
+export const saveFocusPreferences = async (preferences) => {
+  const response = await requestJson(`${BASE}/focus-preferences`, { method: 'PUT', body: preferences })
+  if (
+    typeof response?.focusPreferences?.spotifyUrl !== 'string' ||
+    !['sage', 'ocean', 'amber'].includes(response.focusPreferences.focusTheme)
+  ) {
+    throw new Error('The server returned an invalid focus preference response.')
+  }
+  if (cachedProfile) {
+    cachedProfile = Promise.resolve(cachedProfile)
+      .then((profile) => ({ ...profile, focusPreferences: response.focusPreferences }))
+      .catch((error) => {
+        cachedProfile = null
+        throw error
+      })
+  }
+  return response.focusPreferences
+}

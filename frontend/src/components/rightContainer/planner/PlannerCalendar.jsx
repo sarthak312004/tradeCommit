@@ -20,7 +20,7 @@ function EntryChip({ entry, onOpen, large = false }) {
         onOpen(entry)
       }}
       title={entry.syncState === 'saving' ? 'Saving plan…' : entry.title}
-      className={`flex w-full min-w-0 cursor-pointer items-center overflow-hidden rounded-md bg-zinc-900/[0.06] text-left font-medium leading-none ${large ? 'h-9 gap-2 px-3 text-xs' : 'h-6 gap-1.5 px-2 text-[11px]'} text-zinc-800 transition-colors hover:bg-zinc-900/[0.1] hover:text-zinc-900 disabled:cursor-wait disabled:opacity-70 dark:bg-white/[0.08] dark:text-zinc-200 dark:hover:bg-white/[0.13] dark:hover:text-zinc-50 ${focusRing}`}
+      className={`flex w-full min-w-0 cursor-pointer items-center overflow-hidden rounded-md border border-zinc-200 bg-zinc-100 text-left font-medium leading-none ${large ? 'h-9 gap-2 px-3 text-xs' : 'h-6 gap-1.5 px-2 text-[11px]'} text-zinc-800 transition-colors hover:border-zinc-300 hover:bg-zinc-200 hover:text-zinc-900 disabled:cursor-wait disabled:opacity-70 dark:border-transparent dark:bg-white/[0.08] dark:text-zinc-200 dark:hover:border-transparent dark:hover:bg-white/[0.13] dark:hover:text-zinc-50 ${focusRing}`}
     >
       <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-sky-700 dark:bg-sky-400" />
       <span className="min-w-0 flex-1 truncate">{entry.title}</span>
@@ -155,7 +155,7 @@ function DayCell({ day, entries, isToday, isSelected, isExpanded, onToggleExpand
  * @param {Function} onCreateForDate (dateKey) => void
  * @param {Function} onOpenEntry     (entry) => void
  */
-function PlannerCalendar({ entries, selectedDate = null, onCreateForDate, onOpenEntry }) {
+function PlannerCalendar({ entries, selectedDate = null, onCreateForDate, onOpenEntry, headerHint }) {
   const [month, setMonth] = useState(() => startOfMonth(new Date()))
   const [expandedDay, setExpandedDay] = useState(null)
   const isCompact = useIsCompact()
@@ -195,10 +195,13 @@ function PlannerCalendar({ entries, selectedDate = null, onCreateForDate, onOpen
   return (
     <section
       aria-label="Planner calendar"
-      className="rounded-2xl border border-zinc-200 bg-white/70 p-3 shadow-card sm:p-5 dark:border-zinc-800 dark:bg-white/[0.035] dark:shadow-none"
+      className="tc-surface rounded-2xl border border-zinc-200 bg-white/70 p-3 shadow-card sm:p-5 dark:border-zinc-800 dark:bg-white/[0.035] dark:shadow-none"
     >
       <div className="mb-4 flex min-h-8 flex-wrap items-center justify-between gap-3">
-        <h2 aria-live="polite" className="text-lg font-semibold leading-8 tracking-tight text-zinc-900 dark:text-zinc-50">{formatMonthTitle(month)}</h2>
+        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
+          <h2 aria-live="polite" className="text-lg font-semibold leading-8 tracking-tight text-zinc-900 dark:text-zinc-50">{formatMonthTitle(month)}</h2>
+          {headerHint}
+        </div>
         <div role="group" aria-label="Change month" className={segmentedGroup}>
           <button type="button" onClick={() => goToMonth(addMonths(month, -1))} aria-label="Previous month" title="Previous month" className={`${navItem} w-9`}>
             <ChevronLeftIcon className="h-4 w-4" />

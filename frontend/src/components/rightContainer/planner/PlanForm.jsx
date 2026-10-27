@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import FormDrawer from '../../common/FormDrawer'
 import PropertyRow from '../../common/PropertyRow'
@@ -6,10 +6,43 @@ import ShortcutHint from '../../common/ShortcutHint'
 import DeferredEditor from '../../common/DeferredEditor'
 import { dateInputClass, ghostFooterButton, primaryFooterButton } from '../../common/formStyles'
 import { CalendarIcon } from '../../../utils/Icons.jsx'
+import { SlidersIcon } from '../../../utils/Icons.jsx'
 import { formatLongDate, todayKey } from '../../../utils/calendar'
 import { MOD_LABEL } from '../../../hooks/useFormShortcuts'
+import { useFocusPreferences } from '../../../hooks/useFocusPreferences'
 
 const MAX_TITLE = 120
+const FOCUS_THEMES = [
+  { value: 'sage', label: 'Sage', swatch: 'bg-[#8b9b83]' },
+  { value: 'ocean', label: 'Ocean', swatch: 'bg-sky-500' },
+  { value: 'amber', label: 'Amber', swatch: 'bg-amber-500' },
+]
+
+const deepModeStyles = `
+.deep-mode-scroll { background: radial-gradient(ellipse at 50% 0%, rgba(195, 204, 185, .12), transparent 58%); }
+.dark .deep-mode-scroll { background: radial-gradient(ellipse at 50% 0%, rgba(130, 150, 120, .07), transparent 58%); }
+.deep-mode-scroll[data-focus-theme="ocean"] { background: radial-gradient(ellipse at 50% 0%, rgba(96, 165, 250, .10), transparent 58%); }
+.dark .deep-mode-scroll[data-focus-theme="ocean"] { background: radial-gradient(ellipse at 50% 0%, rgba(56, 135, 190, .10), transparent 58%); }
+.deep-mode-scroll[data-focus-theme="amber"] { background: radial-gradient(ellipse at 50% 0%, rgba(217, 153, 85, .10), transparent 58%); }
+.dark .deep-mode-scroll[data-focus-theme="amber"] { background: radial-gradient(ellipse at 50% 0%, rgba(190, 130, 65, .09), transparent 58%); }
+.deep-focus-waves { height: 68px; opacity: .68; overflow: hidden; mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent); }
+.deep-focus-waves svg { width: 100%; height: 100%; overflow: visible; }
+.deep-focus-waves path { fill: none; stroke: #8b9b83; stroke-width: .8; opacity: .32; animation: deep-wave-drift 12s ease-in-out infinite alternate; }
+.deep-focus-waves path:nth-child(2n) { stroke: #b7a994; animation-duration: 16s; animation-direction: alternate-reverse; }
+.deep-focus-waves path:nth-child(3n) { animation-duration: 20s; opacity: .2; }
+.dark .deep-focus-waves path { stroke: #9cac91; opacity: .24; }
+.deep-mode-scroll[data-focus-theme="ocean"] .deep-focus-waves path { stroke: #5797bb; }
+.dark .deep-mode-scroll[data-focus-theme="ocean"] .deep-focus-waves path { stroke: #78b9d8; }
+.deep-mode-scroll[data-focus-theme="amber"] .deep-focus-waves path { stroke: #b98752; }
+.dark .deep-mode-scroll[data-focus-theme="amber"] .deep-focus-waves path { stroke: #d3a66e; }
+.deep-focus-breathe { animation: deep-breathe 4s ease-in-out infinite; }
+.deep-mode-footer { border-top: 0; background: #f7f6f2; }
+.dark .deep-mode-footer { border-top: 0; background: #111311; }
+@keyframes deep-wave-drift { from { transform: translateY(-3px) scaleY(.88); } to { transform: translateY(4px) scaleY(1.08); } }
+@keyframes deep-breathe { 0%,100% { opacity: .55; box-shadow: 0 0 0 0 rgba(16,185,129,0); } 50% { opacity: 1; box-shadow: 0 0 0 4px rgba(16,185,129,.08); } }
+@media (prefers-reduced-motion: reduce) { .deep-focus-waves path, .deep-focus-breathe { animation: none !important; } }
+`
+
 
 /**
  * Drawer form to write (or review) the plan for one calendar day.
@@ -35,6 +68,88 @@ function PlanForm({ plannerName, plannerType, initialEntry = null, initialDate, 
   const [isSaving, setIsSaving] = useState(false)
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false)
   const [submitError, setSubmitError] = useState('')
+  const [deepMode, setDeepMode] = useState(false)
+  const [isFocusSettingsOpen, setIsFocusSettingsOpen] = useState(false)
+  const focusSettingsRef = useRef(null)
+  const focusSettingsButtonRef = useRef(null)
+  const { preferences, isLoaded: areFocusPreferencesLoaded, loadError, isSaving: areFocusPreferencesSaving, saveError, savePreferences, retryLoad } = useFocusPreferences()
+
+  useEffect(() => {
+    if (!isFocusSettingsOpen) return undefined
+    const handlePointerDown = (event) => {
+      if (!focusSettingsRef.current?.contains(event.target)) setIsFocusSettingsOpen(false)
+    }
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setIsFocusSettingsOpen(false)
+        focusSettingsButtonRef.current?.focus()
+      }
+    }
+    document.addEventListener('pointerdown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isFocusSettingsOpen])
+
+  useEffect(() => {
+    if (!deepMode) return undefined
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = previousOverflow }
+  }, [deepMode])
+
+  const saveFocusPreferences = (next) => {
+    savePreferences(next)
+  }
+
+  const focusSettingsControls = (
+    <div ref={focusSettingsRef} className="relative shrink-0">
+      <button
+        ref={focusSettingsButtonRef}
+        type="button"
+        onClick={() => setIsFocusSettingsOpen((open) => !open)}
+        aria-haspopup="dialog"
+        aria-controls="focus-settings-panel"
+        aria-label="Focus settings"
+        aria-expanded={isFocusSettingsOpen}
+        title="Focus settings"
+        className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-400/70 ${isFocusSettingsOpen ? 'border-stone-300 bg-white/80 text-stone-700 dark:border-white/15 dark:bg-white/[0.08] dark:text-stone-100' : 'border-transparent text-stone-500 hover:bg-stone-200/60 hover:text-stone-800 dark:text-stone-400 dark:hover:bg-white/[0.07] dark:hover:text-stone-100'}`}
+      >
+        <SlidersIcon className="h-4 w-4" />
+      </button>
+      {isFocusSettingsOpen && (
+        <div id="focus-settings-panel" role="dialog" aria-label="Focus settings" className="absolute right-0 top-[calc(100%+10px)] z-[60] w-[min(19rem,calc(100vw-1.5rem))] rounded-xl border border-stone-200 bg-[#fbfaf7] p-3.5 text-stone-800 shadow-[0_16px_45px_rgba(20,25,20,0.16)] dark:border-white/10 dark:bg-[#1b1e1b] dark:text-stone-100 dark:shadow-black/40">
+          <div className="mt-3 border-t border-stone-200/80 pt-3 dark:border-white/[0.08]">
+            <p className="mb-2 text-[10px] font-medium uppercase tracking-[0.12em] text-stone-500 dark:text-stone-400">Focus tint</p>
+            <div role="radiogroup" aria-label="Focus theme" className="grid grid-cols-3 gap-1.5">
+              {FOCUS_THEMES.map(({ value, label, swatch }) => {
+                const active = preferences.focusTheme === value
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    onClick={() => saveFocusPreferences({ ...preferences, focusTheme: value })}
+                    disabled={!areFocusPreferencesLoaded || areFocusPreferencesSaving}
+                    title={active ? `${label} focus tint selected` : `Switch to ${label} focus tint`}
+                    className={`inline-flex h-8 items-center justify-center gap-1.5 rounded-md border text-[10px] font-medium transition-colors disabled:opacity-60 ${active ? 'border-stone-400/70 bg-white text-stone-800 shadow-sm dark:border-white/20 dark:bg-white/[0.09] dark:text-white' : 'border-transparent text-stone-500 hover:bg-stone-200/60 dark:text-stone-400 dark:hover:bg-white/[0.06]'}`}
+                  >
+                    <span className={`h-2 w-2 rounded-full ${swatch}`} />
+                    {label}{active && <span aria-hidden="true" className="ml-0.5">✓</span>}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+          {loadError && <p role="alert" className="mt-2 text-[10px] text-rose-600 dark:text-rose-400">{loadError} <button type="button" onClick={retryLoad} className="font-medium underline underline-offset-2">Retry</button></p>}
+          {saveError && <p role="alert" className="mt-2 text-[10px] text-rose-600 dark:text-rose-400">{saveError}</p>}
+        </div>
+      )}
+    </div>
+  )
 
   const date = watch('date')
   const isBusy = isSaving
@@ -110,16 +225,49 @@ function PlanForm({ plannerName, plannerType, initialEntry = null, initialDate, 
   )
 
   return (
+    <>
+    <style>{deepModeStyles}</style>
     <FormDrawer
       ref={drawerRef}
       ariaTitle={`${initialEntry ? 'Edit plan in' : 'New plan in'} ${plannerName}`}
       breadcrumb={breadcrumb}
+      deepMode={deepMode}
+      deepTheme={preferences.focusTheme}
+      headerExtra={(
+        <>
+          {deepMode && focusSettingsControls}
+          <button type="button" onClick={() => {
+            setDeepMode((value) => !value)
+            setIsFocusSettingsOpen(false)
+          }} aria-pressed={deepMode} aria-label={deepMode ? 'Turn off deep focus' : 'Turn on deep focus'} className={`inline-flex h-8 shrink-0 items-center gap-2 rounded-lg border px-2.5 text-xs font-medium transition-all duration-300 ${deepMode ? 'border-stone-300/80 bg-white/70 text-stone-700 shadow-sm dark:border-white/10 dark:bg-white/[0.06] dark:text-stone-200' : 'border-zinc-200 text-zinc-600 hover:bg-zinc-100 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/[0.06]'}`}>
+            <span className={`h-1.5 w-1.5 rounded-full transition-colors ${deepMode ? 'bg-emerald-500' : 'bg-zinc-400'}`} />
+            <span className="hidden sm:inline">{deepMode ? 'Deep focus on' : 'Deep focus'}</span>
+          </button>
+        </>
+      )}
       onSubmit={handleSubmit(handleFormSubmit)}
       onClose={onClose}
       footer={footer}
       canClose={!isBusy}
       canSubmit={!isBusy}
     >
+      {deepMode && (
+        <section className="deep-focus-intro mb-8 overflow-hidden rounded-2xl border border-stone-200/80 bg-white/55 px-5 pb-4 pt-3 shadow-[0_12px_45px_rgba(73,81,67,0.035)] dark:border-white/[0.08] dark:bg-white/[0.025] sm:px-8" aria-label="Deep focus atmosphere">
+          <div className="deep-focus-waves" aria-hidden="true">
+            <svg viewBox="0 0 900 92" preserveAspectRatio="none">
+              {Array.from({ length: 9 }, (_, index) => <path key={index} d={`M0 ${42 + index * 1.8} C 130 ${8 + index * 4}, 210 ${78 - index * 2}, 340 ${40 + index * 1.3} S 580 ${12 + index * 3}, 700 ${43 + index * 1.4} S 820 ${66 - index * 2}, 900 ${35 + index * 2}`} />)}
+            </svg>
+          </div>
+          <div className="relative flex flex-wrap items-center justify-between gap-3 pt-1">
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-stone-500 dark:text-stone-400">A quieter workspace</p>
+              <p className="mt-1 text-sm text-stone-600 dark:text-stone-300">Slow down. Think clearly. Plan with intention.</p>
+            </div>
+            <span className="inline-flex items-center gap-2 rounded-full border border-stone-200/80 bg-white/70 px-3 py-1.5 text-[11px] text-stone-500 dark:border-white/10 dark:bg-white/[0.04] dark:text-stone-400"><span className="deep-focus-breathe h-1.5 w-1.5 rounded-full bg-emerald-500" /> Focus space</span>
+          </div>
+        </section>
+      )}
+
       {/* header = plan title */}
       <input
         {...register('title', { validate: (value) => value.trim() !== '' || 'Give this plan a title' })}
@@ -168,6 +316,7 @@ function PlanForm({ plannerName, plannerType, initialEntry = null, initialDate, 
         onUploadImage={onUploadImage}
       />
     </FormDrawer>
+    </>
   )
 }
 

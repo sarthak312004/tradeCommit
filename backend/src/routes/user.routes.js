@@ -3,6 +3,7 @@ import {
   getProfile,
   completeOnboarding,
   setHeaderBackdrop,
+  setFocusPreferences,
   uploadHeaderBackdropImage,
   resetPassword,
   sendPasswordResetOtp,
@@ -51,6 +52,7 @@ router.get("/profile", verifyJWT, getProfile)
 router.post("/onboarding/complete", verifyJWT, completeOnboarding)
 // header background: a built-in scene / none (JSON), or the user's own picture (multipart)
 router.put("/header-backdrop", verifyJWT, setHeaderBackdrop)
+router.put("/focus-preferences", verifyJWT, setFocusPreferences)
 router.post("/header-backdrop/image", verifyJWT, upload.single("image"), uploadHeaderBackdropImage)
 router.post("/password/send-otp", verifyJWT, sendPasswordResetOtp)
 router.post("/password/verify-otp", verifyJWT, verifyPasswordResetOtp)

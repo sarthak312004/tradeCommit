@@ -30,7 +30,7 @@ function Sidebar({ isSidebarOpen: isSidebarOpenProp, setIsSidebarOpen, isMobile 
   // which page is showing decides which section highlights its selected row
   const plannerMatch = useMatch("/planner/:plannerId")
   const activePlannerId = plannerMatch?.params.plannerId ?? null
-  const activeJournalId = activePlannerId ? null : selectedJournal?.id ?? null
+  const activeJournalId = activePlannerId || pathname === "/market-research" ? null : selectedJournal?.id ?? null
 
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false)
@@ -50,6 +50,10 @@ function Sidebar({ isSidebarOpen: isSidebarOpenProp, setIsSidebarOpen, isMobile 
   }, [isLogoutConfirmOpen, isLoggingOut])
 
   const toggleSidebar = () => (isMobile ? onMobileClose?.() : setIsSidebarOpen((prev) => !prev))
+  const openMarketResearch = () => {
+    navigate("/market-research")
+    if (isMobile) onMobileClose?.()
+  }
 
   // Escape puts the slide-over away (unless a dialog opened from it is using the key)
   useEffect(() => {
@@ -211,7 +215,7 @@ function Sidebar({ isSidebarOpen: isSidebarOpenProp, setIsSidebarOpen, isMobile 
       </div>
 
       {/* ------------------------------ Footer ------------------------------ */}
-      <div className="relative h-[132px] shrink-0 border-t border-zinc-300 dark:border-white/[0.10]">
+      <div className="relative h-[164px] shrink-0 border-t border-zinc-300 dark:border-white/[0.10]">
         {/* Expanded */}
         <div
           className={`absolute inset-y-0 left-0 flex w-[260px] flex-col justify-center gap-1 px-2 ${FADE_BASE} ${fade(isSidebarOpen)}`}
@@ -221,6 +225,17 @@ function Sidebar({ isSidebarOpen: isSidebarOpenProp, setIsSidebarOpen, isMobile 
             <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">Theme</span>
             <ThemeSegmented theme={theme} setTheme={setTheme} />
           </div>
+          <button
+            type="button"
+            onClick={openMarketResearch}
+            aria-current={pathname === "/market-research" ? "page" : undefined}
+            className={`flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-[13px] ${ghostBtn} ${pathname === "/market-research" ? "bg-zinc-200/70 text-zinc-950 dark:bg-white/[0.08] dark:text-zinc-50" : ""}`}
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M4 19V5M4 19h16" /><path d="m7 15 4-4 3 2 5-6" /><path d="M16 5h3v3" />
+            </svg>
+            <span className="truncate">Market research</span>
+          </button>
           <button
             type="button"
             onClick={() => setIsFeedbackOpen(true)}
@@ -245,6 +260,18 @@ function Sidebar({ isSidebarOpen: isSidebarOpenProp, setIsSidebarOpen, isMobile 
           className={`absolute inset-y-0 left-0 flex w-[56px] flex-col items-center justify-center gap-1 ${FADE_BASE} ${fade(!isSidebarOpen)}`}
         >
           <ThemeCycleButton theme={theme} setTheme={setTheme} />
+          <button
+            type="button"
+            onClick={openMarketResearch}
+            title="Market research"
+            aria-label="Market research"
+            aria-current={pathname === "/market-research" ? "page" : undefined}
+            className={`flex h-8 w-8 items-center justify-center rounded-md ${ghostBtn}`}
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M4 19V5M4 19h16" /><path d="m7 15 4-4 3 2 5-6" /><path d="M16 5h3v3" />
+            </svg>
+          </button>
           <button
             type="button"
             onClick={() => setIsFeedbackOpen(true)}
