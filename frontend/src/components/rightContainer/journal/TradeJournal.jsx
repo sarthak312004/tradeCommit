@@ -2,6 +2,8 @@ import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react
 import { useNavigate } from 'react-router'
 import JournalCalendar from './JournalCalendar'
 import TradeCard from './TradeCard'
+import TradeTable from './TradeTable'
+import TradeViewToggle from './TradeViewToggle'
 import DateRangeFilter from './DateRangeFilter'
 import JournalActionsMenu from './JournalActionsMenu'
 import MentorOrb from './MentorOrb'
@@ -14,6 +16,7 @@ import { DEFAULT_CURRENCY } from '../../../utils/currencies'
 import { buildTemplateFields, hasJournalContext } from '../../../utils/customFields'
 import { buildFieldChoices, collectCustomFieldOptions, resolveCardFields } from '../../../utils/tradeCardFields'
 import { useTradeCardFields } from '../../../hooks/useTradeCardFields'
+import { useTradeView } from '../../../hooks/useTradeView'
 import { SlidersIcon } from '../../../utils/Icons.jsx'
 import { loadTradeForm, preloadTradeForm } from '../../../utils/formLoaders'
 import DialogSkeleton from '../../common/DialogSkeleton'
@@ -146,6 +149,8 @@ function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades,
 
   // the details (max 3) a trade chip shows when hovered: edited with the pencil on the chip, remembered in this browser
   const [cardFieldIds, setCardFieldIds] = useTradeCardFields()
+  // table (default) or cards, remembered in this browser
+  const [tradeLayout, setTradeLayout] = useTradeView()
   const customFieldOptions = useMemo(() => collectCustomFieldOptions(allTrades ?? [], journalContext?.attributes ?? []), [allTrades, journalContext])
   const cardFields = useMemo(() => resolveCardFields(cardFieldIds, customFieldOptions), [cardFieldIds, customFieldOptions])
   // everything the trade form has, offered by the pencil on every chip (one shared choice for all of them)
@@ -228,6 +233,8 @@ function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades,
               </button>
             ))}
           </div>
+
+          {view === 'trades' && <TradeViewToggle value={tradeLayout} onChange={setTradeLayout} />}
 
           <DateRangeFilter range={range} onChange={setRange} />
 
@@ -405,6 +412,20 @@ function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades,
             rangeLabel={isFiltered ? describeRangeInline(range) : null}
           />
         </Suspense>
+      ) : tradeLayout === 'table' ? (
+        // borderless table: hairline between rows, details panel floats over the rows below
+        <TradeTable
+          trades={visibleTrades}
+          currency={currency}
+          detailFields={cardFields}
+          fieldIds={cardFieldIds}
+          fieldChoices={fieldChoices}
+          onFieldsChange={setCardFieldIds}
+          onSelect={handleOpenEditTrade}
+          onDelete={(tradeId) => onDeleteTrade(journal.id, tradeId)}
+          onRetry={onRetryTrade}
+          onDiscard={onDiscardTrade}
+        />
       ) : (
         // auto-fill grid of chips: as many >=24rem columns as fit. items-start keeps every chip at its own height,
         // because the hover panel floats over the chips below instead of pushing them down
