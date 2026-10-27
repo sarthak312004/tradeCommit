@@ -10,6 +10,12 @@ import { useHidePnl } from '../../../hooks/useHidePnl'
 const RESULT_FIELD_IDS = new Set(['rMultiple', 'returnPct'])
 const MASK = '\u2022\u2022\u2022\u2022'
 
+// two-letter monogram of the asset ("NSE:RELIANCE" -> "RE", "BTC/USD" -> "BT"), shown in front of its name
+const symbolMark = (symbol) => {
+  const base = String(symbol ?? '').split(':').pop().replace(/[^A-Za-z0-9]/g, '')
+  return (base.slice(0, 2) || '?').toUpperCase()
+}
+
 const sideChip = {
   long: 'bg-emerald-500/[0.14] text-emerald-800 dark:text-emerald-300',
   short: 'bg-rose-500/[0.14] text-rose-800 dark:text-rose-300'
@@ -133,21 +139,24 @@ function TradeCard({ trade, currency = DEFAULT_CURRENCY, detailFields = [], fiel
         } ${open ? 'rounded-b-none border-zinc-300 bg-white dark:border-zinc-700 dark:bg-panel-hi' : ''}`}
       >
         {/* left: what was traded */}
-        <div className="min-w-0">
-          <div className="flex min-w-0 items-center gap-2">
-            <p className="truncate text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{trade.symbol}</p>
-            <span className={`shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-semibold ${sideChip[side] ?? 'bg-zinc-500/10 text-zinc-600 dark:text-zinc-300'}`}>
-              {direction}
-            </span>
+        <div className="flex min-w-0 items-center gap-3">
+          <span aria-hidden="true" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-zinc-500/[0.10] text-[11px] font-semibold tracking-tight text-zinc-700 dark:bg-white/[0.07] dark:text-zinc-300">{symbolMark(trade.symbol)}</span>
+          <div className="min-w-0">
+            <div className="flex min-w-0 items-center gap-2">
+              <p className="truncate text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{trade.symbol}</p>
+              <span className={`shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-semibold ${sideChip[side] ?? 'bg-zinc-500/10 text-zinc-600 dark:text-zinc-300'}`}>
+                {direction}
+              </span>
+            </div>
+            <p className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-zinc-600 dark:text-zinc-400">
+              <span aria-hidden="true" className={`h-1.5 w-1.5 shrink-0 rounded-full ${isOpen ? 'bg-amber-500 dark:bg-amber-400' : 'bg-zinc-400 dark:bg-zinc-500'}`} />
+              <span className="truncate">
+                {trade.status}
+                <span aria-hidden="true" className="mx-1.5">&middot;</span>
+                {dateText}
+              </span>
+            </p>
           </div>
-          <p className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-zinc-600 dark:text-zinc-400">
-            <span aria-hidden="true" className={`h-1.5 w-1.5 shrink-0 rounded-full ${isOpen ? 'bg-amber-500 dark:bg-amber-400' : 'bg-zinc-400 dark:bg-zinc-500'}`} />
-            <span className="truncate">
-              {trade.status}
-              <span aria-hidden="true" className="mx-1.5">&middot;</span>
-              {dateText}
-            </span>
-          </p>
         </div>
 
         {/* right: the result, then the small actions */}

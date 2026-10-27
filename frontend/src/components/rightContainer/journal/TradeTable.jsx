@@ -10,6 +10,12 @@ import { useHidePnl } from '../../../hooks/useHidePnl'
 const RESULT_FIELD_IDS = new Set(['rMultiple', 'returnPct'])
 const MASK = '\u2022\u2022\u2022\u2022'
 
+// two-letter monogram of the asset ("NSE:RELIANCE" -> "RE", "BTC/USD" -> "BT"), shown in front of its name
+const symbolMark = (symbol) => {
+  const base = String(symbol ?? '').split(':').pop().replace(/[^A-Za-z0-9]/g, '')
+  return (base.slice(0, 2) || '?').toUpperCase()
+}
+
 // one grid for the header and every row, so the columns line up (below md: asset | result | actions)
 // md and up: asset | status | date | size | result | actions (size and result are right-aligned numbers)
 const COLUMNS = 'grid grid-cols-[minmax(0,1fr)_auto_5.25rem] md:grid-cols-[minmax(0,1.4fr)_minmax(0,0.9fr)_minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1fr)_5.25rem]'
@@ -147,21 +153,24 @@ function TradeRow({ trade, currency = DEFAULT_CURRENCY, detailFields = [], field
         } ${open ? 'rounded-b-none border-zinc-300 bg-white dark:border-zinc-700 dark:bg-panel-hi' : ''}`}
       >
         {/* asset: symbol + direction (status and date sit under it on small screens) */}
-        <div className="min-w-0">
-          <div className="flex min-w-0 items-center gap-2">
-            <p className="truncate text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{trade.symbol}</p>
-            <span className={`shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-semibold ${sideChip[side] ?? 'bg-zinc-500/10 text-zinc-600 dark:text-zinc-300'}`}>
-              {direction}
-            </span>
+        <div className="flex min-w-0 items-center gap-3">
+          <span aria-hidden="true" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-zinc-500/[0.10] text-[11px] font-semibold tracking-tight text-zinc-700 dark:bg-white/[0.07] dark:text-zinc-300">{symbolMark(trade.symbol)}</span>
+          <div className="min-w-0">
+            <div className="flex min-w-0 items-center gap-2">
+              <p className="truncate text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{trade.symbol}</p>
+              <span className={`shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-semibold ${sideChip[side] ?? 'bg-zinc-500/10 text-zinc-600 dark:text-zinc-300'}`}>
+                {direction}
+              </span>
+            </div>
+            <p className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-zinc-600 md:hidden dark:text-zinc-400">
+              {statusDot}
+              <span className="truncate">
+                {trade.status}
+                <span aria-hidden="true" className="mx-1.5">&middot;</span>
+                {dateText}
+              </span>
+            </p>
           </div>
-          <p className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-zinc-600 md:hidden dark:text-zinc-400">
-            {statusDot}
-            <span className="truncate">
-              {trade.status}
-              <span aria-hidden="true" className="mx-1.5">&middot;</span>
-              {dateText}
-            </span>
-          </p>
         </div>
 
         {/* status */}
