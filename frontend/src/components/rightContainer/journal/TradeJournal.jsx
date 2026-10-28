@@ -9,6 +9,8 @@ import JournalActionsMenu from './JournalActionsMenu'
 import MentorOrb from './MentorOrb'
 import MentorUnlockBadge from './MentorUnlockBadge'
 import { useMentorProgress } from '../../../hooks/useMentorProgress'
+import { useProfile } from '../../../hooks/useProfile'
+import { getTourStatus, isTourActive, TOUR_ACTIVITY_CHANGE_EVENT, TOUR_STATUS_CHANGE_EVENT } from '../../../utils/productTour'
 import { CalendarNudge, EmptyWorkspace, FirstTradeCard } from '../../onboarding/GetStarted'
 import { ALL_TIME, describeRangeInline, isRangeActive } from '../../../utils/dateRange'
 import { filterTradesByDate, sortTradesNewestFirst, toDateKey } from '../../../utils/tradeAnalytics'
@@ -88,16 +90,41 @@ function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades,
   const [isContextOpen, setIsContextOpen] = useState(false)
   const [isExportOpen, setIsExportOpen] = useState(false)
   const [isImportOpen, setIsImportOpen] = useState(false)
+  const { profile } = useProfile()
+  const [, setTourStatusVersion] = useState(0)
   const importHintKey = journal?.id ? `tradecommit:import-hint:${journal.id}` : null
   const [isImportHintDismissed, setIsImportHintDismissed] = useState(() =>
     !importHintKey || window.localStorage.getItem(importHintKey) === '1'
   )
   const showImportHint = Boolean(
     journal?.createdInSession &&
+    profile?.username &&
+    getTourStatus(profile.username, 'main') === 'done' &&
+    getTourStatus(profile.username, 'journal') === 'done' &&
+    !isTourActive(profile.username) &&
     !isImportHintDismissed &&
     (journal?.trades?.length ?? 0) === 0 &&
     onImportTrades
   )
+
+  useEffect(() => {
+    const username = profile?.username?.toLowerCase()
+    if (!username) return undefined
+
+    const refreshTourStatus = (event) => {
+      if ((event.type === TOUR_STATUS_CHANGE_EVENT || event.type === TOUR_ACTIVITY_CHANGE_EVENT) && event.detail?.username !== username) return
+      setTourStatusVersion((version) => version + 1)
+    }
+
+    window.addEventListener(TOUR_STATUS_CHANGE_EVENT, refreshTourStatus)
+    window.addEventListener(TOUR_ACTIVITY_CHANGE_EVENT, refreshTourStatus)
+    window.addEventListener('storage', refreshTourStatus)
+    return () => {
+      window.removeEventListener(TOUR_STATUS_CHANGE_EVENT, refreshTourStatus)
+      window.removeEventListener(TOUR_ACTIVITY_CHANGE_EVENT, refreshTourStatus)
+      window.removeEventListener('storage', refreshTourStatus)
+    }
+  }, [profile?.username])
   const [isMentorOpen, setIsMentorOpen] = useState(false)
   const [isMentorMounted, setIsMentorMounted] = useState(false)
   const [hasReadyMentorReview, setHasReadyMentorReview] = useState(false)

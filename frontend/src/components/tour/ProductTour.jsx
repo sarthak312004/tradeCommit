@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { useLocation } from 'react-router'
 import { journalContext } from '../../context/Context'
 import { useProfile } from '../../hooks/useProfile'
-import { TOUR_REPLAY_EVENT, getTourStatus, hasTourEnded, markTourEnded, setTourStatus } from '../../utils/productTour'
+import { TOUR_REPLAY_EVENT, getTourStatus, hasTourEnded, markTourEnded, setTourActive, setTourStatus } from '../../utils/productTour'
 import TourCard from './TourCard'
 import { TOURS, buildSteps } from './tourSteps'
 import { useTargetRect } from './useTargetRect'
@@ -19,6 +19,11 @@ function TourSession({ tourId, hasJournal, username, name, isSidebarOpen, setIsS
   const [nav, setNav] = useState({ index: 0, direction: 1 })
   const step = steps[nav.index]
   const { rect, status } = useTargetRect(step.target, `${tourId}:${step.id}`)
+
+  useEffect(() => {
+    setTourActive(username, tourId, true)
+    return () => setTourActive(username, tourId, false)
+  }, [username, tourId])
 
   // hand focus back to wherever it was when the tour ends
   useEffect(() => {
@@ -156,16 +161,23 @@ function ProductTour({ isSidebarOpen, setIsSidebarOpen, autoCloseSidebar = false
     else if (waiting('journal') && journalId) candidate = 'journal'
     if (!candidate) return undefined
 
-    const timer = setTimeout(() => setActiveTour(candidate), START_DELAY_MS)
+    const timer = setTimeout(() => {
+      setTourActive(username, candidate, true)
+      setActiveTour(candidate)
+    }, START_DELAY_MS)
     return () => clearTimeout(timer)
   }, [username, onPlanner, journalId, activeTour])
 
   // "Take the product tour" in the profile menu: the planner page replays its walkthrough, everything else the main tour
   useEffect(() => {
-    const replay = () => setActiveTour(onPlanner ? 'planner' : 'main')
+    const replay = () => {
+      const tourId = onPlanner ? 'planner' : 'main'
+      setTourActive(username, tourId, true)
+      setActiveTour(tourId)
+    }
     window.addEventListener(TOUR_REPLAY_EVENT, replay)
     return () => window.removeEventListener(TOUR_REPLAY_EVENT, replay)
-  }, [onPlanner])
+  }, [onPlanner, username])
 
   // a tour belongs to the page it started on
   if (!username || !activeTour || pageOf(activeTour) !== (onPlanner ? 'planner' : 'journals')) return null

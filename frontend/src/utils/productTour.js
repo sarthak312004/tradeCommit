@@ -7,6 +7,8 @@
 // Only a fresh sign-up is ever queued, so nobody who already knows the app gets hints they did not ask for.
 
 export const TOUR_REPLAY_EVENT = 'tradecommit:start-tour'
+export const TOUR_STATUS_CHANGE_EVENT = 'tradecommit:tour-status-change'
+export const TOUR_ACTIVITY_CHANGE_EVENT = 'tradecommit:tour-activity-change'
 
 const storageKey = (username, tourId) => `tradecommit:tour:${String(username).toLowerCase()}:${tourId}`
 
@@ -21,9 +23,29 @@ export const getTourStatus = (username, tourId) => {
 export const setTourStatus = (username, tourId, status) => {
   try {
     window.localStorage.setItem(storageKey(username, tourId), status)
+    window.dispatchEvent(new CustomEvent(TOUR_STATUS_CHANGE_EVENT, {
+      detail: { username: String(username).toLowerCase(), tourId, status }
+    }))
   } catch {
     // storage unavailable (private mode): the tour just won't be remembered
   }
+}
+
+const activeToursByUser = new Map()
+
+export const isTourActive = (username) => Boolean(activeToursByUser.get(String(username).toLowerCase())?.size)
+
+export const setTourActive = (username, tourId, isActive) => {
+  const key = String(username).toLowerCase()
+  const activeTours = activeToursByUser.get(key) ?? new Set()
+  if (isActive) {
+    activeTours.add(tourId)
+    activeToursByUser.set(key, activeTours)
+  } else {
+    activeTours.delete(tourId)
+    if (activeTours.size === 0) activeToursByUser.delete(key)
+  }
+  window.dispatchEvent(new CustomEvent(TOUR_ACTIVITY_CHANGE_EVENT, { detail: { username: key } }))
 }
 
 export const queueProductTours = (username) => {
