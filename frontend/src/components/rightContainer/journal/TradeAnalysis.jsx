@@ -1,9 +1,31 @@
-import { useMemo } from 'react'
+import { lazy, Suspense, useMemo, useState } from 'react'
 import EquityCurve from './EquityCurve'
 import MonthlyPnl from './MonthlyPnl'
+import AnalyticsBoundary from './analytics/AnalyticsBoundary'
+import AnalyticsFilters from './analytics/AnalyticsFilters'
+import MetricGate from './analytics/MetricGate'
+import { DrawdownChart } from './analytics/charts'
+import { EmptyNote, TabLoading } from './analytics/parts'
 import { computeAnalytics, formatMoney, formatPercent, formatR, formatRatio, toneOf } from '../../../utils/tradeAnalytics'
 import { MIN_RELIABLE_SAMPLE } from '../../../utils/tradeMetrics'
+import { applyTradeFilters, detectFieldRoles, discoverFields, filterOptions, UNTAGGED } from '../../../utils/tradeBreakdowns'
 import { canViewMetric } from '../../../config/analyticsAccess'
+
+// the heavier views load only when their tab is opened
+const BreakdownTab = lazy(() => import('./analytics/BreakdownTab'))
+const DistributionTab = lazy(() => import('./analytics/DistributionTab'))
+const CompareTab = lazy(() => import('./analytics/CompareTab'))
+
+const TABS = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'breakdown', label: 'Breakdown' },
+  { id: 'distribution', label: 'Distribution' },
+  { id: 'compare', label: 'Compare' }
+]
+
+const NO_FILTERS = { instrument: '', strategy: '', setup: '' }
+
+const saved = (list) => list.filter((trade) => trade.syncState !== 'failed')
 
 const toneClass = {
   positive: 'text-emerald-600 dark:text-emerald-400',
@@ -49,10 +71,28 @@ function MetricList({ title, rows }) {
 // each entry carries the metric id the access config knows it by, so restricting one later is a config change
 const visible = (entries) => entries.filter((entry) => canViewMetric(entry.metric))
 
-function TradeAnalysis({ trades, currency, rangeLabel, mode }) {
+function TradeAnalysis({ trades, allTrades, range, currency, rangeLabel, mode }) {
   const money = (value, options) => formatMoney(value, { currency, ...options })
+  const [tab, setTab] = useState('overview')
+  const [filters, setFilters] = useState(NO_FILTERS)
+  const [roleOverride, setRoleOverride] = useState({})
+
   // a trade that failed to save (shown with Retry / Discard) isn't in the journal yet, so it stays out of the numbers
-  const stats = useMemo(() => computeAnalytics(trades.filter((trade) => trade.syncState !== 'failed')), [trades])
+  const inRange = useMemo(() => saved(trades), [trades])
+  // every date of this journal: used to discover properties, fill the filters and compare periods
+  const everything = useMemo(() => saved(allTrades ?? trades), [allTrades, trades])
+
+  const fields = useMemo(() => discoverFields(everything), [everything])
+  const detectedRoles = useMemo(() => detectFieldRoles(fields), [fields])
+  const roles = useMemo(() => ({ ...detectedRoles, ...roleOverride }), [detectedRoles, roleOverride])
+  const options = useMemo(() => filterOptions(everything, roles), [everything, roles])
+
+  // ONE filtered list feeds the overview, every breakdown and every chart, so they cannot disagree
+  const filtered = useMemo(() => applyTradeFilters(inRange, filters, roles), [inRange, filters, roles])
+  const comparable = useMemo(() => applyTradeFilters(everything, filters, roles), [everything, filters, roles])
+  const stats = useMemo(() => computeAnalytics(filtered), [filtered])
+  const filtersActive = Boolean(filters.instrument || filters.strategy || filters.setup)
+  const filterLabel = [filters.instrument, filters.strategy === UNTAGGED ? 'no strategy' : filters.strategy, filters.setup === UNTAGGED ? 'no setup' : filters.setup].filter(Boolean).join(', ')
   const hasClosed = stats.closedTrades > 0
   // reward-to-risk in R when stops are logged, otherwise the same idea by amount
   const rewardRisk = stats.rewardRisk ?? stats.payoffRatio
@@ -174,53 +214,123 @@ function TradeAnalysis({ trades, currency, rangeLabel, mode }) {
             {plural(stats.closedTrades, 'closed trade')}
             {rangeLabel ? ` in ${rangeLabel}` : ''}
             {modeLabel ? `, ${modeLabel.toLowerCase()}` : ''}
+            {filterLabel ? `, filtered to ${filterLabel}` : ''}
           </p>
-          {lowSample && (
-            <p className="mt-2 text-xs leading-snug text-amber-900 dark:text-amber-200">
-              Small sample: ratios like profit factor and expectancy swing a lot below {MIN_RELIABLE_SAMPLE} closed trades. Treat them as early signals.
-            </p>
-          )}
         </div>
       </div>
 
-      {showCurve && (
-        <div className="px-3 pb-4 sm:px-4">
-          {hasClosed ? (
-            <EquityCurve points={stats.equity} currency={currency} />
-          ) : (
-            <div className="grid h-52 place-items-center px-6 text-center">
-              <div>
-                <p className="text-sm font-medium text-zinc-600 dark:text-zinc-300">No closed trades to chart</p>
-                <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">Add an exit price to a trade and its result shows up here.</p>
+      <div className="border-t border-zinc-300 px-5 pt-3 sm:px-6 dark:border-white/[0.12]">
+        <div role="tablist" aria-label="Analysis views" className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-3">
+          {TABS.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              role="tab"
+              id={`analysis-tab-${item.id}`}
+              aria-selected={tab === item.id}
+              aria-controls="analysis-panel"
+              onClick={() => setTab(item.id)}
+              className={`cursor-pointer whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+                tab === item.id
+                  ? 'bg-zinc-100 text-zinc-900 dark:bg-white/[0.08] dark:text-zinc-100'
+                  : 'text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900 dark:text-zinc-300 dark:hover:bg-white/[0.05] dark:hover:text-zinc-100'
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+        {lowSample && (
+          <p className="mb-3 text-xs leading-snug text-sky-800 dark:text-sky-300">
+            Small sample: ratios like profit factor and expectancy swing a lot below {MIN_RELIABLE_SAMPLE} closed trades. Treat them as early signals.
+          </p>
+        )}
+        <MetricGate id="analyticsFilters">
+          <div className="pb-4">
+            <AnalyticsFilters filters={filters} onChange={setFilters} options={options} hasStrategy={Boolean(roles.strategy)} hasSetup={Boolean(roles.setup)} />
+            {tab === 'compare' && filtersActive && (
+              <p className="mt-2 text-[11px] text-zinc-600 dark:text-zinc-400">Filters apply here too. The date range above is replaced by the two periods below.</p>
+            )}
+          </div>
+        </MetricGate>
+      </div>
+
+      <div id="analysis-panel" role="tabpanel" aria-labelledby={`analysis-tab-${tab}`} className="border-t border-zinc-300 dark:border-white/[0.12]">
+        <AnalyticsBoundary key={tab}>
+          {tab === 'overview' && (
+            <>
+            {showCurve && (
+              <div className="px-3 pb-4 pt-4 sm:px-4">
+                {hasClosed ? (
+                  <>
+                    <EquityCurve points={stats.equity} currency={currency} />
+                    <MetricGate id="drawdownChart">
+                      <div className="px-2 pt-3 sm:px-3">
+                        <DrawdownChart points={stats.equity} currency={currency} />
+                      </div>
+                    </MetricGate>
+                  </>
+                ) : (
+                  <div className="grid h-52 place-items-center px-6 text-center">
+                    <div>
+                      <p className="text-sm font-medium text-zinc-600 dark:text-zinc-300">No closed trades to chart</p>
+                      <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">Add an exit price to a trade and its result shows up here.</p>
+                    </div>
+                  </div>
+                )}
               </div>
+            )}
+
+            {keyStats.length > 0 && (
+              <div className="grid grid-cols-2 gap-x-6 gap-y-6 border-t border-zinc-300 p-5 sm:p-6 md:grid-cols-5 dark:border-white/[0.12]">
+                {keyStats.map((entry) => entry.node)}
+              </div>
+            )}
+
+            <div className="grid gap-x-12 gap-y-6 border-t border-zinc-300 p-5 sm:p-6 md:grid-cols-2 dark:border-white/[0.12]">
+              <MetricList title="Performance" rows={performanceRows} />
+              <MetricList title="Risk and consistency" rows={riskRows} />
+              <MetricList title="Long vs short" rows={sideRows} />
             </div>
+
+            {showMonthly && (
+              <div className="border-t border-zinc-300 p-5 sm:p-6 dark:border-white/[0.12]">
+                <MonthlyPnl months={stats.monthly} currency={currency} />
+              </div>
+            )}
+
+            {excluded.length > 0 && (
+              <p className="border-t border-zinc-300 px-5 py-3 text-[11px] text-zinc-600 sm:px-6 dark:border-white/[0.12] dark:text-zinc-400">
+                Not counted in these statistics: {excluded.join(', ')}.
+              </p>
+            )}
+            </>
           )}
-        </div>
-      )}
 
-      {keyStats.length > 0 && (
-        <div className="grid grid-cols-2 gap-x-6 gap-y-6 border-t border-zinc-300 p-5 sm:p-6 md:grid-cols-5 dark:border-white/[0.12]">
-          {keyStats.map((entry) => entry.node)}
-        </div>
-      )}
-
-      <div className="grid gap-x-12 gap-y-6 border-t border-zinc-300 p-5 sm:p-6 md:grid-cols-2 dark:border-white/[0.12]">
-        <MetricList title="Performance" rows={performanceRows} />
-        <MetricList title="Risk and consistency" rows={riskRows} />
-        <MetricList title="Long vs short" rows={sideRows} />
+          {tab !== 'overview' && filtered.length === 0 && tab !== 'compare' ? (
+            <div className="p-5 sm:p-6">
+              <EmptyNote title={filtersActive ? 'No trades match these filters' : 'No trades to analyse'}>
+                {filtersActive ? 'Clear a filter, or widen the date range of the journal.' : 'Log a trade and close it with an exit price.'}
+              </EmptyNote>
+            </div>
+          ) : (
+            <Suspense fallback={<TabLoading />}>
+              {tab === 'breakdown' && (
+                <BreakdownTab
+                  trades={filtered}
+                  stats={stats}
+                  roles={roles}
+                  fields={fields}
+                  onRoleChange={(role, value) => setRoleOverride((current) => ({ ...current, [role]: value }))}
+                  currency={currency}
+                />
+              )}
+              {tab === 'distribution' && <DistributionTab trades={filtered} currency={currency} />}
+              {tab === 'compare' && <CompareTab trades={comparable} range={range} currency={currency} />}
+            </Suspense>
+          )}
+        </AnalyticsBoundary>
       </div>
-
-      {showMonthly && (
-        <div className="border-t border-zinc-300 p-5 sm:p-6 dark:border-white/[0.12]">
-          <MonthlyPnl months={stats.monthly} currency={currency} />
-        </div>
-      )}
-
-      {excluded.length > 0 && (
-        <p className="border-t border-zinc-300 px-5 py-3 text-[11px] text-zinc-600 sm:px-6 dark:border-white/[0.12] dark:text-zinc-400">
-          Not counted in these statistics: {excluded.join(', ')}.
-        </p>
-      )}
     </div>
   )
 }

@@ -435,6 +435,8 @@ function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades,
         <Suspense fallback={<AnalysisLoading />}>
           <TradeAnalysis
             trades={visibleTrades}
+            allTrades={allTrades ?? []}
+            range={range}
             currency={currency}
             rangeLabel={isFiltered ? describeRangeInline(range) : null}
             mode={journal.mode}

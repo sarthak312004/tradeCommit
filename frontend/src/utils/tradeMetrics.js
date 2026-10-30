@@ -183,32 +183,12 @@ const computeMonthly = (closed) => {
     .map((bucket) => ({ ...bucket, winRate: bucket.trades ? bucket.wins / bucket.trades : null }))
 }
 
-/* --------------------------- summaries -------------------------- */
-
-const summarise = (closed) => {
-  const pnls = closed.map((item) => item.pnl)
-  const wins = pnls.filter((value) => value > 0)
-  const losses = pnls.filter((value) => value < 0)
-  const grossLoss = Math.abs(sum(losses))
-  return {
-    count: closed.length,
-    wins: wins.length,
-    losses: losses.length,
-    netPnl: sum(pnls),
-    avgPnl: closed.length ? sum(pnls) / closed.length : null,
-    winRate: closed.length ? wins.length / closed.length : null,
-    profitFactor: grossLoss > 0 ? sum(wins) / grossLoss : sum(wins) > 0 ? Infinity : null
-  }
-}
-
 /**
- * Everything the analysis tab needs, derived from a list of trades.
- * Only closed trades (an exit price and a computable P&L) count towards P&L metrics.
+ * Closed-trade records (pnl, r, risk, dateKey) in chronological order. Open and incomplete trades are dropped.
+ * Shared by every breakdown so they all agree on what "a closed trade" is.
  */
-export const computeAnalytics = (trades) => {
-  const list = Array.isArray(trades) ? trades.filter(Boolean) : []
-
-  const closed = list
+export const getClosedRecords = (trades) =>
+  (Array.isArray(trades) ? trades.filter(Boolean) : [])
     .map((trade, index) => ({
       trade,
       index,
@@ -229,6 +209,56 @@ export const computeAnalytics = (trades) => {
       return a.index - b.index
     })
 
+/* --------------------------- summaries -------------------------- */
+
+/**
+ * Compact statistics for any subset of closed records (a weekday, an instrument, a setup, a side...).
+ * `closed` must already be in chronological order (getClosedRecords guarantees it).
+ */
+export const summariseClosed = (closed) => {
+  const pnls = closed.map((item) => item.pnl)
+  const wins = pnls.filter((value) => value > 0)
+  const losses = pnls.filter((value) => value < 0)
+  const grossProfit = sum(wins)
+  const grossLoss = Math.abs(sum(losses))
+  const rValues = closed.map((item) => item.r).filter((value) => value !== null)
+  let running = 0
+  let peak = 0
+  let maxDrawdown = 0
+  for (const value of pnls) {
+    running += value
+    peak = Math.max(peak, running)
+    maxDrawdown = Math.max(maxDrawdown, peak - running)
+  }
+  return {
+    count: closed.length,
+    wins: wins.length,
+    losses: losses.length,
+    netPnl: sum(pnls),
+    avgPnl: closed.length ? sum(pnls) / closed.length : null,
+    winRate: closed.length ? wins.length / closed.length : null,
+    avgWin: wins.length ? grossProfit / wins.length : null,
+    avgLoss: losses.length ? grossLoss / losses.length : null,
+    profitFactor: grossLoss > 0 ? grossProfit / grossLoss : grossProfit > 0 ? Infinity : null,
+    avgR: rValues.length ? sum(rValues) / rValues.length : null,
+    rSample: rValues.length,
+    bestTrade: closed.length ? Math.max(...pnls) : null,
+    worstTrade: closed.length ? Math.min(...pnls) : null,
+    maxDrawdown
+  }
+}
+
+const summarise = summariseClosed
+
+/**
+ * Everything the analysis tab needs, derived from a list of trades.
+ * Only closed trades (an exit price and a computable P&L) count towards P&L metrics.
+ */
+export const computeAnalytics = (trades) => {
+  const list = Array.isArray(trades) ? trades.filter(Boolean) : []
+
+  const closed = getClosedRecords(list)
+
   const openTrades = list.filter(isOpenTrade).length
   // has an exit price but entry/quantity are unusable, so no P&L can be trusted
   const incompleteTrades = list.length - closed.length - openTrades
@@ -244,12 +274,12 @@ export const computeAnalytics = (trades) => {
   let running = 0
   let peak = 0
   let maxDrawdown = 0
-  const equity = [{ index: 0, value: 0, label: 'Start', trade: null }]
+  const equity = [{ index: 0, value: 0, label: 'Start', trade: null, drawdown: 0 }]
   closed.forEach((item, position) => {
     running += item.pnl
     peak = Math.max(peak, running)
     maxDrawdown = Math.max(maxDrawdown, peak - running)
-    equity.push({ index: position + 1, value: running, label: item.dateKey, trade: item.trade, pnl: item.pnl })
+    equity.push({ index: position + 1, value: running, label: item.dateKey, trade: item.trade, pnl: item.pnl, drawdown: peak - running })
   })
   const currentDrawdown = Math.max(0, peak - running)
 

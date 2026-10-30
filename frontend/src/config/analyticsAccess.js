@@ -2,7 +2,9 @@
  * Analytics feature access: the ONE place that decides which metrics a plan may see.
  *
  * Calculation lives in utils/tradeMetrics.js and knows nothing about plans.
- * The UI asks `canViewMetric(metricId, plan)` before rendering a metric.
+ * The UI asks `canViewMetric(metricId, plan)` before rendering a metric. Whole sections go through
+ * <MetricGate> (components/rightContainer/journal/analytics/MetricGate.jsx), so no component
+ * checks a plan on its own.
  *
  * Today every metric is free and enforcement is OFF. To restrict a metric later:
  *   1. set its tier below to 'pro' (or any tier listed in PLAN_RANK),
@@ -36,7 +38,23 @@ export const METRIC_ACCESS = {
   maxDrawdown: 'free',
   recoveryFactor: 'free',
   streaks: 'free',
-  riskConsistency: 'free'
+  riskConsistency: 'free',
+  // performance breakdowns
+  dayOfWeek: 'free',
+  timeOfDay: 'free',
+  holdingDuration: 'free',
+  monthlyHeatmap: 'free',
+  strategyBreakdown: 'free',
+  instrumentBreakdown: 'free',
+  setupBreakdown: 'free',
+  longShortDetail: 'free',
+  rangeComparison: 'free',
+  // advanced visualizations
+  drawdownChart: 'free',
+  pnlDistribution: 'free',
+  rMultipleDistribution: 'free',
+  // filters
+  analyticsFilters: 'free'
 }
 
 /** Whether `plan` may see `metricId`. Unknown metrics default to the strictest known tier, never silently open. */
