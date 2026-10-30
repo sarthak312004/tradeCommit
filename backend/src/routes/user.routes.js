@@ -22,8 +22,6 @@ import {
   googleLogin,
   loginUser,
   logoutUser,
-  sendSignupOtp,
-  verifySignupOtp,
 } from "../controllers/user.controller.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 import { upload } from "../middlewares/multer.middleware.js";
@@ -32,12 +30,11 @@ const router = Router()
 
 router.get("/config", getAuthConfig)
 router.get("/check", verifyJWT, checkAuthStatus)
-router.post("/signup/send-otp", sendSignupOtp)
-router.post("/signup/verify-otp", verifySignupOtp)
 router.post("/login", loginUser)
 // log in with an emailed code instead of a password
 router.post("/login/send-otp", sendLoginOtp)
 router.post("/login/verify-otp", verifyLoginOtp)
+// Google is both log in and sign up (creates the account on first use)
 router.post("/google", googleLogin)
 router.post("/logout", verifyJWT, logoutUser)
 

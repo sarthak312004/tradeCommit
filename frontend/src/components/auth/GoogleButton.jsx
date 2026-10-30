@@ -54,7 +54,7 @@ function GoogleLogo() {
 }
 
 /**
- * "Sign in with Google" for the LOGIN form only (the backend does not create accounts from Google).
+ * "Continue with Google": logs in, or creates the account on first use (the backend decides).
  *
  * The look is our own (same as the app's inputs and buttons). Google's real button is rendered on top of it,
  * invisible, so the click still goes through Google's official, policy-compliant button.
@@ -63,7 +63,7 @@ function GoogleLogo() {
  * @param {Function} onCredential  (idToken: string) => void
  * @param {boolean}  [disabled]    blocks the button while another request is running
  */
-export default function GoogleButton({ onCredential, disabled = false }) {
+export default function GoogleButton({ onCredential, disabled = false, label = "Sign in with Google", gisText = "signin_with", divider = true }) {
   const [clientId, setClientId] = useState(undefined) // undefined = still checking, null = Google sign-in is off
   const holderRef = useRef(null)
   const onCredentialRef = useRef(onCredential)
@@ -96,7 +96,7 @@ export default function GoogleButton({ onCredential, disabled = false }) {
         type: "standard",
         theme: "outline",
         size: "large",
-        text: "signin_with",
+        text: gisText,
         shape: "rectangular",
         width: Math.min(MAX_WIDTH, Math.round(holder.clientWidth) || MAX_WIDTH),
       })
@@ -124,7 +124,7 @@ export default function GoogleButton({ onCredential, disabled = false }) {
       window.removeEventListener("resize", onResize)
       if (activeHandler === handler) activeHandler = null
     }
-  }, [clientId])
+  }, [clientId, gisText])
 
   if (clientId === null) return null
 
@@ -139,17 +139,17 @@ export default function GoogleButton({ onCredential, disabled = false }) {
             className="pointer-events-none absolute inset-0 flex items-center justify-center gap-2.5 rounded-md border border-zinc-300/80 bg-white text-sm font-medium text-zinc-800 shadow-sm transition-colors group-hover:bg-zinc-50 dark:border-white/10 dark:bg-[#202020] dark:text-zinc-100 dark:group-hover:bg-[#262626]"
           >
             <GoogleLogo />
-            Sign in with Google
+            {label}
           </div>
           {/* Google's own button, stretched over ours and invisible: it receives the click */}
           <div ref={holderRef} className="absolute inset-0 z-10 overflow-hidden opacity-[0.01]" />
         </div>
       )}
-      <div className="my-5 flex items-center gap-3 text-xs text-zinc-400 dark:text-zinc-500" aria-hidden="true">
+      {divider && <div className="my-5 flex items-center gap-3 text-xs text-zinc-400 dark:text-zinc-500" aria-hidden="true">
         <span className="h-px flex-1 bg-zinc-300/70 dark:bg-white/[0.08]" />
         or
         <span className="h-px flex-1 bg-zinc-300/70 dark:bg-white/[0.08]" />
-      </div>
+      </div>}
     </>
   )
 }

@@ -1,25 +1,11 @@
 import crypto from "node:crypto";
-import { EmailVerification } from "../models/emailVerification.models.js";
 import { User } from "../models/user.models.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { isGoogleAuthConfigured, verifyGoogleCredential } from "../utils/googleAuth.js";
-import { sendOtpEmail } from "../utils/mailer.js";
 import { clearAuthCookies, setAuthCookies } from "../utils/authCookies.js";
 import { DEFAULT_HEADER_SCENE } from "../constants/headerBackdrop.js";
-import {
-  OTP_LENGTH,
-  OTP_MAX_ATTEMPTS,
-  OTP_RESEND_COOLDOWN_MS,
-  buildOtpRecord,
-  canSendOtp,
-  generateOtp,
-  isOtpMatch,
-  retryAfterSeconds,
-} from "../utils/otp.js";
-
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const normalizeEmail = (email) => (typeof email === "string" ? email.trim().toLowerCase() : "");
 
@@ -42,7 +28,6 @@ export const sendSession = async (res, user, statusCode, message) => {
 };
 
 export const USERNAME_PATTERN = /^[a-z0-9_]{3,20}$/;
-const PURGE_GRACE_MS = 5 * 60 * 1000; // keep a spent code row a little longer than the code itself
 
 // GET /api/v1/auth/config  (tells the login page whether to show the Google button)
 export const getAuthConfig = asyncHandler(async (req, res) => {
@@ -51,13 +36,12 @@ export const getAuthConfig = asyncHandler(async (req, res) => {
   );
 });
 
-// ---- Sign-up is two steps: email, then the emailed code. No form, no password, no username ----------
-//   1. POST /auth/signup/send-otp    { email }        -> emails a 6-digit code
-//   2. POST /auth/signup/verify-otp  { email, otp }   -> accepts the code, creates the account if needed, logs in
-// The name is taken from the email address and the username is generated from it; the password is optional.
-// All of it can be edited later in the Profile section.
+// ---- Sign-up is Google only: one click, no form, no emailed code, no password ----------------------
+//   POST /auth/google { credential }  -> logs in the existing account, or creates one on the first Google sign-in.
+// Name and username come from the Google profile (both editable later in the Profile section);
+// the password is optional and is set later through the existing emailed-code flow.
 
-// "sarthak.kumar92+trading@gmail.com" -> "Sarthak Kumar". Empty when nothing name-like is in the address.
+// "sarthak.kumar92+trading@gmail.com" -> "Sarthak Kumar". Fallback when Google sends no display name.
 const nameFromEmail = (email) => {
   const words = email
     .split("@")[0]
@@ -79,18 +63,21 @@ const generateUsername = (fullname, email) => {
   return `${base}_${crypto.randomBytes(3).toString("hex")}`;
 };
 
+const cleanGoogleName = (name) => (typeof name === "string" ? name.replace(/\s+/g, " ").trim().slice(0, 80) : "");
+
 /**
- * Creates the account for an email whose ownership was just proven, or returns the account that already exists.
- * The unique email index makes this safe when two requests race: the loser's insert fails and it reads the winner's user.
+ * Creates the account for a Google-verified email. The unique email and googleId indexes make this safe when two
+ * requests race: the loser's insert fails with a duplicate-key error and it returns the winner's user instead.
  */
-const findOrCreateVerifiedUser = async (email) => {
-  const fullname = nameFromEmail(email); // a starting point: the user can correct it in the Profile section
+const createGoogleUser = async (profile) => {
+  const fullname = cleanGoogleName(profile.name) || nameFromEmail(profile.email);
   for (let attempt = 0; attempt < 5; attempt += 1) {
     try {
       const user = await User.create({
-        username: generateUsername(fullname, email),
+        username: generateUsername(fullname, profile.email),
         fullname,
-        email,
+        email: profile.email,
+        googleId: profile.googleId,
         emailVerified: true,
         onboardingCompleted: false,
         headerBackdrop: { mode: "scene", scene: DEFAULT_HEADER_SCENE, imageUrl: null },
@@ -99,98 +86,14 @@ const findOrCreateVerifiedUser = async (email) => {
     } catch (error) {
       if (error?.code !== 11000) throw error;
       if (error.keyPattern?.username) continue; // generated name collided: draw another one
-      const existing = await User.findOne({ email });
+      const existing =
+        (await User.findOne({ googleId: profile.googleId })) ?? (await User.findOne({ email: profile.email }));
       if (existing) return { user: existing, created: false };
       throw error;
     }
   }
   throw new ApiError(503, "Could not create your account right now. Please try again.");
 };
-
-// POST /api/v1/auth/signup/send-otp  (also used by "Resend code")
-export const sendSignupOtp = asyncHandler(async (req, res) => {
-  const email = normalizeEmail(req.body?.email);
-  if (!EMAIL_PATTERN.test(email)) throw new ApiError(400, "Enter a valid email address");
-
-  const existing = await User.findOne({ email }).select("emailVerified");
-  if (existing && existing.emailVerified !== false) {
-    throw new ApiError(409, "An account with this email already exists. Log in instead.");
-  }
-  // an unverified leftover from the old register flow must not block the real owner of the address
-  if (existing) await User.deleteOne({ _id: existing._id });
-
-  const pending = await EmailVerification.findOne({ email }).select("sentAt");
-  if (pending && !canSendOtp(pending)) {
-    // a code went out a moment ago: don't send another, just tell the client how long to wait
-    return res
-      .status(200)
-      .json(new ApiResponse(200, { email, sent: false, retryAfter: retryAfterSeconds(pending) }, "A code was just sent"));
-  }
-
-  const otp = generateOtp();
-  const record = buildOtpRecord(otp, email);
-  await EmailVerification.findOneAndUpdate(
-    { email },
-    {
-      $set: { ...record, purgeAt: new Date(record.expiresAt.getTime() + PURGE_GRACE_MS) },
-    },
-    { upsert: true }
-  );
-
-  try {
-    await sendOtpEmail({ to: email, otp });
-  } catch (error) {
-    await EmailVerification.deleteOne({ email }); // no cooldown for an email that never left
-    throw error;
-  }
-
-  return res
-    .status(200)
-    .json(new ApiResponse(200, { email, sent: true, retryAfter: Math.ceil(OTP_RESEND_COOLDOWN_MS / 1000) }, "Verification code sent"));
-});
-
-// POST /api/v1/auth/signup/verify-otp  { email, otp }  -> account created (or found) + logged in
-export const verifySignupOtp = asyncHandler(async (req, res) => {
-  const email = normalizeEmail(req.body?.email);
-  const raw = req.body?.otp;
-  const code = typeof raw === "string" || typeof raw === "number" ? String(raw).trim() : "";
-
-  if (!email) throw new ApiError(400, "Email is required");
-  if (!new RegExp(`^\\d{${OTP_LENGTH}}$`).test(code)) {
-    throw new ApiError(400, `Enter the ${OTP_LENGTH}-digit code`);
-  }
-
-  const record = await EmailVerification.findOne({ email });
-  if (!record?.hash) {
-    throw new ApiError(400, "Invalid or expired code. Request a new one.");
-  }
-  if (new Date(record.expiresAt).getTime() <= Date.now()) {
-    throw new ApiError(400, "This code has expired. Request a new one.");
-  }
-  if ((record.attempts ?? 0) >= OTP_MAX_ATTEMPTS) {
-    throw new ApiError(429, "Too many incorrect attempts. Request a new code.");
-  }
-  if (!isOtpMatch(code, email, record.hash)) {
-    await EmailVerification.updateOne({ _id: record._id }, { $inc: { attempts: 1 } });
-    throw new ApiError(400, "Incorrect code. Please try again.");
-  }
-
-  // Consume the code. Matching on the stored hash makes it single-use even if two requests race:
-  // only one of them deletes the row, the other is told the code is no longer valid.
-  const consumed = await EmailVerification.findOneAndDelete({ _id: record._id, hash: record.hash });
-  if (!consumed) throw new ApiError(400, "Invalid or expired code. Request a new one.");
-
-  // The code proves the address is theirs, so this is the only place a sign-up produces a session.
-  const { user, created } = await findOrCreateVerifiedUser(email);
-
-  if (!created && user.emailVerified === false) {
-    // an old half-finished signup: the code proves the address, so finish it and drop its unconfirmed password
-    user.emailVerified = true;
-    user.password = undefined;
-  }
-
-  return sendSession(res, user, created ? 201 : 200, created ? "Account created" : "Logged in with email code");
-});
 
 // POST /api/v1/auth/login
 export const loginUser = asyncHandler(async (req, res) => {
@@ -222,32 +125,42 @@ export const loginUser = asyncHandler(async (req, res) => {
   return sendSession(res, user, 200, "User logged in successfully");
 });
 
-// POST /api/v1/auth/google  { credential }  -> LOGIN ONLY. Accounts are created through the email-code sign-up.
+// POST /api/v1/auth/google  { credential }  -> log in, or sign up when no account exists for this Google account/email
 export const googleLogin = asyncHandler(async (req, res) => {
   const { credential } = req.body ?? {};
   if (typeof credential !== "string" || !credential) throw new ApiError(400, "Google credential is required");
 
-  const profile = await verifyGoogleCredential(credential);
+  const profile = await verifyGoogleCredential(credential); // email is lower-cased and Google-verified
 
-  const user = await User.findOne({ $or: [{ googleId: profile.googleId }, { email: profile.email }] });
+  // 1) the same Google account, 2) an existing email account (the email is unique, so never a second account)
+  let user = await User.findOne({ googleId: profile.googleId });
+  if (!user) user = await User.findOne({ email: profile.email });
+
+  let created = false;
   if (!user) {
-    throw new ApiError(404, "No account found for this Google email. Create an account with your email first.");
+    ({ user, created } = await createGoogleUser(profile));
   }
 
-  let changed = false;
-  if (!user.googleId) {
-    user.googleId = profile.googleId; // existing email account: link it (Google has verified the address)
-    changed = true;
+  if (!created) {
+    if (user.googleId && user.googleId !== profile.googleId) {
+      // same email, different Google account (e.g. a reassigned address): never merge them
+      throw new ApiError(409, "This email is linked to a different Google account.");
+    }
+    let changed = false;
+    if (!user.googleId) {
+      user.googleId = profile.googleId; // existing email account: link it (Google has verified the address)
+      changed = true;
+    }
+    if (user.emailVerified === false) {
+      // an old half-finished signup: Google proves the address, so finish it and drop its unconfirmed password
+      user.emailVerified = true;
+      user.password = undefined;
+      changed = true;
+    }
+    if (changed) await user.save({ validateBeforeSave: false });
   }
-  if (user.emailVerified === false) {
-    // an old half-finished signup: Google proves the address, so finish it and drop its unconfirmed password
-    user.emailVerified = true;
-    user.password = undefined;
-    changed = true;
-  }
-  if (changed) await user.save({ validateBeforeSave: false });
 
-  return sendSession(res, user, 200, "Signed in with Google");
+  return sendSession(res, user, created ? 201 : 200, created ? "Account created with Google" : "Signed in with Google");
 });
 
 export const checkAuthStatus = asyncHandler(async (req, res) => {
