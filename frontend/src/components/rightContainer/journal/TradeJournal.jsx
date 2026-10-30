@@ -437,6 +437,7 @@ function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades,
             trades={visibleTrades}
             currency={currency}
             rangeLabel={isFiltered ? describeRangeInline(range) : null}
+            mode={journal.mode}
           />
         </Suspense>
       ) : tradeLayout === 'table' ? (

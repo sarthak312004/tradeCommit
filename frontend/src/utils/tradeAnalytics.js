@@ -1,57 +1,23 @@
 import { DEFAULT_CURRENCY, localeForCurrency } from './currencies'
+import { toDateKey } from './tradeMetrics'
 
 /* ------------------------------------------------------------------
- * Trade analytics helpers
- * Pure functions only: no React, no I/O. Everything is derived from the
- * raw trade fields (entry, exit, quantity, direction, stopLoss) so the
- * numbers never depend on the pre-formatted `pnl` string from the API.
+ * Trade analytics helpers.
+ * The calculation engine lives in ./tradeMetrics.js (pure, unit tested). It is re-exported
+ * here so existing imports keep working. This file adds list helpers and number formatting.
  * ------------------------------------------------------------------ */
 
-const toNumber = (value) => {
-  if (value === '' || value === null || value === undefined) return null
-  const parsed = Number(value)
-  return Number.isFinite(parsed) ? parsed : null
-}
-
-const isShort = (trade) => String(trade.direction ?? trade.side ?? '').toLowerCase() === 'short'
-
-/** Realised P&L in currency units. `null` while the trade is still open. */
-export const getTradePnl = (trade) => {
-  const entry = toNumber(trade.entryPrice ?? trade.entry)
-  const exit = toNumber(trade.exitPrice ?? trade.exit)
-  const quantity = toNumber(trade.quantity ?? trade.qty)
-  if (entry === null || exit === null || quantity === null) return null
-  return (exit - entry) * (isShort(trade) ? -1 : 1) * quantity
-}
-
-/**
- * Realised reward-to-risk (R multiple) = pnl / initial risk.
- * Needs a stop loss; returns `null` when it is missing or equals the entry.
- */
-export const getTradeR = (trade) => {
-  const pnl = getTradePnl(trade)
-  const entry = toNumber(trade.entryPrice ?? trade.entry)
-  const stop = toNumber(trade.stopLoss)
-  const quantity = toNumber(trade.quantity ?? trade.qty)
-  if (pnl === null || entry === null || stop === null || quantity === null) return null
-  const risk = Math.abs(entry - stop) * quantity
-  return risk > 0 ? pnl / risk : null
-}
-
-/* ---------------------------- dates ---------------------------- */
-
-const pad = (value) => String(value).padStart(2, '0')
-
-/** Local calendar day as YYYY-MM-DD. */
-export const dateKeyFromDate = (date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
-
-/** Normalises whatever the trade holds as `date` to YYYY-MM-DD, or `null`. */
-export const toDateKey = (value) => {
-  if (!value) return null
-  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10)
-  const parsed = new Date(value)
-  return Number.isNaN(parsed.getTime()) ? null : dateKeyFromDate(parsed)
-}
+export {
+  computeAnalytics,
+  dateKeyFromDate,
+  getTradePnl,
+  getTradeR,
+  getTradeRisk,
+  isOpenTrade,
+  sampleLevel,
+  toDateKey,
+  MIN_RELIABLE_SAMPLE
+} from './tradeMetrics'
 
 /** Keeps trades whose date falls inside [from, to] (both inclusive, both optional). */
 export const filterTradesByDate = (trades, { from = '', to = '' } = {}) => {
@@ -71,118 +37,6 @@ export const sortTradesNewestFirst = (trades) =>
     const byDate = String(toDateKey(b.date) ?? '').localeCompare(String(toDateKey(a.date) ?? ''))
     return byDate || String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? ''))
   })
-
-/* --------------------------- analytics -------------------------- */
-
-const sum = (values) => values.reduce((total, value) => total + value, 0)
-
-// longest consecutive run of `true` flags
-const longestRun = (flags) => {
-  let best = 0
-  let current = 0
-  for (const flag of flags) {
-    current = flag ? current + 1 : 0
-    if (current > best) best = current
-  }
-  return best
-}
-
-const summarise = (closed) => {
-  const pnls = closed.map((item) => item.pnl)
-  const wins = pnls.filter((value) => value > 0)
-  return {
-    count: closed.length,
-    netPnl: sum(pnls),
-    winRate: closed.length ? wins.length / closed.length : null
-  }
-}
-
-/**
- * Everything the analysis tab needs, derived from a list of trades.
- * Only closed trades (those with an exit price) count towards P&L metrics.
- */
-export const computeAnalytics = (trades) => {
-  const closed = trades
-    .map((trade, index) => ({
-      trade,
-      index,
-      pnl: getTradePnl(trade),
-      r: getTradeR(trade),
-      dateKey: toDateKey(trade.date) ?? ''
-    }))
-    .filter((item) => item.pnl !== null)
-    // Date is day-only; use creation time to order trades made on the same day.
-    .sort((a, b) => {
-      if (a.dateKey !== b.dateKey) return a.dateKey < b.dateKey ? -1 : 1
-      const aCreatedAt = Date.parse(a.trade.createdAt ?? '')
-      const bCreatedAt = Date.parse(b.trade.createdAt ?? '')
-      if (Number.isFinite(aCreatedAt) && Number.isFinite(bCreatedAt) && aCreatedAt !== bCreatedAt) {
-        return aCreatedAt - bCreatedAt
-      }
-      return a.index - b.index
-    })
-
-  const pnls = closed.map((item) => item.pnl)
-  const wins = pnls.filter((value) => value > 0)
-  const losses = pnls.filter((value) => value < 0)
-  const grossProfit = sum(wins)
-  const grossLoss = Math.abs(sum(losses))
-  const netPnl = sum(pnls)
-
-  // equity curve, anchored at 0 before the first closed trade
-  let running = 0
-  let peak = 0
-  let maxDrawdown = 0
-  const equity = [{ index: 0, value: 0, label: 'Start', trade: null }]
-  closed.forEach((item, position) => {
-    running += item.pnl
-    peak = Math.max(peak, running)
-    maxDrawdown = Math.max(maxDrawdown, peak - running)
-    equity.push({ index: position + 1, value: running, label: item.dateKey, trade: item.trade, pnl: item.pnl })
-  })
-
-  const rValues = closed.map((item) => item.r).filter((value) => value !== null)
-  const winR = closed.filter((item) => item.pnl > 0 && item.r !== null).map((item) => item.r)
-  const lossR = closed.filter((item) => item.pnl < 0 && item.r !== null).map((item) => item.r)
-  const avgWinR = winR.length ? sum(winR) / winR.length : null
-  const avgLossR = lossR.length ? Math.abs(sum(lossR) / lossR.length) : null // shown as a positive size
-  const expectancyR = rValues.length ? sum(rValues) / rValues.length : null
-  const avgWin = wins.length ? grossProfit / wins.length : null
-  const avgLoss = losses.length ? grossLoss / losses.length : null
-
-  const bySide = (side) => summarise(closed.filter((item) => (isShort(item.trade) ? 'short' : 'long') === side))
-
-  return {
-    totalTrades: trades.length,
-    closedTrades: closed.length,
-    wins: wins.length,
-    losses: losses.length,
-    openTrades: trades.length - closed.length,
-    netPnl,
-    winRate: closed.length ? wins.length / closed.length : null,
-    expectancy: closed.length ? netPnl / closed.length : null,
-    profitFactor: grossLoss > 0 ? grossProfit / grossLoss : grossProfit > 0 ? Infinity : null,
-    // Average R per trade is the EXPECTANCY in R. It is not a reward-to-risk ratio.
-    expectancyR,
-    avgRrr: expectancyR, // legacy name, same value as expectancyR
-    rrrSample: rValues.length,
-    avgWinR,
-    avgLossR,
-    // Reward-to-risk = average winner / average loser, both in R (needs stops on those trades)
-    rewardRisk: avgWinR !== null && avgLossR !== null && avgLossR > 0 ? avgWinR / avgLossR : null,
-    avgWin,
-    avgLoss,
-    payoffRatio: avgWin !== null && avgLoss !== null ? avgWin / avgLoss : null,
-    bestTrade: closed.length ? Math.max(...pnls) : null,
-    worstTrade: closed.length ? Math.min(...pnls) : null,
-    maxDrawdown,
-    winStreak: longestRun(pnls.map((value) => value > 0)),
-    lossStreak: longestRun(pnls.map((value) => value < 0)),
-    long: bySide('long'),
-    short: bySide('short'),
-    equity
-  }
-}
 
 /* -------------------------- formatting -------------------------- */
 

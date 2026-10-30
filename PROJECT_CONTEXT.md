@@ -230,6 +230,7 @@ Start with the relevant path below, then follow imports/callers only as needed.
 | Mentor unlock progress | `hooks/useMentorProgress.js`, `services/progressApi.js` | `routes/progress.routes.js`, `controllers/progress.controller.js`, `models/mentorProgress.models.js` |
 | Market search/quotes/news | `pages/MarketResearchPage.jsx`, `services/marketApi.js`, `hooks/useLivePrice.js` | `routes/market.routes.js`, `controllers/market.controller.js`, `utils/marketData.js` |
 | Feedback/bug report | `components/feedback/` | `routes/feedback.routes.js`, `controllers/feedback.controller.js` |
+| Analytics dashboard | `components/rightContainer/journal/TradeAnalysis.jsx`, `MonthlyPnl.jsx`, `EquityCurve.jsx` | none: computed client-side from the already-loaded, date-filtered trades of one journal (so live and backtest never mix). Engine: `frontend/src/utils/tradeMetrics.js` (pure, `npm test` in `frontend/`); formatting/re-exports: `utils/tradeAnalytics.js`; metric access: `frontend/src/config/analyticsAccess.js` (all `free`, `ENFORCE_METRIC_ACCESS = false`). Server twin for the AI mentor: `backend/src/utils/tradeStats.js` (keep definitions in sync) |
 | Rich text/images | `components/common/tiptap/`, `utils/richText.js`, `utils/imageUpload.js` | `middlewares/multer.middleware.js`, relevant controller, `utils/cloudinary.js`, `utils/richText.js` |
 
 ## 8. AI mentor workflow notes
