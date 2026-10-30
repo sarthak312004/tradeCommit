@@ -5,6 +5,8 @@ import { fetchPrefetched } from './utils/prefetch'
 import { SessionError, SessionLoading } from './components/common/SessionScreen'
 import ProductTour from './components/tour/ProductTour'
 import { journalContext } from './context/Context'
+import { DeepFocusProvider } from './context/DeepFocusProvider'
+import DeepFocusDock from './components/rightContainer/planner/DeepFocusDock'
 import { MOBILE_MEDIA_QUERY, useIsMobile } from './hooks/useMediaQuery'
 
 const AUTH_CHECK_TIMEOUT_MS = 60_000
@@ -120,6 +122,7 @@ function Home() {
   }
 
   return (
+    <DeepFocusProvider>
     <>
       <div className="fixed inset-0 flex overflow-hidden bg-canvas text-zinc-900 transition-colors duration-200 dark:bg-night dark:text-zinc-100">
         {isMobile && (
@@ -145,8 +148,10 @@ function Home() {
         </main>
       </div>
 
+      <DeepFocusDock />
       <ProductTour isSidebarOpen={navOpen} setIsSidebarOpen={setNavOpen} autoCloseSidebar={isMobile} onTourEnd={handleTourEnd} />
     </>
+    </DeepFocusProvider>
   )
 }
 

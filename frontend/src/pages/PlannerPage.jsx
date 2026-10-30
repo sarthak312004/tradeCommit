@@ -110,6 +110,7 @@ function PlannerWorkspace({ planner }) {
             plannerId={planner.id}
             plannerName={planner.name}
             plannerType={planner.type}
+            draftKey={planDraftKey}
             initialEntry={currentEntry}
             initialDate={formState.date}
             onSubmit={handleSubmit}

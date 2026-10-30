@@ -242,7 +242,7 @@ function SavedCard({ saved, isSaving, onReplace, onRemove }) {
  *
  * Props come straight from useFocusPreferences().
  */
-function MusicDialog({ preferences, isLoaded, loadError, isSaving, saveError, onSave, onRetryLoad, anchorRef, minimized, onMinimizedChange, onPlaybackChange }) {
+function MusicDialog({ preferences, isLoaded, loadError, isSaving, saveError, onSave, onRetryLoad, anchorRef, anchorHost, minimized, onMinimizedChange, onPlaybackChange }) {
   const dialogRef = useRef(null)
   const [position, setPosition] = useState({ top: 56, left: 0 })
   const [replacing, setReplacing] = useState(false)
@@ -274,7 +274,7 @@ function MusicDialog({ preferences, isLoaded, loadError, isSaving, saveError, on
       window.removeEventListener('resize', updatePosition)
       window.removeEventListener('scroll', updatePosition, true)
     }
-  }, [anchorRef, minimized])
+  }, [anchorRef, anchorHost, minimized])
 
   const onKeyDown = (event) => {
     if (event.key === 'Escape') {

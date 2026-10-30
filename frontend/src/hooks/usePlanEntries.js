@@ -21,32 +21,36 @@ export function usePlanEntries(plannerId) {
     }
   }, [plannerId])
 
-  const addEntry = useCallback((entry, prepare = async () => entry) => {
+  const addEntry = useCallback(async (entry, prepare = async () => entry) => {
     const pendingId = `pending-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
     setError('')
     setEntries((current) => [...current, { ...entry, id: pendingId, syncState: 'saving' }])
-    Promise.resolve()
-      .then(prepare)
-      .then((ready) => plannerApi.createEntry(plannerId, { ...entry, ...ready }))
-      .then((created) => setEntries((current) => current.map((item) => (item.id === pendingId ? created : item))))
-      .catch((saveError) => {
-        setEntries((current) => current.filter((item) => item.id !== pendingId))
-        setError(saveError.message || 'Could not save plan')
-      })
+    try {
+      const ready = await prepare()
+      const created = await plannerApi.createEntry(plannerId, { ...entry, ...ready })
+      setEntries((current) => current.map((item) => (item.id === pendingId ? created : item)))
+      return created
+    } catch (saveError) {
+      setEntries((current) => current.filter((item) => item.id !== pendingId))
+      setError(saveError.message || 'Could not save plan')
+      throw saveError
+    }
   }, [plannerId])
 
-  const updateEntry = useCallback((entryId, entry, prepare = async () => entry) => {
+  const updateEntry = useCallback(async (entryId, entry, prepare = async () => entry) => {
     const previous = entries.find((item) => item.id === entryId)
     setError('')
     setEntries((current) => current.map((item) => (item.id === entryId ? { ...item, ...entry, syncState: 'saving' } : item)))
-    Promise.resolve()
-      .then(prepare)
-      .then((ready) => plannerApi.updateEntry(plannerId, entryId, { ...entry, ...ready }))
-      .then((updated) => setEntries((current) => current.map((item) => (item.id === entryId ? updated : item))))
-      .catch((saveError) => {
-        if (previous) setEntries((current) => current.map((item) => (item.id === entryId ? previous : item)))
-        setError(saveError.message || 'Could not save plan')
-      })
+    try {
+      const ready = await prepare()
+      const updated = await plannerApi.updateEntry(plannerId, entryId, { ...entry, ...ready })
+      setEntries((current) => current.map((item) => (item.id === entryId ? updated : item)))
+      return updated
+    } catch (saveError) {
+      if (previous) setEntries((current) => current.map((item) => (item.id === entryId ? previous : item)))
+      setError(saveError.message || 'Could not save plan')
+      throw saveError
+    }
   }, [entries, plannerId])
 
   const removeEntry = useCallback(async (entryId) => {

@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useFocusTimer } from '../../../hooks/useFocusTimer'
 import { MAX_MINUTES, MIN_MINUTES, PRESET_MINUTES, formatClock, parseMinutes } from '../../../utils/focusTimer'
 
 const COLLAPSED_KEY = 'tradecommit.focusTimer.collapsed.v1'
+const POSITION_KEY = 'tradecommit.focusTimer.position.v1'
 const WIDE_SCREEN = 1500 // wide enough to leave the editor column untouched on the left
 
 // Progress colour follows the Deep Mode tint chosen in Focus settings.
@@ -26,6 +27,16 @@ const readCollapsed = () => {
     if (saved === '0') return false
   } catch { /* storage unavailable */ }
   return window.innerWidth < WIDE_SCREEN
+}
+
+const readPosition = () => {
+  try {
+    const saved = window.localStorage.getItem(POSITION_KEY)
+    if (!saved) return null
+    const position = JSON.parse(saved)
+    if (Number.isFinite(position.left) && Number.isFinite(position.top)) return position
+  } catch { /* storage unavailable or invalid */ }
+  return null
 }
 
 const surface = 'border border-stone-200/80 bg-[#fbfaf7]/90 text-stone-700 shadow-[0_10px_34px_rgba(73,81,67,0.07)] backdrop-blur-md dark:border-white/[0.08] dark:bg-[#171a17]/90 dark:text-stone-200 dark:shadow-black/30'
@@ -56,12 +67,53 @@ function ChevronIcon({ className = 'h-3.5 w-3.5' }) {
  *
  * @param {'sage'|'ocean'|'amber'} [theme]  Deep Mode tint, used for the progress bar
  */
-function FocusTimerPanel({ theme = 'sage' }) {
+function FocusTimerPanel({ theme = 'sage', placement = 'planner' }) {
   const timer = useFocusTimer()
   const { status, selectedMinutes, remainingMs, progress } = timer
-  const [collapsed, setCollapsed] = useState(readCollapsed)
+  const [collapsed, setCollapsed] = useState(() => placement === 'header' || readCollapsed())
+  const [position, setPosition] = useState(() => readPosition() ?? { left: 12, top: 80 })
+  const dragRef = useRef(null)
+  const didDragRef = useRef(false)
   const [customValue, setCustomValue] = useState('')
   const [customError, setCustomError] = useState('')
+
+  const startDrag = (event) => {
+    if (event.button !== 0) return
+    if (event.target.closest('button,input') && !collapsed) return
+    const panel = event.currentTarget.closest('[data-focus-timer]')
+    if (!panel) return
+    const rect = panel.getBoundingClientRect()
+    dragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      left: rect.left,
+      top: rect.top,
+      width: rect.width,
+      height: rect.height,
+    }
+    didDragRef.current = false
+    event.currentTarget.setPointerCapture(event.pointerId)
+  }
+
+  const moveDrag = (event) => {
+    const drag = dragRef.current
+    if (!drag || drag.pointerId !== event.pointerId) return
+    const deltaX = event.clientX - drag.startX
+    const deltaY = event.clientY - drag.startY
+    if (!didDragRef.current && Math.hypot(deltaX, deltaY) < 4) return
+    didDragRef.current = true
+    const nextPosition = {
+      left: Math.max(8, Math.min(window.innerWidth - drag.width - 8, drag.left + deltaX)),
+      top: Math.max(8, Math.min(window.innerHeight - drag.height - 8, drag.top + deltaY)),
+    }
+    setPosition(nextPosition)
+    try { window.localStorage.setItem(POSITION_KEY, JSON.stringify(nextPosition)) } catch { /* storage unavailable */ }
+  }
+
+  const endDrag = (event) => {
+    if (dragRef.current?.pointerId === event.pointerId) dragRef.current = null
+  }
 
   // only an explicit toggle is remembered, so opening on a phone never overwrites the desktop preference
   const toggleCollapsed = (next) => {
@@ -101,19 +153,35 @@ function FocusTimerPanel({ theme = 'sage' }) {
     }
   }
 
-  const position = 'absolute left-3 z-30 bottom-[4.75rem] md:bottom-auto md:top-14'
+  const wrapperClass = placement === 'header' ? 'relative' : 'fixed left-3 top-20 z-[65]'
+  const panelClass = placement === 'header'
+    ? 'absolute right-0 top-[calc(100%+8px)] z-[70]'
+    : 'fixed left-3 top-20 z-[65]'
+  const positionStyle = position
+    ? { position: 'fixed', left: `${position.left}px`, top: `${position.top}px`, zIndex: 70 }
+    : undefined
 
   if (collapsed) {
     return (
-      <div className={position}>
+      <div className={position ? 'fixed z-[70]' : wrapperClass} style={positionStyle} data-focus-timer>
         <style>{timerStyles}</style>
         <button
           type="button"
-          onClick={() => toggleCollapsed(false)}
+          onPointerDown={startDrag}
+          onPointerMove={moveDrag}
+          onPointerUp={endDrag}
+          onPointerCancel={endDrag}
+          onClick={() => {
+            if (didDragRef.current) {
+              didDragRef.current = false
+              return
+            }
+            toggleCollapsed(false)
+          }}
           aria-expanded="false"
           aria-label={`Open focus timer. ${statusLabel}${isLive ? `, ${clock} left` : ''}`}
           title="Focus timer"
-          className={`focus-timer-in ${surface} ${isDone ? 'focus-timer-done' : ''} inline-flex h-8 items-center gap-1.5 rounded-full px-2.5 text-xs transition-colors hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-400/60 dark:hover:bg-[#1d211d]`}
+          className={`focus-timer-in ${surface} ${isDone ? 'focus-timer-done' : ''} inline-flex h-8 items-center gap-1.5 rounded-full px-2.5 text-xs transition-colors hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-400/60 dark:hover:bg-[#1d211d] ${placement === 'floating' || position ? 'cursor-grab touch-none active:cursor-grabbing' : ''}`}
         >
           <ClockIcon />
           {isLive && <span className={`font-medium tabular-nums ${isPaused ? 'opacity-60' : ''}`}>{clock}</span>}
@@ -125,10 +193,16 @@ function FocusTimerPanel({ theme = 'sage' }) {
   }
 
   return (
-    <aside className={position} aria-label="Focus timer">
+    <aside className={panelClass} style={positionStyle} aria-label="Focus timer" data-focus-timer>
       <style>{timerStyles}</style>
       <div className={`focus-timer-in ${surface} ${isDone ? 'focus-timer-done' : ''} w-[min(13.5rem,calc(100vw-1.5rem))] rounded-2xl p-3`}>
-        <div className="flex items-center justify-between">
+        <div
+          className="flex cursor-grab touch-none items-center justify-between active:cursor-grabbing"
+          onPointerDown={startDrag}
+          onPointerMove={moveDrag}
+          onPointerUp={endDrag}
+          onPointerCancel={endDrag}
+        >
           <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-stone-500 dark:text-stone-400">
             <ClockIcon className="h-3 w-3" /> Focus timer
           </p>
