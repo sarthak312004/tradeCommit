@@ -21,6 +21,7 @@ import { useTradeCardFields } from '../../../hooks/useTradeCardFields'
 import { useTradeView } from '../../../hooks/useTradeView'
 import { SlidersIcon } from '../../../utils/Icons.jsx'
 import { loadTradeForm, preloadTradeForm } from '../../../utils/formLoaders'
+import { clearFormDraft, readFormDraft, writeFormDraft } from '../../../utils/formDraftStorage'
 import DialogSkeleton from '../../common/DialogSkeleton'
 
 // loaded on demand so the first paint ships less JavaScript
@@ -38,6 +39,8 @@ const VIEWS = [
   { id: 'calendar', label: 'Calendar', path: '/calendar' },
   { id: 'analysis', label: 'Analysis', path: '/analysis' }
 ]
+
+const tradeFormDraftKey = (journalId, tradeId) => `tradecommit:trade-form-draft:${journalId}:${tradeId ?? 'new'}`
 
 function AnalysisLoading() {
   return (
@@ -81,13 +84,20 @@ function AnalysisLoading() {
 }
 
 function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades, onOpenJournal, onAddTrade, onUpdateTrade, onDeleteTrade, onUploadTradeImage, onSaveContext, onRetryTrade, onDiscardTrade, onOpenCreateForm }) {
-  const [isFormOpen, setIsFormOpen] = useState(false)
-  const [editingTrade, setEditingTrade] = useState(null)
+  const tradeFormStateKey = journal?.id ? `tradecommit:open-trade-form:${journal.id}` : null
+  const contextFormStateKey = journal?.id ? `tradecommit:open-context-form:${journal.id}` : null
+  const [restoredTradeForm] = useState(() => readFormDraft(tradeFormStateKey))
+  const [isFormOpen, setIsFormOpen] = useState(() =>
+    Boolean(restoredTradeForm && (!restoredTradeForm.tradeId || journal?.trades?.some((trade) => trade.id === restoredTradeForm.tradeId)))
+  )
+  const [editingTrade, setEditingTrade] = useState(() =>
+    restoredTradeForm?.tradeId ? journal?.trades?.find((trade) => trade.id === restoredTradeForm.tradeId) ?? null : null
+  )
   const navigate = useNavigate()
   // date picked on the calendar for a new trade (null = form opens on today)
-  const [newTradeDate, setNewTradeDate] = useState(null)
+  const [newTradeDate, setNewTradeDate] = useState(() => restoredTradeForm?.date ?? null)
   const [range, setRange] = useState(ALL_TIME)
-  const [isContextOpen, setIsContextOpen] = useState(false)
+  const [isContextOpen, setIsContextOpen] = useState(() => readFormDraft(contextFormStateKey)?.open === true)
   const [isExportOpen, setIsExportOpen] = useState(false)
   const [isImportOpen, setIsImportOpen] = useState(false)
   const { profile } = useProfile()
@@ -148,6 +158,16 @@ function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades,
     setIsImportHintDismissed(true)
   }
 
+  useEffect(() => {
+    if (isFormOpen) writeFormDraft(tradeFormStateKey, { tradeId: editingTrade?.id ?? null, date: newTradeDate })
+    else clearFormDraft(tradeFormStateKey)
+  }, [tradeFormStateKey, isFormOpen, editingTrade, newTradeDate])
+
+  useEffect(() => {
+    if (isContextOpen) writeFormDraft(contextFormStateKey, { open: true })
+    else clearFormDraft(contextFormStateKey)
+  }, [contextFormStateKey, isContextOpen])
+
   // Start loading the form as soon as the journal is mounted, so an immediate first click is ready.
   useEffect(() => {
     preloadTradeForm()
@@ -184,21 +204,37 @@ function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades,
   const fieldChoices = useMemo(() => buildFieldChoices(customFieldOptions), [customFieldOptions])
 
   const handleOpenNewTrade = (date = null) => {
+    const selectedDate = typeof date === 'string' ? date : null
+    writeFormDraft(tradeFormStateKey, { open: true, tradeId: null, date: selectedDate })
     setEditingTrade(null)
-    setNewTradeDate(typeof date === 'string' ? date : null)
+    setNewTradeDate(selectedDate)
     setIsFormOpen(true)
   }
 
   const handleOpenEditTrade = (trade) => {
     if (trade.syncState) return // still saving, or failed: use the card's Retry / Discard instead
+    writeFormDraft(tradeFormStateKey, { open: true, tradeId: trade.id, date: null })
     setEditingTrade(trade)
     setIsFormOpen(true)
   }
 
   const handleCloseForm = () => {
+    clearFormDraft(tradeFormDraftKey(journal.id, editingTrade?.id))
+    clearFormDraft(tradeFormStateKey)
     setEditingTrade(null)
     setNewTradeDate(null)
     setIsFormOpen(false)
+  }
+
+  const handleOpenContext = () => {
+    writeFormDraft(contextFormStateKey, { open: true })
+    setIsContextOpen(true)
+  }
+
+  const handleCloseContext = () => {
+    clearFormDraft(contextFormStateKey)
+    clearFormDraft(`tradecommit:context-form-draft:${journal.id}`)
+    setIsContextOpen(false)
   }
 
   // The form closes right away. The card shows up (or updates) immediately and the save finishes in the
@@ -267,7 +303,7 @@ function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades,
 
           <button
             type="button"
-            onClick={() => setIsContextOpen(true)}
+            onClick={handleOpenContext}
             data-tour="journal-context"
             title="Strategy and default trade properties"
             className="flex h-8 cursor-pointer items-center gap-2 rounded-lg border border-zinc-300 bg-white px-2.5 text-xs font-medium text-zinc-700 shadow-sm transition-colors hover:bg-zinc-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/40 dark:border-white/[0.14] dark:bg-panel dark:text-zinc-200 dark:shadow-none dark:hover:bg-white/[0.06]"
@@ -339,7 +375,7 @@ function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades,
             context={journalContext}
             mode={journal.mode}
             onSave={(context, options) => onSaveContext(journal.id, context, options)}
-            onClose={() => setIsContextOpen(false)}
+            onClose={handleCloseContext}
           />
         </Suspense>
       )}
@@ -362,7 +398,7 @@ function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades,
             }}
             onOpenContext={() => {
               closeMentor()
-              setIsContextOpen(true)
+              handleOpenContext()
             }}
           />
         </Suspense>
@@ -393,6 +429,8 @@ function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades,
       {isFormOpen && (
         <Suspense fallback={null}>
           <TradeForm
+            key={editingTrade?.id ?? 'new-trade'}
+            journalId={journal.id}
             journalName={journal.name}
             currency={currency}
             templateFields={templateFields}
@@ -417,7 +455,7 @@ function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades,
         <FirstTradeCard
           journalName={journal.name}
           onAddTrade={handleOpenNewTrade}
-          onOpenContext={() => setIsContextOpen(true)}
+          onOpenContext={handleOpenContext}
           onCreate={onOpenCreateForm}
         />
       ) : visibleTrades.length === 0 ? (

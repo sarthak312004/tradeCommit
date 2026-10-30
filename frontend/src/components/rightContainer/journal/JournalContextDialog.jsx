@@ -20,6 +20,7 @@ import { ghostFooterButton, iconButtonClass } from '../../common/formStyles'
 import { cleanStrategy, richTextLength, strategyToHtml } from '../../../utils/richText'
 import { MOD_LABEL, useFormShortcuts } from '../../../hooks/useFormShortcuts'
 import BasicRichTextEditor from '../../common/BasicRichTextEditor'
+import { clearFormDraft, readFormDraft, writeFormDraft } from '../../../utils/formDraftStorage'
 
 const TYPE_ICONS = { text: TextIcon, number: HashIcon, date: CalendarIcon, checkbox: CheckSquareIcon }
 const TYPE_HINTS = { text: 'Free text', number: 'Numbers, e.g. 1.5', date: 'A calendar day', checkbox: 'Yes or no' }
@@ -276,17 +277,40 @@ function AddPropertyMenu({ disabled, onAdd }) {
  */
 function JournalContextDialog({ journalId, journalName, context, mode = "live", onSave, onClose }) {
   // the strategy is rich text: older journals hold plain text, which is turned into paragraphs once, here
-  const [initialStrategy] = useState(() => strategyToHtml(context?.strategy))
+  const draftKey = `tradecommit:context-form-draft:${journalId}`
+  const [savedDraft] = useState(() => readFormDraft(draftKey))
+  const initialStrategy = savedDraft?.strategy ?? strategyToHtml(context?.strategy)
   const [strategy, setStrategy] = useState(initialStrategy)
-  const [strategyLength, setStrategyLength] = useState(() => richTextLength(strategyToHtml(context?.strategy)))
-  const [journalMode, setJournalMode] = useState(mode === "backtest" ? "backtest" : "live")
+  const [strategyLength, setStrategyLength] = useState(() => richTextLength(initialStrategy))
+  const [journalMode, setJournalMode] = useState(savedDraft?.mode ?? (mode === "backtest" ? "backtest" : "live"))
   const [isWide, setIsWide] = useState(readWide)
-  const [attributes, setAttributes] = useState(() => (context?.attributes ?? []).map(toFormField))
+  const [attributes, setAttributes] = useState(() => savedDraft?.attributes ?? (context?.attributes ?? []).map(toFormField))
   const [focusKey, setFocusKey] = useState(null)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState('')
-  const [scope, setScope] = useState(() => readScope(journalId)) // 'all' = also update existing trades, 'future' = new trades only
+  const [scope, setScope] = useState(() =>
+    SCOPE_OPTIONS.some((option) => option.value === savedDraft?.scope) ? savedDraft.scope : readScope(journalId)
+  ) // 'all' = also update existing trades, 'future' = new trades only
   const dialogRef = useRef(null)
+  const draftTimerRef = useRef(null)
+
+  useEffect(() => {
+    const saveDraft = () => writeFormDraft(draftKey, { strategy, attributes, mode: journalMode, scope })
+    const scheduleSave = () => {
+      clearTimeout(draftTimerRef.current)
+      draftTimerRef.current = setTimeout(saveDraft, 200)
+    }
+    scheduleSave()
+    const flushSave = () => {
+      clearTimeout(draftTimerRef.current)
+      saveDraft()
+    }
+    window.addEventListener('pagehide', flushSave)
+    return () => {
+      window.removeEventListener('pagehide', flushSave)
+      clearTimeout(draftTimerRef.current)
+    }
+  }, [draftKey, strategy, attributes, journalMode, scope])
 
   // Take focus off the "Context" button that opened this dialog. Otherwise it stays focused underneath, and
   // pressing Esc turns the browser's keyboard-focus ring on for it, so it keeps glowing after the dialog closes.
@@ -306,6 +330,7 @@ function JournalContextDialog({ journalId, journalName, context, mode = "live", 
   const requestClose = () => {
     if (isSaving) return
     if (isDirty && !window.confirm('Discard your unsaved changes?')) return
+    clearFormDraft(draftKey)
     onClose()
   }
 
@@ -348,6 +373,7 @@ function JournalContextDialog({ journalId, journalName, context, mode = "live", 
     try {
       await onSave(toPayload(strategy, attributes), { applyToExisting: contextDirty && scope === 'all', mode: journalMode })
       rememberScope(journalId, scope)
+      clearFormDraft(draftKey)
       onClose()
     } catch (saveError) {
       setError(saveError instanceof TypeError ? "Can't reach the server. Check your connection and try again." : saveError.message || 'Could not save the context')

@@ -22,7 +22,7 @@ const EXPANDED_WIDTH = 1400 // clamped by max-w-full on small screens
  * Esc closes the drawer and Ctrl/Cmd + Enter submits it. Pass `canClose={false}` / `canSubmit={false}`
  * to switch those off while a request is running.
  */
-function FormDrawer({ ref, ariaTitle, breadcrumb, onSubmit, onClose, footer, children, canClose = true, canSubmit = true, deepMode = false, deepTheme = 'sage', headerExtra = null }) {
+function FormDrawer({ ref, ariaTitle, breadcrumb, onSubmit, onClose, footer, children, canClose = true, canSubmit = true, deepMode = false, deepTheme = 'sage', headerExtra = null, sidePanel = null }) {
   const [drawerWidth, setDrawerWidth] = useState(DEFAULT_WIDTH)
   const [expanded, setExpanded] = useState(false)
   const isFullScreen = deepMode || expanded
@@ -153,6 +153,8 @@ function FormDrawer({ ref, ariaTitle, breadcrumb, onSubmit, onClose, footer, chi
           {footer}
         </footer>
       </form>
+      {/* optional floating panel beside the form (outside it, so it can never submit the form) */}
+      {sidePanel}
     </div>
   )
 }

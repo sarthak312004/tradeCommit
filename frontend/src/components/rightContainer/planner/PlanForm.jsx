@@ -1,15 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
-import { useForm } from 'react-hook-form'
+import { useForm, useWatch } from 'react-hook-form'
 import FormDrawer from '../../common/FormDrawer'
 import PropertyRow from '../../common/PropertyRow'
 import ShortcutHint from '../../common/ShortcutHint'
 import DeferredEditor from '../../common/DeferredEditor'
+import FocusTimerPanel from './FocusTimerPanel'
 import { dateInputClass, ghostFooterButton, primaryFooterButton } from '../../common/formStyles'
 import { CalendarIcon } from '../../../utils/Icons.jsx'
 import { SlidersIcon } from '../../../utils/Icons.jsx'
 import { formatLongDate, todayKey } from '../../../utils/calendar'
 import { MOD_LABEL } from '../../../hooks/useFormShortcuts'
 import { useFocusPreferences } from '../../../hooks/useFocusPreferences'
+import { readFormDraft, writeFormDraft } from '../../../utils/formDraftStorage'
 
 const MAX_TITLE = 120
 const FOCUS_THEMES = [
@@ -58,21 +60,39 @@ const deepModeStyles = `
  * @param {Function} onUploadImage   (file) => Promise<url>
  * @param {object}   [carryForward]  { rule, planLine, checkpoint } the linked journal's latest mentor review asked the trader to apply
  */
-function PlanForm({ plannerName, plannerType, initialEntry = null, initialDate, onSubmit, onDelete, onClose, onUploadImage, carryForward = null }) {
+function PlanForm({ plannerId, plannerName, plannerType, initialEntry = null, initialDate, onSubmit, onDelete, onClose, onUploadImage, carryForward = null }) {
   const defaultDate = initialEntry?.date ?? initialDate ?? todayKey()
-  const { register, handleSubmit, watch, formState: { errors } } = useForm({
-    defaultValues: { title: initialEntry?.title ?? '', date: defaultDate }
+  const draftKey = `tradecommit:plan-form-draft:${plannerId}:${initialEntry?.id ?? 'new'}`
+  const [savedDraft] = useState(() => readFormDraft(draftKey))
+  const contentDraftRef = useRef(savedDraft?.content ?? initialEntry?.content ?? '')
+  const { register, handleSubmit, control, getValues, formState: { errors } } = useForm({
+    defaultValues: { title: initialEntry?.title ?? '', date: defaultDate, ...(savedDraft?.values ?? {}) }
   })
   const drawerRef = useRef(null)
   const editorRef = useRef(null)
   const [isSaving, setIsSaving] = useState(false)
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false)
   const [submitError, setSubmitError] = useState('')
-  const [deepMode, setDeepMode] = useState(false)
+  const [deepMode, setDeepMode] = useState(() => savedDraft?.deepMode === true)
   const [isFocusSettingsOpen, setIsFocusSettingsOpen] = useState(false)
   const focusSettingsRef = useRef(null)
   const focusSettingsButtonRef = useRef(null)
   const { preferences, isLoaded: areFocusPreferencesLoaded, loadError, isSaving: areFocusPreferencesSaving, saveError, savePreferences, retryLoad } = useFocusPreferences()
+
+  const formValues = useWatch({ control })
+
+  useEffect(() => {
+    const timer = setTimeout(() => writeFormDraft(draftKey, { values: formValues, content: contentDraftRef.current, deepMode }), 200)
+    return () => clearTimeout(timer)
+  }, [draftKey, formValues, deepMode])
+
+  useEffect(() => {
+    const flushSave = () => writeFormDraft(draftKey, { values: getValues(), content: contentDraftRef.current, deepMode })
+    window.addEventListener('pagehide', flushSave)
+    return () => {
+      window.removeEventListener('pagehide', flushSave)
+    }
+  }, [draftKey, getValues, deepMode])
 
   useEffect(() => {
     if (!isFocusSettingsOpen) return undefined
@@ -151,7 +171,7 @@ function PlanForm({ plannerName, plannerType, initialEntry = null, initialDate, 
     </div>
   )
 
-  const date = watch('date')
+  const date = formValues?.date ?? defaultDate
   const isBusy = isSaving
 
   const handleFormSubmit = async (values) => {
@@ -182,6 +202,8 @@ function PlanForm({ plannerName, plannerType, initialEntry = null, initialDate, 
       setIsSaving(false)
     }
   }
+
+  const submitForm = (event) => handleSubmit(handleFormSubmit)(event)
 
   const breadcrumb = (
     <>
@@ -233,6 +255,7 @@ function PlanForm({ plannerName, plannerType, initialEntry = null, initialDate, 
       breadcrumb={breadcrumb}
       deepMode={deepMode}
       deepTheme={preferences.focusTheme}
+      sidePanel={deepMode ? <FocusTimerPanel theme={preferences.focusTheme} /> : null}
       headerExtra={(
         <>
           {deepMode && focusSettingsControls}
@@ -245,7 +268,7 @@ function PlanForm({ plannerName, plannerType, initialEntry = null, initialDate, 
           </button>
         </>
       )}
-      onSubmit={handleSubmit(handleFormSubmit)}
+      onSubmit={submitForm}
       onClose={onClose}
       footer={footer}
       canClose={!isBusy}
@@ -311,9 +334,13 @@ function PlanForm({ plannerName, plannerType, initialEntry = null, initialDate, 
         ref={editorRef}
         id="plan-content"
         label="Trade plan"
-        initialHtml={initialEntry?.content ?? ''}
+        initialHtml={savedDraft?.content ?? initialEntry?.content ?? ''}
         placeholder="Levels, setups, entry & exit rules, risk, what would invalidate the idea…"
         onUploadImage={onUploadImage}
+        onChange={(html) => {
+          contentDraftRef.current = html
+          writeFormDraft(draftKey, { values: getValues(), content: html, deepMode })
+        }}
       />
     </FormDrawer>
     </>

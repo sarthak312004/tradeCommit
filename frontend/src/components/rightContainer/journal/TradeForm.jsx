@@ -13,6 +13,7 @@ import ShortcutHint from '../../common/ShortcutHint'
 import DeferredEditor from '../../common/DeferredEditor'
 import { useDrawerMotion } from '../../common/useDrawerMotion'
 import SymbolSuggestions from './SymbolSuggestions'
+import { clearFormDraft, readFormDraft, writeFormDraft } from '../../../utils/formDraftStorage'
 
 // built when the form opens, in local time (UTC would show yesterday for Indian users before 5:30 am)
 const getDefaultValues = () => ({
@@ -150,7 +151,11 @@ function Flash({ pulse, children }) {
 }
 
 //---------------------Main Form-------------
-function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = [], initialTrade = null, initialDate = null, onSubmit, onClose, onUploadImage, respectReducedMotion = false }) {
+function TradeForm({ journalId, journalName, currency = DEFAULT_CURRENCY, templateFields = [], initialTrade = null, initialDate = null, onSubmit, onClose, onUploadImage, respectReducedMotion = false }) {
+  const draftKey = `tradecommit:trade-form-draft:${journalId}:${initialTrade?.id ?? 'new'}`
+  const [savedDraft] = useState(() => readFormDraft(draftKey))
+  const analysisDraftRef = useRef(savedDraft?.analysis ?? initialTrade?.analysis ?? '')
+  const [draftReady, setDraftReady] = useState(false)
   const [drawerWidth, setDrawerWidth] = useState(DEFAULT_WIDTH)
   const [expanded, setExpanded] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
@@ -229,8 +234,23 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
     qtyManualRef.current = Boolean(initialTrade)
     qtyFromMemoryRef.current = false
     autoStopRef.current = null
-    reset(formValues)
-  }, [initialTrade, initialDate, reset])
+    reset({ ...formValues, ...(savedDraft?.values ?? {}) })
+    setDraftReady(true)
+  }, [initialTrade, initialDate, reset, savedDraft])
+
+  useEffect(() => {
+    if (!draftReady) return undefined
+    const timer = setTimeout(() => writeFormDraft(draftKey, { values: live, analysis: analysisDraftRef.current }), 200)
+    return () => clearTimeout(timer)
+  }, [draftKey, draftReady, live])
+
+  useEffect(() => {
+    const flushSave = () => writeFormDraft(draftKey, { values: getValues(), analysis: analysisDraftRef.current })
+    window.addEventListener('pagehide', flushSave)
+    return () => {
+      window.removeEventListener('pagehide', flushSave)
+    }
+  }, [draftKey, getValues])
 
   const flash = (...names) => {
     setFlashed((previous) => ({ ...previous, ...Object.fromEntries(names.map((name) => [name, (previous[name] ?? 0) + 1])) }))
@@ -410,6 +430,7 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
   // slide-out, then let the parent unmount the form
   const requestClose = () => {
     if (closeTimerRef.current) return
+    clearFormDraft(draftKey)
     slideOut()
     closeTimerRef.current = setTimeout(() => {
       closeTimerRef.current = null
@@ -850,9 +871,13 @@ function TradeForm({ journalName, currency = DEFAULT_CURRENCY, templateFields = 
               ref={editorRef}
               id="trade-analysis"
               label="Trade analysis"
-              initialHtml={initialTrade?.analysis ?? ''}
+              initialHtml={savedDraft?.analysis ?? initialTrade?.analysis ?? ''}
               placeholder="What did you see? What did you do? What would you change next time?"
               onUploadImage={onUploadImage}
+              onChange={(html) => {
+                analysisDraftRef.current = html
+                writeFormDraft(draftKey, { values: getValues(), analysis: html })
+              }}
             />
           </div>
         </div>
