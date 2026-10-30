@@ -1,4 +1,4 @@
-// Pure state machine for the Deep Planning Mode focus timer, separate from React.
+// Pure state machine for the Deep Planning Mode focus timer.
 //
 // The timer never counts ticks. A running session stores the wall-clock moment it ends (`endAt`), and the
 // remaining time is always `endAt - now`, so throttled background tabs, slow renders and page refreshes can't

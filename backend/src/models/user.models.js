@@ -104,6 +104,8 @@ const userSchema = new mongoose.Schema(
         },
         focusPreferences:{
             spotifyUrl:{ type:String, default:"" },
+            musicProvider:{ type:String, enum:["","spotify","youtube"], default:"" },
+            youtubeUrl:{ type:String, default:"" },
             focusTheme:{ type:String, enum:["sage","ocean","amber"], default:"sage" }
         },
         refreshToken:{

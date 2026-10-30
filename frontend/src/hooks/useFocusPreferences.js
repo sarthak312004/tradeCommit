@@ -1,11 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { getProfile, saveFocusPreferences } from '../services/profileApi'
 
-const DEFAULT_PREFERENCES = { spotifyUrl: '', focusTheme: 'sage' }
+const DEFAULT_PREFERENCES = { spotifyUrl: '', youtubeUrl: '', musicProvider: '', focusTheme: 'sage' }
 const FOCUS_THEMES = new Set(['sage', 'ocean', 'amber'])
 
+// One saved playlist per account: `musicProvider` says which of the two links is active (mirrors toMusicPreferences on the server).
+const normalizeMusic = (saved) => {
+  const spotifyUrl = typeof saved?.spotifyUrl === 'string' ? saved.spotifyUrl : ''
+  const youtubeUrl = typeof saved?.youtubeUrl === 'string' ? saved.youtubeUrl : ''
+  let musicProvider = saved?.musicProvider === 'spotify' || saved?.musicProvider === 'youtube' ? saved.musicProvider : ''
+  if (musicProvider === 'spotify' && !spotifyUrl) musicProvider = ''
+  if (musicProvider === 'youtube' && !youtubeUrl) musicProvider = ''
+  if (!musicProvider && spotifyUrl) musicProvider = 'spotify'
+  return { musicProvider, spotifyUrl: musicProvider === 'youtube' ? '' : spotifyUrl, youtubeUrl: musicProvider === 'youtube' ? youtubeUrl : '' }
+}
+
 const normalizePreferences = (saved) => ({
-  spotifyUrl: typeof saved?.spotifyUrl === 'string' ? saved.spotifyUrl : '',
+  ...normalizeMusic(saved),
   focusTheme: FOCUS_THEMES.has(saved?.focusTheme) ? saved.focusTheme : 'sage',
 })
 

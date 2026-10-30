@@ -177,7 +177,7 @@ AI
 
 | Model | File | Main data |
 |---|---|---|
-| `User` | `user.models.js` | username (unique; auto-generated at signup), email, fullname (optional, default `""`), password hash (optional: passwordless accounts have none), Google ID, email/onboarding flags, OTP/reset subdocuments, passwordChangedAt, headerBackdrop, focusPreferences, refreshToken |
+| `User` | `user.models.js` | username (unique; auto-generated at signup), email, fullname (optional, default `""`), password hash (optional: passwordless accounts have none), Google ID, email/onboarding flags, OTP/reset subdocuments, passwordChangedAt, headerBackdrop, focusPreferences (`focusTheme` + one saved Deep Mode playlist: `musicProvider` `spotify`/`youtube`, `spotifyUrl`, `youtubeUrl`), refreshToken |
 | `Journal` | `journal.models.js` | journalName, description, mode (`live`/`backtest`), immutable currency, context strategy + custom attributes, owner |
 | `Trade` | `trade.models.js` | date, assetName, quantity, direction (`long`/`short`), entryPrice, optional exitPrice/stopLoss, sanitized analysis HTML, images, customFields, owner, journal |
 | `Planner` | `planner.models.js` | name, type, optional linkedJournal, owner |
@@ -220,6 +220,7 @@ Start with the relevant path below, then follow imports/callers only as needed.
 |---|---|---|
 | Auth/signup/login/OTP | `pages/AuthPage.jsx`, `components/auth/` | `routes/user.routes.js`, `controllers/user.controller.js`, `loginOtp.controller.js`, `forgotPassword.controller.js`, `middlewares/auth.middleware.js` |
 | Profile/preferences/header image | `hooks/useProfile.js`, `components/profile/` | `routes/user.routes.js`, `controllers/profile.controller.js` |
+| Deep Mode focus timer + music | `components/rightContainer/planner/PlanForm.jsx` (header button, `sidePanel`), `FocusTimerPanel.jsx` + `hooks/useFocusTimer.js` + `utils/focusTimer.js` (timer: wall-clock end time in localStorage, no API), `MusicDialog.jsx` + `hooks/useYouTubePlayer.js` + `utils/musicLinks.js` (music; Spotify plain embed, YouTube IFrame API, no OAuth), `hooks/useFocusPreferences.js` | `PUT /auth/focus-preferences` (`verifyJWT`, writes only `req.user._id`) → `profile.controller.js` `setFocusPreferences`; links validated/canonicalized by `utils/musicLinks.js` (frontend twin: keep in sync); read back through `GET /auth/profile` → `focusPreferences` |
 | Journals | `context/journalContextProvider.jsx`, `pages/MainJournal.jsx`, `components/sidebar/` | `routes/journal.routes.js`, `controllers/journal.controller.js`, `models/journal.models.js` |
 | Trade logging/editing | `components/rightContainer/journal/TradeForm.jsx`, `TradeJournal.jsx`, journal context | `routes/trade.routes.js`, `controllers/trade.controller.js`, `models/trade.models.js` |
 | Import | `components/rightContainer/journal/import/`, `services/importApi.js` | `routes/import.routes.js`, `controllers/import.controller.js`, `utils/exportData.js` (inspect actual imports) |

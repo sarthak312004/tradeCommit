@@ -5,6 +5,7 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { sendOtpEmail } from "../utils/mailer.js";
 import { deleteImagesFromCloudinary, uploadOnCloudinary } from "../utils/cloudinary.js";
 import { HEADER_SCENE_IDS, headerBackdropFolder } from "../constants/headerBackdrop.js";
+import { resolveMusicChanges, toMusicPreferences } from "../utils/musicLinks.js";
 import {
   OTP_LENGTH,
   OTP_MAX_ATTEMPTS,
@@ -28,7 +29,6 @@ const MAX_FULLNAME_LENGTH = 80;
 
 const SESSION_EXPIRED = "Your verification expired. Please start again.";
 const FOCUS_THEMES = new Set(["sage", "ocean", "amber"]);
-const SPOTIFY_URL_PATTERN = /^\/(playlist|album|track|episode|show)\/[A-Za-z0-9]+\/?$/;
 
 // What the client gets for the header picture: always a complete, valid object.
 const toHeaderBackdrop = (user) => {
@@ -39,7 +39,7 @@ const toHeaderBackdrop = (user) => {
 };
 
 const toFocusPreferences = (user) => ({
-  spotifyUrl: user?.focusPreferences?.spotifyUrl ?? "",
+  ...toMusicPreferences(user?.focusPreferences),
   focusTheme: FOCUS_THEMES.has(user?.focusPreferences?.focusTheme) ? user.focusPreferences.focusTheme : "sage",
 });
 
@@ -72,45 +72,23 @@ export const setHeaderBackdrop = asyncHandler(async (req, res) => {
   return res.status(200).json(new ApiResponse(200, { headerBackdrop: next }, "Header background saved"));
 });
 
-// PUT /api/v1/auth/focus-preferences { spotifyUrl, focusTheme }
+// PUT /api/v1/auth/focus-preferences { focusTheme, musicProvider?, spotifyUrl?, youtubeUrl? }
+// The saved playlist (one per account) is validated and canonicalized in utils/musicLinks.js; only the signed-in
+// user's own document is ever written. `musicProvider: ""` removes the playlist.
 export const setFocusPreferences = asyncHandler(async (req, res) => {
-  const spotifyUrl = typeof req.body?.spotifyUrl === "string" ? req.body.spotifyUrl.trim() : null;
   const focusTheme = req.body?.focusTheme;
-
-  if (spotifyUrl === null || spotifyUrl.length > 500) {
-    throw new ApiError(400, "Enter a valid Spotify link");
-  }
-  if (spotifyUrl) {
-    let parsed;
-    try {
-      parsed = new URL(spotifyUrl);
-    } catch {
-      throw new ApiError(400, "Enter a valid Spotify link");
-    }
-    if (
-      parsed.protocol !== "https:" ||
-      !["open.spotify.com", "spotify.com", "www.spotify.com"].includes(parsed.hostname) ||
-      !SPOTIFY_URL_PATTERN.test(parsed.pathname)
-    ) {
-      throw new ApiError(400, "Enter a Spotify playlist, album, track, episode, or show link");
-    }
-  }
   if (!FOCUS_THEMES.has(focusTheme)) throw new ApiError(400, "Choose a valid focus theme");
 
-  const updated = await User.findByIdAndUpdate(
-    req.user._id,
-    {
-      $set: {
-        "focusPreferences.spotifyUrl": spotifyUrl,
-        "focusPreferences.focusTheme": focusTheme,
-      },
-    },
-    { new: true, projection: "focusPreferences" }
-  );
+  const music = resolveMusicChanges(req.body);
+  if (!music.ok) throw new ApiError(400, music.message);
+
+  const $set = { "focusPreferences.focusTheme": focusTheme };
+  for (const [field, value] of Object.entries(music.changes)) $set[`focusPreferences.${field}`] = value;
+
+  const updated = await User.findByIdAndUpdate(req.user._id, { $set }, { new: true, projection: "focusPreferences" });
   if (!updated) throw new ApiError(404, "User not found");
 
-  const preferences = { spotifyUrl, focusTheme };
-  return res.status(200).json(new ApiResponse(200, { focusPreferences: preferences }, "Focus preferences saved"));
+  return res.status(200).json(new ApiResponse(200, { focusPreferences: toFocusPreferences(updated) }, "Focus preferences saved"));
 });
 
 // POST /api/v1/auth/header-backdrop/image   multipart, field "image"

@@ -1,17 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
-import { useForm, useWatch } from 'react-hook-form'
+import { useForm } from 'react-hook-form'
 import FormDrawer from '../../common/FormDrawer'
 import PropertyRow from '../../common/PropertyRow'
 import ShortcutHint from '../../common/ShortcutHint'
 import DeferredEditor from '../../common/DeferredEditor'
 import FocusTimerPanel from './FocusTimerPanel'
+import MusicDialog, { MusicIcon } from './MusicDialog'
 import { dateInputClass, ghostFooterButton, primaryFooterButton } from '../../common/formStyles'
 import { CalendarIcon } from '../../../utils/Icons.jsx'
 import { SlidersIcon } from '../../../utils/Icons.jsx'
 import { formatLongDate, todayKey } from '../../../utils/calendar'
 import { MOD_LABEL } from '../../../hooks/useFormShortcuts'
 import { useFocusPreferences } from '../../../hooks/useFocusPreferences'
-import { readFormDraft, writeFormDraft } from '../../../utils/formDraftStorage'
 
 const MAX_TITLE = 120
 const FOCUS_THEMES = [
@@ -60,39 +60,25 @@ const deepModeStyles = `
  * @param {Function} onUploadImage   (file) => Promise<url>
  * @param {object}   [carryForward]  { rule, planLine, checkpoint } the linked journal's latest mentor review asked the trader to apply
  */
-function PlanForm({ plannerId, plannerName, plannerType, initialEntry = null, initialDate, onSubmit, onDelete, onClose, onUploadImage, carryForward = null }) {
+function PlanForm({ plannerName, plannerType, initialEntry = null, initialDate, onSubmit, onDelete, onClose, onUploadImage, carryForward = null }) {
   const defaultDate = initialEntry?.date ?? initialDate ?? todayKey()
-  const draftKey = `tradecommit:plan-form-draft:${plannerId}:${initialEntry?.id ?? 'new'}`
-  const [savedDraft] = useState(() => readFormDraft(draftKey))
-  const contentDraftRef = useRef(savedDraft?.content ?? initialEntry?.content ?? '')
-  const { register, handleSubmit, control, getValues, formState: { errors } } = useForm({
-    defaultValues: { title: initialEntry?.title ?? '', date: defaultDate, ...(savedDraft?.values ?? {}) }
+  const { register, handleSubmit, watch, formState: { errors } } = useForm({
+    defaultValues: { title: initialEntry?.title ?? '', date: defaultDate }
   })
   const drawerRef = useRef(null)
   const editorRef = useRef(null)
   const [isSaving, setIsSaving] = useState(false)
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false)
   const [submitError, setSubmitError] = useState('')
-  const [deepMode, setDeepMode] = useState(() => savedDraft?.deepMode === true)
+  const [deepMode, setDeepMode] = useState(false)
   const [isFocusSettingsOpen, setIsFocusSettingsOpen] = useState(false)
+  const [isMusicOpen, setIsMusicOpen] = useState(false)
+  const [isMusicMinimized, setIsMusicMinimized] = useState(false)
+  const [isMusicPlaying, setIsMusicPlaying] = useState(false)
+  const musicButtonRef = useRef(null)
   const focusSettingsRef = useRef(null)
   const focusSettingsButtonRef = useRef(null)
   const { preferences, isLoaded: areFocusPreferencesLoaded, loadError, isSaving: areFocusPreferencesSaving, saveError, savePreferences, retryLoad } = useFocusPreferences()
-
-  const formValues = useWatch({ control })
-
-  useEffect(() => {
-    const timer = setTimeout(() => writeFormDraft(draftKey, { values: formValues, content: contentDraftRef.current, deepMode }), 200)
-    return () => clearTimeout(timer)
-  }, [draftKey, formValues, deepMode])
-
-  useEffect(() => {
-    const flushSave = () => writeFormDraft(draftKey, { values: getValues(), content: contentDraftRef.current, deepMode })
-    window.addEventListener('pagehide', flushSave)
-    return () => {
-      window.removeEventListener('pagehide', flushSave)
-    }
-  }, [draftKey, getValues, deepMode])
 
   useEffect(() => {
     if (!isFocusSettingsOpen) return undefined
@@ -171,7 +157,7 @@ function PlanForm({ plannerId, plannerName, plannerType, initialEntry = null, in
     </div>
   )
 
-  const date = formValues?.date ?? defaultDate
+  const date = watch('date')
   const isBusy = isSaving
 
   const handleFormSubmit = async (values) => {
@@ -202,8 +188,6 @@ function PlanForm({ plannerId, plannerName, plannerType, initialEntry = null, in
       setIsSaving(false)
     }
   }
-
-  const submitForm = (event) => handleSubmit(handleFormSubmit)(event)
 
   const breadcrumb = (
     <>
@@ -255,20 +239,65 @@ function PlanForm({ plannerId, plannerName, plannerType, initialEntry = null, in
       breadcrumb={breadcrumb}
       deepMode={deepMode}
       deepTheme={preferences.focusTheme}
-      sidePanel={deepMode ? <FocusTimerPanel theme={preferences.focusTheme} /> : null}
+      sidePanel={deepMode ? (
+        <>
+          <FocusTimerPanel theme={preferences.focusTheme} />
+          {isMusicOpen && (
+            <MusicDialog
+              preferences={preferences}
+              isLoaded={areFocusPreferencesLoaded}
+              loadError={loadError}
+              isSaving={areFocusPreferencesSaving}
+              saveError={saveError}
+              onSave={savePreferences}
+              onRetryLoad={retryLoad}
+              anchorRef={musicButtonRef}
+              minimized={isMusicMinimized}
+              onMinimizedChange={setIsMusicMinimized}
+              onPlaybackChange={setIsMusicPlaying}
+            />
+          )}
+        </>
+      ) : null}
       headerExtra={(
         <>
           {deepMode && focusSettingsControls}
+          {deepMode && (
+            <button
+              ref={musicButtonRef}
+              type="button"
+              onClick={() => {
+                if (!isMusicOpen) {
+                  setIsMusicOpen(true)
+                  setIsMusicMinimized(false)
+                } else {
+                  setIsMusicMinimized((minimized) => !minimized)
+                }
+                setIsFocusSettingsOpen(false)
+              }}
+              aria-label={isMusicPlaying ? (isMusicMinimized ? 'Show music player, music is playing' : 'Minimize music player, music is playing') : (isMusicMinimized ? 'Show music player' : 'Focus music')}
+              aria-expanded={isMusicOpen && !isMusicMinimized}
+              aria-controls="music-dialog"
+              title={isMusicPlaying ? (isMusicMinimized ? 'Music playing · Show player' : 'Music playing · Minimize player') : (isMusicMinimized ? 'Show music player' : 'Focus music')}
+              className={`relative inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-400/70 ${isMusicOpen ? 'border-stone-300 bg-white/80 text-stone-700 dark:border-white/15 dark:bg-white/[0.08] dark:text-stone-100' : 'border-transparent text-stone-500 hover:bg-stone-200/60 hover:text-stone-800 dark:text-stone-400 dark:hover:bg-white/[0.07] dark:hover:text-stone-100'}`}
+            >
+              <MusicIcon />
+              {isMusicPlaying && <span aria-hidden="true" className="music-playing-indicator absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-emerald-400 ring-2 ring-[#f7f6f2] dark:ring-[#111311]" />}
+            </button>
+          )}
           <button type="button" onClick={() => {
             setDeepMode((value) => !value)
             setIsFocusSettingsOpen(false)
+            setIsMusicOpen(false)
+            setIsMusicMinimized(false)
+            setIsMusicPlaying(false)
           }} aria-pressed={deepMode} aria-label={deepMode ? 'Turn off deep focus' : 'Turn on deep focus'} className={`inline-flex h-8 shrink-0 items-center gap-2 rounded-lg border px-2.5 text-xs font-medium transition-all duration-300 ${deepMode ? 'border-stone-300/80 bg-white/70 text-stone-700 shadow-sm dark:border-white/10 dark:bg-white/[0.06] dark:text-stone-200' : 'border-zinc-200 text-zinc-600 hover:bg-zinc-100 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/[0.06]'}`}>
             <span className={`h-1.5 w-1.5 rounded-full transition-colors ${deepMode ? 'bg-emerald-500' : 'bg-zinc-400'}`} />
             <span className="hidden sm:inline">{deepMode ? 'Deep focus on' : 'Deep focus'}</span>
           </button>
         </>
       )}
-      onSubmit={submitForm}
+      onSubmit={handleSubmit(handleFormSubmit)}
       onClose={onClose}
       footer={footer}
       canClose={!isBusy}
@@ -334,13 +363,9 @@ function PlanForm({ plannerId, plannerName, plannerType, initialEntry = null, in
         ref={editorRef}
         id="plan-content"
         label="Trade plan"
-        initialHtml={savedDraft?.content ?? initialEntry?.content ?? ''}
+        initialHtml={initialEntry?.content ?? ''}
         placeholder="Levels, setups, entry & exit rules, risk, what would invalidate the idea…"
         onUploadImage={onUploadImage}
-        onChange={(html) => {
-          contentDraftRef.current = html
-          writeFormDraft(draftKey, { values: getValues(), content: html, deepMode })
-        }}
       />
     </FormDrawer>
     </>
