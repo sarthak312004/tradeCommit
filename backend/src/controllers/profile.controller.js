@@ -19,10 +19,12 @@ import {
   isProofTokenMatch,
   retryAfterSeconds,
 } from "../utils/otp.js";
-import { sendSession } from "./user.controller.js";
+import { USERNAME_PATTERN, sendSession } from "./user.controller.js";
 
 const MIN_PASSWORD_LENGTH = 8;
 const MAX_PASSWORD_LENGTH = 72; // bcrypt ignores everything after 72 bytes
+
+const MAX_FULLNAME_LENGTH = 80;
 
 const SESSION_EXPIRED = "Your verification expired. Please start again.";
 const FOCUS_THEMES = new Set(["sage", "ocean", "amber"]);
@@ -142,7 +144,7 @@ export const getProfile = asyncHandler(async (req, res) => {
     new ApiResponse(
       200,
       {
-        fullname: user.fullname,
+        fullname: user.fullname ?? "",
         username: user.username,
         email: user.email,
         hasPassword: Boolean(user.password), // false for Google-only accounts: the dialog says "Set" instead of "Reset"
@@ -155,6 +157,50 @@ export const getProfile = asyncHandler(async (req, res) => {
       "Profile fetched"
     )
   );
+});
+
+
+// PATCH /api/v1/auth/profile   { fullname?, username? }
+// Sign-up no longer asks for these, so this is where they are added and edited. Only the signed-in user's own
+// document is touched (the id comes from req.user, never from the body).
+export const updateProfile = asyncHandler(async (req, res) => {
+  const { fullname, username } = req.body ?? {};
+  const changes = {};
+
+  if (fullname !== undefined) {
+    if (typeof fullname !== "string") throw new ApiError(400, "Enter a valid name");
+    const cleaned = fullname.trim().replace(/\s+/g, " ");
+    if (cleaned.length > MAX_FULLNAME_LENGTH) throw new ApiError(400, "Name is too long");
+    changes.fullname = cleaned;
+  }
+
+  if (username !== undefined) {
+    const cleaned = typeof username === "string" ? username.trim().toLowerCase() : "";
+    if (!USERNAME_PATTERN.test(cleaned)) {
+      throw new ApiError(400, "Username must be 3-20 characters: letters, numbers or underscores");
+    }
+    changes.username = cleaned;
+  }
+
+  if (!Object.keys(changes).length) throw new ApiError(400, "Nothing to update");
+
+  if (changes.username && (await User.exists({ username: changes.username, _id: { $ne: req.user._id } }))) {
+    throw new ApiError(409, "That username is taken. Try another one.");
+  }
+
+  let updated;
+  try {
+    updated = await User.findByIdAndUpdate(req.user._id, { $set: changes }, { new: true, projection: "fullname username" });
+  } catch (error) {
+    // two people picking the same name at once: the unique index decides
+    if (error?.code === 11000) throw new ApiError(409, "That username is taken. Try another one.");
+    throw error;
+  }
+  if (!updated) throw new ApiError(404, "User not found");
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, { fullname: updated.fullname ?? "", username: updated.username }, "Profile updated"));
 });
 
 

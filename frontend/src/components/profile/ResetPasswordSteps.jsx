@@ -25,6 +25,7 @@ export function SendCodeStep({ email, hasPassword, isBusy, error, onSend }) {
     <div>
       <StepHeader title={hasPassword ? 'Reset your password' : 'Set a password'}>
         For your security we&apos;ll email a {OTP_LENGTH}-digit code to <span className="font-medium text-zinc-800 dark:text-zinc-100">{email}</span> before you can choose a new password.
+        {!hasPassword && ' A password is optional: you can always log in with an email code too.'}
       </StepHeader>
       <ErrorText>{error}</ErrorText>
       <button type="button" onClick={onSend} disabled={isBusy} className={`${primaryButtonClass} mt-5`}>

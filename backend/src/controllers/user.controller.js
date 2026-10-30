@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { EmailVerification } from "../models/emailVerification.models.js";
 import { User } from "../models/user.models.js";
 import { ApiError } from "../utils/ApiError.js";
@@ -11,12 +12,9 @@ import {
   OTP_LENGTH,
   OTP_MAX_ATTEMPTS,
   OTP_RESEND_COOLDOWN_MS,
-  SIGNUP_TOKEN_TTL_MS,
   buildOtpRecord,
   canSendOtp,
   generateOtp,
-  generateSignupToken,
-  hashSignupToken,
   isOtpMatch,
   retryAfterSeconds,
 } from "../utils/otp.js";
@@ -43,7 +41,7 @@ export const sendSession = async (res, user, statusCode, message) => {
     .json(new ApiResponse(statusCode, { user: publicUser, accessToken, refreshToken }, message));
 };
 
-const USERNAME_PATTERN = /^[a-z0-9_]{3,20}$/;
+export const USERNAME_PATTERN = /^[a-z0-9_]{3,20}$/;
 const PURGE_GRACE_MS = 5 * 60 * 1000; // keep a spent code row a little longer than the code itself
 
 // GET /api/v1/auth/config  (tells the login page whether to show the Google button)
@@ -53,10 +51,61 @@ export const getAuthConfig = asyncHandler(async (req, res) => {
   );
 });
 
-// ---- Sign-up is three steps, and no User document exists until the last one ---------------------
-//   1. POST /auth/signup/send-otp    { email }                       -> emails a 6-digit code
-//   2. POST /auth/signup/verify-otp  { email, otp }                  -> { signupToken } (proof the address is theirs)
-//   3. POST /auth/register           { email, signupToken, fullname, username, password } -> creates the account + logs in
+// ---- Sign-up is two steps: email, then the emailed code. No form, no password, no username ----------
+//   1. POST /auth/signup/send-otp    { email }        -> emails a 6-digit code
+//   2. POST /auth/signup/verify-otp  { email, otp }   -> accepts the code, creates the account if needed, logs in
+// The name is taken from the email address and the username is generated from it; the password is optional.
+// All of it can be edited later in the Profile section.
+
+// "sarthak.kumar92+trading@gmail.com" -> "Sarthak Kumar". Empty when nothing name-like is in the address.
+const nameFromEmail = (email) => {
+  const words = email
+    .split("@")[0]
+    .split("+")[0]
+    .split(/[^a-zA-Z]+/)
+    .filter((word) => word.length > 1);
+  return words
+    .slice(0, 3)
+    .map((word) => word[0].toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ")
+    .slice(0, 80);
+};
+
+// A unique username built from the name, e.g. "Sarthak Kumar" -> "sarthak_kumar_4f9a2c" (<= 12 + 1 + 6 = 19 chars).
+const generateUsername = (fullname, email) => {
+  const fromName = fullname.toLowerCase().replace(/[^a-z]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 12).replace(/_+$/, "");
+  const fromEmail = email.split("@")[0].toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 12);
+  const base = [fromName, fromEmail].find((candidate) => candidate.length >= 3) ?? "trader";
+  return `${base}_${crypto.randomBytes(3).toString("hex")}`;
+};
+
+/**
+ * Creates the account for an email whose ownership was just proven, or returns the account that already exists.
+ * The unique email index makes this safe when two requests race: the loser's insert fails and it reads the winner's user.
+ */
+const findOrCreateVerifiedUser = async (email) => {
+  const fullname = nameFromEmail(email); // a starting point: the user can correct it in the Profile section
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      const user = await User.create({
+        username: generateUsername(fullname, email),
+        fullname,
+        email,
+        emailVerified: true,
+        onboardingCompleted: false,
+        headerBackdrop: { mode: "scene", scene: DEFAULT_HEADER_SCENE, imageUrl: null },
+      });
+      return { user, created: true };
+    } catch (error) {
+      if (error?.code !== 11000) throw error;
+      if (error.keyPattern?.username) continue; // generated name collided: draw another one
+      const existing = await User.findOne({ email });
+      if (existing) return { user: existing, created: false };
+      throw error;
+    }
+  }
+  throw new ApiError(503, "Could not create your account right now. Please try again.");
+};
 
 // POST /api/v1/auth/signup/send-otp  (also used by "Resend code")
 export const sendSignupOtp = asyncHandler(async (req, res) => {
@@ -84,7 +133,6 @@ export const sendSignupOtp = asyncHandler(async (req, res) => {
     { email },
     {
       $set: { ...record, purgeAt: new Date(record.expiresAt.getTime() + PURGE_GRACE_MS) },
-      $unset: { verifiedAt: 1, tokenHash: 1 },
     },
     { upsert: true }
   );
@@ -101,7 +149,7 @@ export const sendSignupOtp = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, { email, sent: true, retryAfter: Math.ceil(OTP_RESEND_COOLDOWN_MS / 1000) }, "Verification code sent"));
 });
 
-// POST /api/v1/auth/signup/verify-otp  { email, otp }
+// POST /api/v1/auth/signup/verify-otp  { email, otp }  -> account created (or found) + logged in
 export const verifySignupOtp = asyncHandler(async (req, res) => {
   const email = normalizeEmail(req.body?.email);
   const raw = req.body?.otp;
@@ -113,7 +161,7 @@ export const verifySignupOtp = asyncHandler(async (req, res) => {
   }
 
   const record = await EmailVerification.findOne({ email });
-  if (!record?.hash || record.verifiedAt) {
+  if (!record?.hash) {
     throw new ApiError(400, "Invalid or expired code. Request a new one.");
   }
   if (new Date(record.expiresAt).getTime() <= Date.now()) {
@@ -127,79 +175,21 @@ export const verifySignupOtp = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Incorrect code. Please try again.");
   }
 
-  const signupToken = generateSignupToken();
-  // the verifiedAt guard makes the code single-use even if two requests race
-  const accepted = await EmailVerification.findOneAndUpdate(
-    { _id: record._id, verifiedAt: { $exists: false } },
-    {
-      $set: {
-        verifiedAt: new Date(),
-        tokenHash: hashSignupToken(signupToken),
-        purgeAt: new Date(Date.now() + SIGNUP_TOKEN_TTL_MS),
-      },
-      $unset: { hash: 1 },
-    }
-  );
-  if (!accepted) throw new ApiError(400, "Invalid or expired code. Request a new one.");
+  // Consume the code. Matching on the stored hash makes it single-use even if two requests race:
+  // only one of them deletes the row, the other is told the code is no longer valid.
+  const consumed = await EmailVerification.findOneAndDelete({ _id: record._id, hash: record.hash });
+  if (!consumed) throw new ApiError(400, "Invalid or expired code. Request a new one.");
 
-  return res.status(200).json(new ApiResponse(200, { email, signupToken }, "Email verified"));
-});
+  // The code proves the address is theirs, so this is the only place a sign-up produces a session.
+  const { user, created } = await findOrCreateVerifiedUser(email);
 
-// POST /api/v1/auth/register -> creates the account (only possible with the proof from verify-otp) and logs in
-export const registerUser = asyncHandler(async (req, res) => {
-  const { email, signupToken, username, fullname, password } = req.body ?? {};
-
-  if ([email, signupToken, username, fullname, password].some((f) => typeof f !== "string" || !f.trim())) {
-    throw new ApiError(400, "All fields are required");
+  if (!created && user.emailVerified === false) {
+    // an old half-finished signup: the code proves the address, so finish it and drop its unconfirmed password
+    user.emailVerified = true;
+    user.password = undefined;
   }
 
-  const normalizedEmail = normalizeEmail(email);
-  const normalizedUsername = username.trim().toLowerCase();
-
-  if (!USERNAME_PATTERN.test(normalizedUsername)) {
-    throw new ApiError(400, "Username must be 3-20 characters: letters, numbers or underscores");
-  }
-  if (password.length < 8) throw new ApiError(400, "Password must be at least 8 characters");
-  if (fullname.trim().length > 80) throw new ApiError(400, "Name is too long");
-
-  // This is the actual gate: without a code that was accepted for THIS email, nothing is created.
-  const proof = await EmailVerification.findOne({
-    email: normalizedEmail,
-    tokenHash: hashSignupToken(signupToken),
-  });
-  if (!proof?.verifiedAt || Date.now() - new Date(proof.verifiedAt).getTime() > SIGNUP_TOKEN_TTL_MS) {
-    // 410 tells the client to send the user back to the email step
-    throw new ApiError(410, "Your email verification expired. Please verify your email again.");
-  }
-
-  if (await User.exists({ username: normalizedUsername })) {
-    throw new ApiError(409, "That username is taken. Try another one.");
-  }
-
-  let user;
-  try {
-    user = await User.create({
-      username: normalizedUsername,
-      email: normalizedEmail,
-      fullname: fullname.trim(),
-      password,
-      emailVerified: true,
-      onboardingCompleted: false,
-      headerBackdrop: { mode: "scene", scene: DEFAULT_HEADER_SCENE, imageUrl: null },
-    });
-  } catch (error) {
-    if (error?.code === 11000) {
-      throw new ApiError(
-        409,
-        error.keyPattern?.username ? "That username is taken. Try another one." : "An account with this email already exists. Log in instead."
-      );
-    }
-    throw error;
-  }
-
-  await EmailVerification.deleteOne({ _id: proof._id }); // the proof is single-use
-
-  return sendSession(res, user, 201, "Account created");
+  return sendSession(res, user, created ? 201 : 200, created ? "Account created" : "Logged in with email code");
 });
 
 // POST /api/v1/auth/login

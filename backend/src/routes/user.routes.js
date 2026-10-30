@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
   getProfile,
+  updateProfile,
   completeOnboarding,
   setHeaderBackdrop,
   setFocusPreferences,
@@ -21,7 +22,6 @@ import {
   googleLogin,
   loginUser,
   logoutUser,
-  registerUser,
   sendSignupOtp,
   verifySignupOtp,
 } from "../controllers/user.controller.js";
@@ -34,7 +34,6 @@ router.get("/config", getAuthConfig)
 router.get("/check", verifyJWT, checkAuthStatus)
 router.post("/signup/send-otp", sendSignupOtp)
 router.post("/signup/verify-otp", verifySignupOtp)
-router.post("/register", registerUser)
 router.post("/login", loginUser)
 // log in with an emailed code instead of a password
 router.post("/login/send-otp", sendLoginOtp)
@@ -49,6 +48,8 @@ router.post("/forgot-password/reset", resetForgottenPassword)
 
 // profile + password change (logged-in users only)
 router.get("/profile", verifyJWT, getProfile)
+// add / edit the display name and username (sign-up no longer asks for them)
+router.patch("/profile", verifyJWT, updateProfile)
 router.post("/onboarding/complete", verifyJWT, completeOnboarding)
 // header background: a built-in scene / none (JSON), or the user's own picture (multipart)
 router.put("/header-backdrop", verifyJWT, setHeaderBackdrop)

@@ -48,6 +48,21 @@ export const setTourActive = (username, tourId, isActive) => {
   window.dispatchEvent(new CustomEvent(TOUR_ACTIVITY_CHANGE_EVENT, { detail: { username: key } }))
 }
 
+// Tour progress is stored under the username, so a rename in the Profile section must carry it over.
+export const moveTourState = (fromUsername, toUsername) => {
+  if (!fromUsername || !toUsername || String(fromUsername).toLowerCase() === String(toUsername).toLowerCase()) return
+  try {
+    ;['main', 'journal', 'planner'].forEach((tourId) => {
+      const status = window.localStorage.getItem(storageKey(fromUsername, tourId))
+      if (status === null) return
+      window.localStorage.setItem(storageKey(toUsername, tourId), status)
+      window.localStorage.removeItem(storageKey(fromUsername, tourId))
+    })
+  } catch {
+    // storage unavailable: nothing was remembered anyway
+  }
+}
+
 export const queueProductTours = (username) => {
   if (!username) return
   setTourStatus(username, 'main', 'pending')

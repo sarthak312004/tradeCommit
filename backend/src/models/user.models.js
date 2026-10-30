@@ -42,14 +42,15 @@ const userSchema = new mongoose.Schema(
             trim:true,
             lowercase:true
         },
+        // Optional: email-code sign-ups start with no name; the user can add it in the Profile section.
         fullname:{
             type:String,
-            required:true,
-            trim:true
+            trim:true,
+            default:""
         },
+        // Optional: email-code (passwordless) accounts have none until the user sets one in the Profile section.
         password:{
-            type:String,
-            required:[function(){ return !this.googleId }, "Password is required"]
+            type:String
         },
         googleId:{
             type:String,
@@ -57,7 +58,7 @@ const userSchema = new mongoose.Schema(
             sparse:true
         },
         // Accounts created before email verification existed count as verified (default true);
-        // the register flow explicitly creates new password accounts as false.
+        // new accounts are only created after the emailed code was accepted, so they are always true.
         emailVerified:{
             type:Boolean,
             default:true

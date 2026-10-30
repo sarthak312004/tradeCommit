@@ -7,7 +7,6 @@ export const OTP_TTL_MS = 10 * 60 * 1000; // a code is valid for 10 minutes
 export const OTP_RESEND_COOLDOWN_MS = 60 * 1000; // at most one email per minute
 export const OTP_MAX_ATTEMPTS = 5; // wrong guesses before a new code is required
 export const RESET_TOKEN_TTL_MS = 10 * 60 * 1000; // after the code is accepted, the user has 10 minutes to choose the new password
-export const SIGNUP_TOKEN_TTL_MS = 15 * 60 * 1000; // after the code is accepted, the user has 15 minutes to finish the form
 
 const secret = () => process.env.ACCESS_TOKEN_SECRET ?? process.env.ACCESS_TOKEN_SECRETE;
 

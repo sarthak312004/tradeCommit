@@ -393,7 +393,7 @@ export default function AuthPage() {
   // The inline card keeps its height while the dialog is open so the page doesn't jump behind it.
   const openAuth = (next = "login") => { setInlineHeight(inlineRef.current?.offsetHeight ?? 0); setMode(next); setMessage(null); setAuthOpen(true) }
   const finishLogin = () => { window.dispatchEvent(new Event("auth-state-changed")); navigate(REDIRECT_AFTER_LOGIN) }
-  const finishRegistration = () => { window.dispatchEvent(new Event("auth-state-changed")); navigate("/onboarding", { replace: true }) }
+  const finishRegistration = () => { window.dispatchEvent(new Event("auth-state-changed")); navigate(REDIRECT_AFTER_LOGIN, { replace: true }) }
 
   useEffect(() => {
     const previousTitle = document.title

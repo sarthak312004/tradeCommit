@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { clearProfileCache, getProfile } from '../services/profileApi'
+import { PROFILE_UPDATED_EVENT, clearProfileCache, getProfile } from '../services/profileApi'
 
 /** Loads the signed-in user's profile (fullname, username, email, hasPassword). */
 export function useProfile() {
@@ -30,6 +30,15 @@ export function useProfile() {
     }
     window.addEventListener('auth-state-changed', handleAuthChange)
     return () => window.removeEventListener('auth-state-changed', handleAuthChange)
+  }, [])
+
+  // the name or username was edited in the profile card: show the saved values everywhere at once
+  useEffect(() => {
+    const handleProfileUpdated = () => {
+      getProfile().then(setProfile).catch(() => {})
+    }
+    window.addEventListener(PROFILE_UPDATED_EVENT, handleProfileUpdated)
+    return () => window.removeEventListener(PROFILE_UPDATED_EVENT, handleProfileUpdated)
   }, [])
 
   const retry = useCallback(() => {

@@ -76,7 +76,7 @@ export default function OnboardingPage() {
 
             {step === 0 && (
               <div className="animate-[fadeIn_.25s_ease-out]">
-                <p className="mb-3 text-[10px] font-medium uppercase tracking-[0.2em] text-zinc-500">Welcome, {profile.fullname.split(" ")[0]}</p>
+                <p className="mb-3 text-[10px] font-medium uppercase tracking-[0.2em] text-zinc-500">Welcome{profile.fullname?.trim() ? `, ${profile.fullname.trim().split(/\s+/)[0]}` : ""}</p>
                 <h1 className={`${SERIF} max-w-xl text-5xl font-medium leading-[1.04] tracking-[-0.035em] sm:text-6xl`}>
                   A calmer place to think about your trades.
                 </h1>
