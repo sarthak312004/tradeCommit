@@ -4,6 +4,7 @@ import { Navigate, Outlet } from 'react-router'
 import { fetchPrefetched } from './utils/prefetch'
 import { SessionError, SessionLoading } from './components/common/SessionScreen'
 import ProductTour from './components/tour/ProductTour'
+import PlaybookModal from './components/tour/PlaybookModal'
 import { journalContext } from './context/Context'
 import { DeepFocusProvider } from './context/DeepFocusProvider'
 import DeepFocusDock from './components/rightContainer/planner/DeepFocusDock'
@@ -149,6 +150,7 @@ function Home() {
       </div>
 
       <DeepFocusDock />
+      <PlaybookModal onCreate={openCreateForm} />
       <ProductTour isSidebarOpen={navOpen} setIsSidebarOpen={setNavOpen} autoCloseSidebar={isMobile} onTourEnd={handleTourEnd} />
     </>
     </DeepFocusProvider>

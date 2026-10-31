@@ -7,9 +7,8 @@ import { getMentorProgress, markMentorCelebrated } from '../services/progressApi
 export function useMentorProgress(savedTradeCount) {
   const [progress, setProgress] = useState(null)
 
-  // fetch on mount, and again whenever the number of saved trades changes (a new trade landed, a retry succeeded)
+  // fetch on mount and whenever the number of saved trades changes, including deletions
   useEffect(() => {
-    if (progress?.completed && progress.celebrated) return
     let cancelled = false
     getMentorProgress()
       .then((next) => {
@@ -19,7 +18,7 @@ export function useMentorProgress(savedTradeCount) {
         console.error('Could not fetch mentor unlock progress:', error)
       })
     return () => { cancelled = true }
-  }, [savedTradeCount, progress?.completed, progress?.celebrated])
+  }, [savedTradeCount])
 
   const celebrate = useCallback(async () => {
     setProgress((current) => (current ? { ...current, celebrated: true } : current))

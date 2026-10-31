@@ -140,6 +140,7 @@ function AiMentorDialog({ journalId, journalName, currency, isOpen, onClose, onO
                 key={rangeKey}
                 journalId={journalId}
                 currency={currency}
+                isOpen={isOpen}
                 seed={rangeSeed}
                 journalRange={initialRange}
                 earliestTradeDate={earliestTradeDate}

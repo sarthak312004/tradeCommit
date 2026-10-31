@@ -31,7 +31,8 @@ function ProgressSegments({ count, target, justHit }) {
  * Rendered in a portal so no ancestor (the page header uses backdrop-blur) can trap its `fixed` position.
  */
 function MentorOrb({ onOpen, onWarm, progress = null, hasReadyReview = false, onLogTrade }) {
-  const locked = Boolean(progress && !progress.completed)
+  const showUnlockProgress = Boolean(progress && !progress.firstFeedbackReceived)
+  const locked = showUnlockProgress && !progress.completed
   const count = progress?.count ?? 0
   const target = progress?.target ?? 5
   const remaining = Math.max(target - count, 0)

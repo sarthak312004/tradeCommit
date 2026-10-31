@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
 import JournalCalendar from './JournalCalendar'
 import TradeCard from './TradeCard'
@@ -138,19 +138,22 @@ function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades,
   const [isMentorOpen, setIsMentorOpen] = useState(false)
   const [isMentorMounted, setIsMentorMounted] = useState(false)
   const [hasReadyMentorReview, setHasReadyMentorReview] = useState(false)
+  const isMentorOpenRef = useRef(false)
 
   const openMentor = useCallback(() => {
+    isMentorOpenRef.current = true
     setHasReadyMentorReview(false)
     setIsMentorMounted(true)
     setIsMentorOpen(true)
   }, [])
 
   const closeMentor = useCallback(() => {
+    isMentorOpenRef.current = false
     setIsMentorOpen(false)
   }, [])
 
   const handleMentorReviewReady = useCallback(() => {
-    setHasReadyMentorReview(true)
+    if (!isMentorOpenRef.current) setHasReadyMentorReview(true)
   }, [])
 
   const dismissImportHint = () => {
@@ -516,7 +519,7 @@ function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades,
         </div>
       )}
 
-      {mentorProgress?.completed && !mentorProgress.celebrated && !isMentorOpen && !isFormOpen && (
+      {mentorProgress?.completed && !mentorProgress.firstFeedbackReceived && !mentorProgress.celebrated && !isMentorOpen && !isFormOpen && (
         <MentorUnlockBadge
           target={mentorProgress.target}
           onDismiss={celebrateMentor}

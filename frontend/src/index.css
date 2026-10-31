@@ -422,3 +422,8 @@ html.dark .mentor-orb-halo {
     animation: none;
   }
 }
+
+/* THE TRADING PLAYBOOK modal: one gentle chapter transition, off under reduced-motion */
+@keyframes tc-pb-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.tc-pb-rise { animation: tc-pb-rise .45s cubic-bezier(.22, 1, .36, 1) both; }
+@media (prefers-reduced-motion: reduce) { .tc-pb-rise { animation: none !important; } }

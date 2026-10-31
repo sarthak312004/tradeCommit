@@ -2,11 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 import { useProfile } from '../../hooks/useProfile'
 import { errorText } from '../../services/authApi'
 import { updateProfile } from '../../services/profileApi'
-import { AtSignIcon, CheckIcon, ChevronDownIcon, CloseIcon, LockIcon, MailIcon, PencilIcon, UserIcon } from '../../utils/Icons.jsx'
+import { AtSignIcon, CheckIcon, ChevronDownIcon, CloseIcon, FileIcon, LockIcon, MailIcon, PencilIcon, UserIcon } from '../../utils/Icons.jsx'
 import ProfileAvatar from './ProfileAvatar'
 import ResetPasswordDialog from './ResetPasswordDialog'
 import { CompassIcon } from '../tour/tourIcons'
-import { replayProductTour } from '../../utils/productTour'
+import { openPlaybook, replayProductTour } from '../../utils/productTour'
 import { focusRing } from './profileStyles'
 
 const USERNAME_PATTERN = /^[a-z0-9_]{3,20}$/
@@ -165,6 +165,11 @@ function ProfileMenu() {
     replayProductTour()
   }
 
+  const startPlaybook = () => {
+    setIsOpen(false)
+    openPlaybook()
+  }
+
   return (
     <div ref={rootRef} className="relative shrink-0">
       <button
@@ -244,6 +249,16 @@ function ProfileMenu() {
             >
               <CompassIcon className="h-3.5 w-3.5" />
               Take the product tour
+            </button>
+
+            <button
+              type="button"
+              onClick={startPlaybook}
+              tabIndex={isOpen ? 0 : -1}
+              className={`mt-1.5 flex h-9 w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-zinc-300 text-[13px] font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-white/[0.14] dark:text-zinc-200 dark:hover:bg-white/[0.06] ${focusRing}`}
+            >
+              <FileIcon className="h-3.5 w-3.5" />
+              The Trading Playbook
             </button>
           </>
         ) : error ? (

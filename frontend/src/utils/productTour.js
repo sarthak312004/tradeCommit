@@ -107,3 +107,7 @@ export const clearTourProgress = (username, tourId) => {
 }
 
 export const replayProductTour = () => window.dispatchEvent(new Event(TOUR_REPLAY_EVENT))
+
+// THE TRADING PLAYBOOK: a read-only explainer modal (PlaybookModal). It has no progress of its own and never changes tour statuses.
+export const OPEN_PLAYBOOK_EVENT = 'tradecommit:open-playbook'
+export const openPlaybook = () => window.dispatchEvent(new Event(OPEN_PLAYBOOK_EVENT))

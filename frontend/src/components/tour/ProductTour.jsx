@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { useLocation } from 'react-router'
 import { journalContext, plannerContext } from '../../context/Context'
 import { useProfile } from '../../hooks/useProfile'
-import { TOUR_REPLAY_EVENT, clearTourProgress, getTourProgress, getTourStatus, hasTourEnded, markTourEnded, setTourActive, setTourProgress, setTourStatus } from '../../utils/productTour'
+import { TOUR_REPLAY_EVENT, clearTourProgress, getTourProgress, getTourStatus, hasTourEnded, markTourEnded, openPlaybook, setTourActive, setTourProgress, setTourStatus } from '../../utils/productTour'
 import TourCard from './TourCard'
 import { TOURS, buildSteps } from './tourSteps'
 import { useTargetRect } from './useTargetRect'
@@ -64,7 +64,7 @@ function TourSession({ tourId, hasJournal, username, name, resumeId, isSidebarOp
 
   // Skip, finish and replay only touch the tours that actually ran in this session; every other tour keeps its status.
   // persist=false: no step could be shown at all (targets never appeared), so the tour stays pending for a later visit.
-  const end = (persist = true) => {
+  const end = (persist = true, completed = false) => {
     if (!persist) {
       markTourEnded(username, tourId)
       onEnd({ persist: false })
@@ -80,11 +80,11 @@ function TourSession({ tourId, hasJournal, username, name, resumeId, isSidebarOp
       clearTourProgress(username, id)
       markTourEnded(username, id)
     })
-    onEnd({ persist: true })
+    onEnd({ persist: true, journalTourCompleted: completed && covered.has('journal') })
   }
 
   const goNext = () => {
-    if (nav.index >= steps.length - 1) end()
+    if (nav.index >= steps.length - 1) end(true, true)
     else setNav({ index: nav.index + 1, direction: 1 })
   }
   const goBack = () => {
@@ -255,9 +255,10 @@ function ProductTour({ isSidebarOpen, setIsSidebarOpen, autoCloseSidebar = false
       isSidebarOpen={isSidebarOpen}
       setIsSidebarOpen={setIsSidebarOpen}
       autoCloseSidebar={autoCloseSidebar}
-      onEnd={({ persist = true } = {}) => {
+      onEnd={({ persist = true, journalTourCompleted = false } = {}) => {
         const endedTour = activeTour
         setActiveTour(null)
+        if (journalTourCompleted) openPlaybook()
         // after the first-run tour, hand the user to the next action (Home opens the "new journal" form)
         if (endedTour === 'main' && persist) onTourEnd?.()
       }}

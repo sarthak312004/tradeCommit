@@ -1,4 +1,6 @@
 import crypto from "node:crypto";
+import { AiRangeReview } from "../models/aiRangeReview.models.js";
+import { AiReview } from "../models/aiReview.models.js";
 import { MentorProgress } from "../models/mentorProgress.models.js";
 import { Trade } from "../models/trade.models.js";
 import { aiLimits } from "./aiQuota.js";
@@ -29,10 +31,20 @@ const serialize = (doc, target) => {
     count,
     target,
     completed,
+    firstFeedbackReceived: Boolean(doc?.firstFeedbackAt),
     celebrated: Boolean(doc?.celebratedAt) || Boolean(doc?.legacy),
     badge: completed && !doc?.legacy,
     completedAt: doc?.completedAt ? new Date(doc.completedAt).toISOString() : null,
   };
+};
+
+const currentFingerprints = async (ownerId, target) => {
+  const rows = await Trade.find({ owner: ownerId })
+    .sort({ createdAt: 1 })
+    .limit(500)
+    .select("assetName date direction entryPrice quantity")
+    .lean();
+  return [...new Set(rows.map(tradeFingerprint))].slice(0, target);
 };
 
 /**
@@ -64,7 +76,31 @@ const ensureProgress = async (ownerId, excludeTradeId = null) => {
   }
 };
 
-export const getMentorProgress = async (ownerId) => serialize(await ensureProgress(ownerId), mentorTarget());
+const refreshProgress = async (ownerId, progress, target) => {
+  const fingerprints = await currentFingerprints(ownerId, target);
+  const completed = fingerprints.length >= target;
+  const completedAt = completed ? progress.completedAt ?? new Date() : null;
+  const updates = { fingerprints, completedAt };
+  if (!progress.firstFeedbackAt) {
+    const [weeklyReview, rangeReview] = await Promise.all([
+      AiReview.exists({ owner: ownerId }),
+      AiRangeReview.exists({ owner: ownerId }),
+    ]);
+    if (weeklyReview || rangeReview) updates.firstFeedbackAt = new Date();
+  }
+  const refreshed = await MentorProgress.findOneAndUpdate(
+    { owner: ownerId },
+    { $set: updates },
+    { new: true }
+  );
+  return refreshed ?? progress;
+};
+
+export const getMentorProgress = async (ownerId) => {
+  const target = mentorTarget();
+  const progress = await ensureProgress(ownerId);
+  return serialize(await refreshProgress(ownerId, progress, target), target);
+};
 
 /** Called after a trade is created (never after an edit). A fingerprint that already counted adds nothing. */
 export const recordNewTrade = async (ownerId, parsedTrade, createdTradeId) => {
