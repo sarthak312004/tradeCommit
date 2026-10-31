@@ -18,7 +18,15 @@ export const previewRangeReview = (journalId, start, end) =>
   requestJson(`${base(journalId)}/preview?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`, { cache: 'no-store' })
 
 /** Returns the saved review when it is current, otherwise asks the mentor. Rejects with the server's explanation when not allowed. */
-export const createRangeReview = (journalId, start, end) => requestJson(base(journalId), { method: 'POST', body: { start, end } })
+export const createRangeReview = (journalId, start, end) => requestJson(base(journalId), { method: 'POST', body: { start, end }, timeoutMs: 200_000 })
+
+/**
+ * Cheap check (never calls the AI, never uses allowance): { generating, savedAt }. `generating` is true while the server is
+ * still writing this trader's review; `savedAt` is when the saved review for exactly this range was last written (or null).
+ * Used to recover when the POST above was cut off while the server kept working.
+ */
+export const getRangeReviewStatus = (journalId, start, end) =>
+  requestJson(`${base(journalId)}/status?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`, { cache: 'no-store' })
 
 /**
  * The one change the journal's latest review (weekly or range) asked the trader to carry into the next plan, so the

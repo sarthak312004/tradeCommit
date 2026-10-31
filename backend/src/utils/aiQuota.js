@@ -1,4 +1,5 @@
 import { AiUsage } from "../models/aiUsage.models.js";
+import { ApiError } from "./ApiError.js";
 import { isUserBusy } from "./aiJobGuard.js";
 
 // All limits can be tuned from environment variables without touching code.
@@ -16,9 +17,20 @@ export const aiLimits = () => ({
 });
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-// A reservation that is still unconfirmed after this long is treated as dead (the longest a call can legitimately take
-// is the queue wait plus Gemini's request timeout, which is under four minutes).
-const PENDING_WINDOW_MS = 6 * 60 * 1000;
+// A reservation that is still unconfirmed after this long is treated as dead. The longest a generation can legitimately
+// take is the queue wait (60s) plus the queue's hard job limit (140s) plus saving, so about 200s; this adds a margin.
+export const PENDING_WINDOW_MS = 4 * 60 * 1000;
+const pendingSince = () => new Date(Date.now() - PENDING_WINDOW_MS);
+
+// Reservations created by THIS process that have not finished yet (used to hand them back if the process is stopped).
+const liveReservations = new Set();
+export const pendingReservationCount = () => liveReservations.size;
+
+/** True while this trader has a generation running, on this instance or any other (reads the unconfirmed reservation). */
+export const isGenerating = async (ownerId) => {
+  if (isUserBusy(ownerId)) return true;
+  return Boolean(await AiUsage.exists({ owner: ownerId, ok: false, createdAt: { $gte: pendingSince() } }));
+};
 
 /** The current date in Pacific time, because Gemini's daily free-tier quota resets at midnight Pacific. */
 export const pacificDayKey = () =>
@@ -59,8 +71,8 @@ export const getQuotaSnapshot = async (ownerId) => {
   if (lastDay.length >= limits.perDay) blockedUntil.push(new Date(lastDay[lastDay.length - limits.perDay].createdAt).getTime() + DAY_MS);
   if (mine.length >= limits.perWeek) blockedUntil.push(new Date(mine[mine.length - limits.perWeek].createdAt).getTime() + 7 * DAY_MS);
 
-  // one generation per trader at a time, whichever kind of review it is (see aiJobGuard.js)
-  const generating = isUserBusy(ownerId);
+  // one generation per trader at a time, whichever kind of review it is (see aiJobGuard.js and reserveUsage)
+  const generating = await isGenerating(ownerId);
 
   if (!blockedUntil.length) return { usage, blocked: false, reason: null, nextAvailableAt: null, message: "", generating };
 
@@ -102,7 +114,7 @@ export const evaluateAccess = async ({ week, saved, ownerId }) => {
   // failed is deleted at once (see withUsageReservation); this window also ignores any orphan left by a crash.
   const budgetUsed = await AiUsage.countDocuments({
     day: pacificDayKey(),
-    $or: [{ ok: true }, { createdAt: { $gte: new Date(Date.now() - PENDING_WINDOW_MS) } }],
+    $or: [{ ok: true }, { createdAt: { $gte: pendingSince() } }],
   });
 
   const { usage } = quota;
@@ -136,8 +148,37 @@ export const evaluateAccess = async ({ week, saved, ownerId }) => {
   return { ...base, canGenerate: true, reason: null, message: "" };
 };
 
-/** Reserves one generation before Gemini is called, so concurrent traders cannot overshoot the daily budget. */
-export const reserveUsage = ({ ownerId, journalId, weekStart }) => AiUsage.create({ owner: ownerId, journal: journalId, weekStart, day: pacificDayKey() });
+/**
+ * Reserves one generation before Gemini is called, so concurrent traders cannot overshoot the daily budget.
+ *
+ * The in-memory guards (aiJobGuard, inFlight) only see one process. The reservation row is the shared truth, so after
+ * inserting it this re-checks, against the database, what the unsynchronised checks in evaluateAccess could not:
+ *  - another unconfirmed reservation of the same trader that is older (smaller _id) wins: this one stands down, so two
+ *    instances can never run two generations (and charge two reviews) for one trader;
+ *  - the shared daily budget counting only reservations ahead of this one, so a burst cannot overshoot it;
+ *  - the trader's own day/week caps (confirmed rows only).
+ * A losing reservation is deleted again, so it costs nothing.
+ */
+export const reserveUsage = async ({ ownerId, journalId, weekStart }) => {
+  const usage = await AiUsage.create({ owner: ownerId, journal: journalId, weekStart, day: pacificDayKey() });
+  try {
+    const since = pendingSince();
+    const olderOfMine = await AiUsage.exists({ owner: ownerId, ok: false, _id: { $lt: usage._id }, createdAt: { $gte: since } });
+    if (olderOfMine) throw new ApiError(429, "Your other review is still being written. Wait for it to finish, then try again.");
+
+    const aheadOfMe = await AiUsage.countDocuments({ day: usage.day, _id: { $lt: usage._id }, $or: [{ ok: true }, { createdAt: { $gte: since } }] });
+    if (aheadOfMe >= aiLimits().dailyBudget) {
+      throw new ApiError(429, "The AI mentor is receiving a lot of requests right now. Please try again in a few minutes.");
+    }
+
+    const quota = await getQuotaSnapshot(ownerId);
+    if (quota.blocked) throw new ApiError(429, quota.message);
+  } catch (error) {
+    await releaseUsage(usage._id).catch((releaseError) => console.error("Could not release a rejected AI review reservation:", releaseError));
+    throw error;
+  }
+  return usage;
+};
 
 export const markUsageOk = (id) => AiUsage.updateOne({ _id: id }, { $set: { ok: true } });
 
@@ -166,24 +207,38 @@ const withAllowanceNote = (error) => {
  */
 export const withUsageReservation = async ({ ownerId, journalId, weekStart }, work) => {
   const usage = await reserveUsage({ ownerId, journalId, weekStart });
+  const id = String(usage._id);
+  liveReservations.add(id);
 
-  let result;
   try {
-    result = await work();
-  } catch (error) {
-    await releaseUsage(usage._id).catch((releaseError) => console.error("Could not release an unused AI review reservation:", releaseError));
-    throw withAllowanceNote(error);
-  }
-
-  // The review is saved. If confirming it fails twice the trader still keeps the review; the row stays unconfirmed,
-  // which simply means it is not counted against them.
-  for (let attempt = 0; attempt < 2; attempt += 1) {
+    let result;
     try {
-      await markUsageOk(usage._id);
-      break;
-    } catch (markError) {
-      console.error("Could not confirm an AI review reservation:", markError);
+      result = await work();
+    } catch (error) {
+      await releaseUsage(usage._id).catch((releaseError) => console.error("Could not release an unused AI review reservation:", releaseError));
+      throw withAllowanceNote(error);
     }
+
+    // The review is saved. If confirming keeps failing the trader still keeps the review; the row stays unconfirmed,
+    // which simply means it is not counted against them.
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        await markUsageOk(usage._id);
+        break;
+      } catch (markError) {
+        console.error("Could not confirm an AI review reservation:", markError);
+        if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 250));
+      }
+    }
+    return result;
+  } finally {
+    liveReservations.delete(id);
   }
-  return result;
+};
+
+/** On shutdown: hands back reservations of generations this process could not finish, so they never linger as "generating". */
+export const releasePendingReservations = async () => {
+  const ids = [...liveReservations];
+  liveReservations.clear();
+  if (ids.length) await AiUsage.deleteMany({ _id: { $in: ids }, ok: false });
 };

@@ -1,10 +1,23 @@
 import { ApiError } from "./ApiError.js";
 
 const ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
-const REQUEST_TIMEOUT_MS = 120_000; // "thinking" Flash models can take a while on a long journal
-const TRANSIENT_TRIES = 3; // tries per model for 500/503/504/network blips
+
+const int = (name, fallback) => {
+  const value = Number.parseInt(process.env[name] ?? "", 10);
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+};
+// Read on every call so they can be tuned from the environment (and in tests) without a rebuild.
+const requestTimeoutMs = () => int("GEMINI_REQUEST_TIMEOUT_MS", 60_000); // one HTTP call to one model
+const deadlineMs = () => int("GEMINI_DEADLINE_MS", 110_000); // ALL models and retries of one generation together
+const retryBackoffMs = () => int("GEMINI_RETRY_BACKOFF_MS", 1500);
+const minCallMs = () => int("GEMINI_MIN_CALL_MS", 8_000); // not worth starting another call with less time than this left
+const brokenModelCooldownMs = () => int("GEMINI_BROKEN_COOLDOWN_MS", 15_000); // skip a model that just timed out / kept failing
+const FAST_FAILURE_RETRIES = 1; // extra tries on the SAME model, only for fast 5xx / network failures (never for a timeout)
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const UNAVAILABLE_MESSAGE = "The AI mentor is temporarily unavailable. Please try again in a few minutes.";
+const TIMEOUT_MESSAGE = "The AI mentor took too long to respond. Please try again in a few minutes.";
 
 export const BUSY_MESSAGE = "The AI mentor is a little busy right now. Please try again in a few minutes. Your review wasn't charged.";
 
@@ -23,6 +36,8 @@ const modelChain = () => {
 
 // model -> timestamp until which it is known to be rate limited / missing; skipped (not even called) until then.
 const cooldowns = new Map();
+// models that rejected the thinking setting once: do not waste a round trip re-learning that on every request
+const noThinking = new Set();
 const coolingUntil = (model) => cooldowns.get(model) ?? 0;
 const cool = (model, ms) => cooldowns.set(model, Date.now() + ms);
 
@@ -49,19 +64,21 @@ const isDailyQuota = (detail) => {
   return /PerDay|per day|daily/i.test(text);
 };
 
-const callOnce = async (model, apiKey, body) => {
+const callOnce = async (model, apiKey, body, timeoutMs) => {
   let response;
   try {
     response = await fetch(`${ENDPOINT}/${encodeURIComponent(model)}:generateContent`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (error) {
     const timedOut = error?.name === "TimeoutError" || error?.name === "AbortError";
     console.error(`[gemini] ${model}: ${timedOut ? "timed out" : `network error: ${error?.cause?.code ?? error?.message}`}`);
-    throw Object.assign(new ApiError(503, "The AI mentor is temporarily unavailable. Please try again in a few minutes."), { transient: true });
+    // a timeout means the model is hung or slow: retrying it only repeats the wait, so move on to the next model instead
+    if (timedOut) throw Object.assign(new ApiError(503, TIMEOUT_MESSAGE), { timedOut: true });
+    throw Object.assign(new ApiError(503, UNAVAILABLE_MESSAGE), { transient: true });
   }
 
   if (response.ok) return response.json();
@@ -107,10 +124,14 @@ export const generateJson = async ({ system, prompt, schema }) => {
   };
 
   const models = modelChain();
+  const startedAt = Date.now();
+  const remaining = () => deadlineMs() - (Date.now() - startedAt);
   let data;
   let usedModel;
   let lastError;
   let soonestRetryMs;
+  let attemptedCalls = 0;
+  let outOfTime = false;
 
   for (const model of models) {
     const left = coolingUntil(model) - Date.now();
@@ -118,42 +139,66 @@ export const generateJson = async ({ system, prompt, schema }) => {
       soonestRetryMs = Math.min(soonestRetryMs ?? left, left);
       continue;
     }
+    if (remaining() < minCallMs()) {
+      outOfTime = true;
+      break;
+    }
+
+    // each model gets its own copy so dropping the thinking setting for one model never leaks into another
+    const modelBody = { ...body, generationConfig: { ...body.generationConfig } };
+    if (noThinking.has(model)) delete modelBody.generationConfig.thinkingConfig;
 
     let lastModelError;
-    for (let attempt = 0; attempt < TRANSIENT_TRIES; ) {
+    for (let retries = 0; ; ) {
+      const timeoutMs = Math.min(requestTimeoutMs(), remaining());
+      if (timeoutMs < minCallMs()) {
+        outOfTime = true;
+        break;
+      }
+      attemptedCalls += 1;
+      const callStarted = Date.now();
       try {
-        data = await callOnce(model, apiKey, body);
+        data = await callOnce(model, apiKey, modelBody, timeoutMs);
         usedModel = model;
+        console.log(`[gemini] ${model} ok in ${Date.now() - callStarted}ms (total ${Date.now() - startedAt}ms, call ${attemptedCalls})`);
         break;
       } catch (error) {
         lastModelError = error;
         if (error.dropThinking) {
-          delete body.generationConfig.thinkingConfig; // not counted as an attempt
+          delete modelBody.generationConfig.thinkingConfig; // not counted as a retry
+          noThinking.add(model);
           continue;
         }
-        if (error.transient && attempt < TRANSIENT_TRIES - 1) {
-          attempt += 1;
-          await wait(1500 * attempt);
+        // only a FAST 5xx / network failure is worth one more try on the same model, and only if there is time for it
+        if (error.transient && retries < FAST_FAILURE_RETRIES && remaining() > retryBackoffMs() + minCallMs()) {
+          retries += 1;
+          await wait(retryBackoffMs());
           continue;
         }
-        break; // give up on this model
+        break; // give up on this model; the next one in the chain gets the remaining time
       }
     }
     if (data) break;
 
-    lastError = lastModelError;
+    lastError = lastModelError ?? lastError;
     if (lastModelError?.modelMissing) cool(model, 60 * 60_000);
     else if (lastModelError?.rateLimited) {
       const ms = Math.min(lastModelError.retryAfterMs ?? 30_000, 6 * 60 * 60_000);
       cool(model, ms);
       soonestRetryMs = Math.min(soonestRetryMs ?? ms, ms);
     } else if (lastModelError?.config) throw lastModelError; // another model will not fix a bad key
+    else if (lastModelError?.timedOut || lastModelError?.transient) cool(model, brokenModelCooldownMs()); // a burst should not each wait on the same dead model
+    if (outOfTime) break;
   }
 
   if (!data) {
+    const elapsed = Date.now() - startedAt;
+    console.error(`[gemini] gave up after ${elapsed}ms, ${attemptedCalls} call(s): ${lastError?.message ?? (outOfTime ? "out of time" : "all models cooling down")}`);
     if (lastError?.rateLimited || soonestRetryMs !== undefined) {
-      throw Object.assign(new ApiError(429, BUSY_MESSAGE), { rateLimited: true, retryAfterMs: soonestRetryMs });
+      // attemptedCalls === 0: every model was already cooling down, so nothing new was learned and the queue need not pause again
+      throw Object.assign(new ApiError(429, BUSY_MESSAGE), { rateLimited: true, retryAfterMs: soonestRetryMs, skippedCooldown: attemptedCalls === 0 });
     }
+    if (outOfTime && !lastError) throw new ApiError(503, TIMEOUT_MESSAGE);
     throw lastError ?? new ApiError(502, "The AI service is having trouble. Please try again shortly. Your review wasn't charged.");
   }
 

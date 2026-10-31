@@ -130,6 +130,7 @@ const generate = async (week) => {
   // the flywheel link: what the previous review asked the trader to carry into this week
   const lastCommitment = await findLastCommitment({ journalId: week.journal._id, ownerId, before: week.weekStart });
   const { prompt, tradeLabels, leakReport, hasPlanContext, hasLast, closedCount } = buildMentorPrompt({ ...week, lastCommitment });
+  const generationStarted = Date.now();
 
   // The generation is reserved first so concurrent traders cannot overshoot the shared daily budget, but it only
   // counts once the review is saved. If Gemini is rate limited, the queue is full, the call times out or the answer
@@ -139,11 +140,14 @@ const generate = async (week) => {
     const review = sanitizeReview(result, tradeLabels, { hasPlanContext, weekStart: week.weekStart, weekEnd: week.weekEnd, hasLast, closedCount, leakReport });
     if (!review.summary || !review.headline) throw new ApiError(502, "The AI returned an incomplete review. Please try again.");
 
-    return AiReview.findOneAndUpdate(
+    const persistStarted = Date.now();
+    const saved = await AiReview.findOneAndUpdate(
       { journal: week.journal._id, weekStart: week.weekStart },
       { $set: { owner: ownerId, inputHash: week.inputHash, contextHash: week.contextHash, reviewedTradeCount: week.weekTrades.length, model, review } },
       { upsert: true, new: true, setDefaultsOnInsert: true }
     ).lean();
+    console.log(`[ai-review] weekly saved in ${Date.now() - persistStarted}ms (total ${Date.now() - generationStarted}ms)`);
+    return saved;
   });
 };
 

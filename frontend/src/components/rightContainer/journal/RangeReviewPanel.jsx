@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { createRangeReview, previewRangeReview } from '../../../services/aiRangeReviewApi'
+import { createRangeReview, getRangeReviewStatus, previewRangeReview } from '../../../services/aiRangeReviewApi'
 import { dateKeyFromDate, formatDateKey } from '../../../utils/tradeAnalytics'
 import { focusRing } from '../../common/controlStyles'
 import ListenControls from './ListenControls'
@@ -121,6 +121,15 @@ function UnlockMeter({ count, target }) {
   )
 }
 
+// After a POST is cut off (proxy timeout, dropped connection) the server usually keeps writing the review. These decide
+// when to keep waiting for it instead of reporting a failure, and for how long.
+const RECOVERY_MAX_MS = 4.5 * 60_000
+const isCutOff = (error) =>
+  error instanceof TypeError ||
+  error?.timedOut === true ||
+  (error?.status >= 500 && error?.fromApi === false) ||
+  (error?.status === 429 && /still being written/i.test(error?.message ?? ''))
+
 /**
  * The only way to ask the mentor for feedback: pick a period (a preset or any dates), then press the button.
  * Choosing dates only loads what is saved (free); a new review is written when the trader presses the button.
@@ -140,6 +149,8 @@ function RangeReviewPanel({ journalId, currency, seed, journalRange, earliestTra
   const [error, setError] = useState('')
   const [reloadKey, setReloadKey] = useState(0)
   const requestId = useRef(0)
+  const generatingRef = useRef(false)
+  const attempt = useRef({ startedAt: 0, baseline: null, cutOff: false })
 
   const days = range.from && range.to && range.from <= range.to ? daysBetween(range.from, range.to) : 0
   const valid = days > 0 && days <= MAX_RANGE_DAYS
@@ -183,7 +194,10 @@ function RangeReviewPanel({ journalId, currency, seed, journalRange, earliestTra
   )
 
   const generate = useCallback(async () => {
+    if (generatingRef.current) return // a double click must not send a second request
+    generatingRef.current = true
     const id = ++requestId.current
+    attempt.current = { startedAt: Date.now(), baseline: data?.generatedAt ?? null, cutOff: false }
     setPhase('generating')
     setError('')
     try {
@@ -194,42 +208,79 @@ function RangeReviewPanel({ journalId, currency, seed, journalRange, earliestTra
       if (next.review && !next.stale) onReviewReady?.()
     } catch (generateError) {
       if (id !== requestId.current) return
+      if (isCutOff(generateError)) {
+        // the server may still be writing the review: keep the loader and let the recovery check below find it
+        attempt.current.cutOff = true
+        return
+      }
       setError(errorText(generateError))
       onRefreshQuota?.()
+    } finally {
+      generatingRef.current = false
     }
     if (id === requestId.current) setPhase('ready')
-  }, [journalId, range.from, range.to, onAccess, onRefreshQuota, onReviewReady])
+  }, [journalId, range.from, range.to, data?.generatedAt, onAccess, onRefreshQuota, onReviewReady])
 
-  // a long request can outlive the connection: while generating, keep checking whether the review has been saved
+  // While generating, watch the cheap status endpoint: it finds a review that was saved even when the POST never answered
+  // (and ends the wait once the server has stopped working without saving anything), with a time limit and a gentle backoff.
   useEffect(() => {
     if (phase !== 'generating') return undefined
 
     const id = requestId.current
     let cancelled = false
     let timeoutId
+    let checks = 0
+    let idleChecks = 0
+    const finish = (message) => {
+      if (cancelled || id !== requestId.current) return
+      requestId.current += 1
+      generatingRef.current = false
+      setError(message)
+      onRefreshQuota?.()
+      setPhase('ready')
+    }
     const check = async () => {
+      checks += 1
       try {
-        const latest = await previewRangeReview(journalId, range.from, range.to)
+        const status = await getRangeReviewStatus(journalId, range.from, range.to)
         if (cancelled || id !== requestId.current) return
-        if (latest.review && !latest.stale) {
-          setData(latest)
-          onAccess?.(latest.access)
-          onReviewReady?.()
-          setError('')
-          setPhase('ready')
+        if (status.savedAt && status.savedAt !== attempt.current.baseline) {
+          // only what the database returns is shown as saved
+          const latest = await previewRangeReview(journalId, range.from, range.to)
+          if (cancelled || id !== requestId.current) return
+          if (latest.review) {
+            requestId.current += 1
+            generatingRef.current = false
+            setData(latest)
+            onAccess?.(latest.access)
+            onReviewReady?.()
+            setError('')
+            setPhase('ready')
+            return
+          }
+        }
+        // after a cut-off POST, a server that is no longer working and saved nothing means the attempt failed
+        idleChecks = status.generating ? 0 : idleChecks + 1
+        if (attempt.current.cutOff && idleChecks >= 2) {
+          finish("The AI mentor couldn't finish this review. Your review wasn't charged. Please try again in a few minutes.")
           return
         }
       } catch (pollError) {
         if (!cancelled && id === requestId.current) console.error('Could not check whether the AI review has completed:', pollError)
       }
-      if (!cancelled) timeoutId = setTimeout(check, 4000)
+      if (cancelled) return
+      if (Date.now() - attempt.current.startedAt > RECOVERY_MAX_MS) {
+        finish('This is taking longer than expected. If the review finishes, it will appear when you reopen this period. Please try again in a few minutes.')
+        return
+      }
+      timeoutId = setTimeout(check, Math.min(3000 + checks * 1000, 10_000))
     }
-    timeoutId = setTimeout(check, 4000)
+    timeoutId = setTimeout(check, 3000)
     return () => {
       cancelled = true
       clearTimeout(timeoutId)
     }
-  }, [phase, journalId, range.from, range.to, onAccess, onReviewReady])
+  }, [phase, journalId, range.from, range.to, onAccess, onRefreshQuota, onReviewReady])
 
   const busy = valid && phase === 'generating'
   useEffect(() => {

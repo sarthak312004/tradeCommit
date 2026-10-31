@@ -2,6 +2,7 @@ import 'dotenv/config'
 import mongoose from 'mongoose'
 import { app } from './app.js'
 import { dbConnection } from './db/dbConnection.js'
+import { pendingReservationCount, releasePendingReservations } from './utils/aiQuota.js'
 
 const requiredEnv = [
     'MONGODB_CONNECTION_URL',
@@ -63,7 +64,13 @@ try {
                     process.exit(1)
                 })
         })
-        setTimeout(() => process.exit(1), 10000).unref()
+        // reviews still being written get time to finish (the open requests keep the server alive); anything left is handed
+        // back so it never lingers as "generating"
+        const forceExitMs = pendingReservationCount() > 0 ? 25000 : 10000
+        setTimeout(async () => {
+            await releasePendingReservations().catch((releaseError) => console.error('Could not release AI reservations on shutdown', releaseError))
+            process.exit(1)
+        }, forceExitMs).unref()
     }
 
     process.on('SIGTERM', () => shutdown('SIGTERM'))

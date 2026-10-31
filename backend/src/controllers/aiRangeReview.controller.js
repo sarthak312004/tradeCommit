@@ -12,7 +12,7 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { sanitizeReview, REVIEW_SCHEMA } from "../utils/aiMentorPrompt.js";
 import { buildRangePrompt, RANGE_SYSTEM_PROMPT } from "../utils/aiRangePrompt.js";
 import { isUserBusy, markUserBusy, releaseUser } from "../utils/aiJobGuard.js";
-import { evaluateAccess, withUsageReservation } from "../utils/aiQuota.js";
+import { evaluateAccess, isGenerating, withUsageReservation } from "../utils/aiQuota.js";
 import { generateJson } from "../utils/gemini.js";
 import { runQueued } from "../utils/geminiQueue.js";
 import { htmlToPlainText } from "../utils/richText.js";
@@ -145,6 +145,7 @@ const generate = async (range) => {
   // the flywheel link: what the previous review asked the trader to carry into this period
   const lastCommitment = await findLastCommitment({ journalId: range.journal._id, ownerId, before: range.rangeStart });
   const { prompt, tradeLabels, leakReport, hasPlanContext, hasLast, closedCount } = buildRangePrompt({ ...range, lastCommitment });
+  const generationStarted = Date.now();
 
   // Reserved first (shared daily budget), counted only once the review is saved. Any failure on the way, such as a
   // Gemini rate limit, a full queue, a timeout or an unusable answer, deletes the reservation: no allowance is used.
@@ -153,7 +154,8 @@ const generate = async (range) => {
     const review = sanitizeReview(result, tradeLabels, { hasPlanContext, weekStart: range.rangeStart, weekEnd: range.rangeEnd, maxPlanDays: MAX_PLAN_DAYS_IN_REVIEW, hasLast, closedCount, leakReport });
     if (!review.summary || !review.headline) throw new ApiError(502, "The AI returned an incomplete review. Please try again.");
 
-    return AiRangeReview.findOneAndUpdate(
+    const persistStarted = Date.now();
+    const saved = await AiRangeReview.findOneAndUpdate(
       { journal: range.journal._id, rangeStart: range.rangeStart, rangeEnd: range.rangeEnd },
       {
         $set: {
@@ -168,6 +170,8 @@ const generate = async (range) => {
       },
       { upsert: true, new: true, setDefaultsOnInsert: true }
     ).lean();
+    console.log(`[ai-review] range saved in ${Date.now() - persistStarted}ms (total ${Date.now() - generationStarted}ms)`);
+    return saved;
   });
 };
 
@@ -231,6 +235,25 @@ export const createRangeReview = asyncHandler(async (req, res) => {
   markUserBusy(ownerId, key);
 
   return respond(await job);
+});
+
+// GET /api/v1/journals/:journalId/ai-range-reviews/status?start=YYYY-MM-DD&end=YYYY-MM-DD
+// Very cheap (two indexed reads, no trade loading, never calls the AI). Lets the client recover when its POST was cut
+// off by a proxy or a network drop while the server kept writing the review: { generating, savedAt }. `savedAt` is the
+// time the saved review for that exact range was last written (null when none), read from the database only.
+export const getRangeReviewStatus = asyncHandler(async (req, res) => {
+  const journalId = requireJournalId(req);
+  const { start, end } = req.query ?? {};
+  validateRange(start, end);
+
+  const journal = await Journal.findOne({ _id: journalId, owner: req.user._id }).select("_id").lean();
+  if (!journal) throw new ApiError(404, "Journal not found");
+
+  const [saved, generating] = await Promise.all([
+    AiRangeReview.findOne({ journal: journal._id, owner: req.user._id, rangeStart: start, rangeEnd: end }).select("updatedAt").lean(),
+    isGenerating(req.user._id),
+  ]);
+  return res.status(200).json(new ApiResponse(200, { generating, savedAt: saved?.updatedAt ? new Date(saved.updatedAt).toISOString() : null }, "AI range review status fetched"));
 });
 
 // GET /api/v1/journals/:journalId/ai-range-reviews/carry-forward
