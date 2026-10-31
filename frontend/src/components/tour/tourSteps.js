@@ -12,7 +12,7 @@
 //   primary    optional label for the main button
 //
 // "{name}" in a title or body is replaced with the user's first name.
-// A step whose target is not on screen is skipped automatically.
+// A step whose target is still not on screen after a long wait is skipped; a tour in which no step could be shown stays pending.
 
 const at = (id) => `[data-tour="${id}"]`
 
@@ -37,6 +37,16 @@ export const TOURS = {
       body: 'Create one journal for a single account or strategy. Give it a memorable name and choose its base currency—your stats will stay together and make more sense.',
       tip: 'Keep it simple for now. You can add more journals whenever you need them.',
       primary: 'Continue',
+    },
+    {
+      id: 'planners',
+      target: at('sidebar-planners'),
+      placement: 'right',
+      sidebar: true,
+      eyebrow: 'Plan before you trade',
+      title: 'Trade planners',
+      body: 'Planners hold your dated trade plans: setups, key levels and notes for upcoming sessions. Create one here whenever you like, and opening it starts a short walkthrough.',
+      tip: 'Optional. A planner can be linked to a journal so the AI mentor can compare plan and result.',
     },
     {
       id: 'done',
@@ -110,5 +120,15 @@ export const TOURS = {
  * The steps to run for a tour. Replaying the main tour while a journal already exists continues straight into the
  * journal steps, so one replay covers everything (its closing checklist is dropped, the journal steps close it instead).
  */
+// For someone who already has a journal the "create your first journal" copy is swapped for a neutral one.
+const EXISTING_JOURNAL_STEP = {
+  eyebrow: 'Step 1 · Your journals',
+  title: 'Your journals live here',
+  body: 'Switch between journals here, or press + to add another one for a different account or strategy.',
+  tip: undefined,
+}
+
 export const buildSteps = (tourId, hasJournal) =>
-  tourId === 'main' && hasJournal ? [...TOURS.main.filter((step) => step.id !== 'done'), ...TOURS.journal] : TOURS[tourId]
+  tourId === 'main' && hasJournal
+    ? [...TOURS.main.filter((step) => step.id !== 'done').map((step) => (step.id === 'journals' ? { ...step, ...EXISTING_JOURNAL_STEP } : step)), ...TOURS.journal]
+    : TOURS[tourId]

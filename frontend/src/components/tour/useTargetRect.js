@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react'
 // 'found'     `rect` is the element's box in viewport coordinates
 // 'missing'   gave up: the tour skips this step
 const WAIT_NOTICE_MS = 600
-const GIVE_UP_MS = 4000
+const GIVE_UP_MS = 8000 // slow networks: data-backed targets can take several seconds
 const LOSS_GRACE_MS = 1500 // the element re-mounting (a journal being created, a list refreshing) is not a reason to react
 
 const readRect = (element) => {
@@ -14,6 +14,15 @@ const readRect = (element) => {
   if (rect.width < 1 || rect.height < 1) return null
   if (window.getComputedStyle(element).visibility === 'hidden') return null
   return { left: rect.left, top: rect.top, width: rect.width, height: rect.height }
+}
+
+// A selector can match several elements (desktop and mobile variants of one control): take the first one that is on screen.
+const findVisible = (selector) => {
+  for (const element of document.querySelectorAll(selector)) {
+    const rect = readRect(element)
+    if (rect) return { element, rect }
+  }
+  return null
 }
 
 const sameRect = (a, b) =>
@@ -44,8 +53,9 @@ export function useTargetRect(selector, key) {
 
     const tick = () => {
       if (cancelled) return
-      const element = document.querySelector(selector)
-      const rect = element ? readRect(element) : null
+      const match = findVisible(selector)
+      const element = match?.element
+      const rect = match?.rect ?? null
 
       if (rect) {
         hasFound = true

@@ -58,6 +58,12 @@ export const moveTourState = (fromUsername, toUsername) => {
       window.localStorage.setItem(storageKey(toUsername, tourId), status)
       window.localStorage.removeItem(storageKey(fromUsername, tourId))
     })
+    ;['main', 'journal', 'planner'].forEach((tourId) => {
+      const step = window.localStorage.getItem(progressKey(fromUsername, tourId))
+      if (step === null) return
+      window.localStorage.setItem(progressKey(toUsername, tourId), step)
+      window.localStorage.removeItem(progressKey(fromUsername, tourId))
+    })
   } catch {
     // storage unavailable: nothing was remembered anyway
   }
@@ -72,7 +78,32 @@ export const queueProductTours = (username) => {
 
 // A tour that ended must never start again by itself in this tab, even if the browser refused to store 'done'.
 const endedThisSession = new Set()
-export const markTourEnded = (username, tourId) => endedThisSession.add(`${username}:${tourId}`)
-export const hasTourEnded = (username, tourId) => endedThisSession.has(`${username}:${tourId}`)
+const sessionKey = (username, tourId) => `${String(username).toLowerCase()}:${tourId}`
+export const markTourEnded = (username, tourId) => endedThisSession.add(sessionKey(username, tourId))
+export const hasTourEnded = (username, tourId) => endedThisSession.has(sessionKey(username, tourId))
+
+// The step a tour was on, so a refresh or a trip to another page resumes it instead of restarting from the welcome card.
+const progressKey = (username, tourId) => `tradecommit:tour-step:${String(username).toLowerCase()}:${tourId}`
+export const getTourProgress = (username, tourId) => {
+  try {
+    return window.localStorage.getItem(progressKey(username, tourId))
+  } catch {
+    return null
+  }
+}
+export const setTourProgress = (username, tourId, stepId) => {
+  try {
+    window.localStorage.setItem(progressKey(username, tourId), stepId)
+  } catch {
+    // storage unavailable: the tour restarts from its first step next time
+  }
+}
+export const clearTourProgress = (username, tourId) => {
+  try {
+    window.localStorage.removeItem(progressKey(username, tourId))
+  } catch {
+    // nothing was stored
+  }
+}
 
 export const replayProductTour = () => window.dispatchEvent(new Event(TOUR_REPLAY_EVENT))

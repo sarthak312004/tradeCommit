@@ -98,6 +98,22 @@ function TourCard({ step, index, total, rect, name, onNext, onBack, onSkip }) {
     arrow = <span aria-hidden="true" className={`${arrowBase} ${arrowBorder}`} style={arrowStyle} />
   }
 
+  // keep Tab inside the card while focus is on it
+  const trapTab = (event) => {
+    if (event.key !== 'Tab') return
+    const items = [...cardRef.current.querySelectorAll('button:not([disabled])')]
+    if (items.length === 0) return
+    const first = items[0]
+    const last = items[items.length - 1]
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault()
+      last.focus()
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault()
+      first.focus()
+    }
+  }
+
   const primaryLabel = step.primary ?? (isLast ? 'Finish' : 'Next')
   const progress = ((index + 1) / total) * 100
 
@@ -105,27 +121,30 @@ function TourCard({ step, index, total, rect, name, onNext, onBack, onSkip }) {
     <div
       ref={cardRef}
       role="dialog"
+      data-tour-card=""
       aria-modal="true"
       aria-labelledby="tour-title"
       aria-describedby="tour-body"
       tabIndex={-1}
+      onKeyDown={trapTab}
       style={{ left: x, top: y, width }}
-      className={`fixed z-[91] max-w-[calc(100vw-24px)] animate-[fadeIn_.2s_ease-out] overflow-hidden rounded-2xl border border-zinc-200 bg-white p-5 text-left shadow-[0_24px_80px_-20px_rgba(0,0,0,0.5)] outline-none dark:border-white/[0.12] dark:bg-panel-hi ${
+      className={`fixed z-[91] max-w-[calc(100vw-24px)] animate-[fadeIn_.2s_ease-out] motion-reduce:animate-none overflow-hidden rounded-2xl border border-zinc-200 bg-white p-5 text-left shadow-[0_24px_80px_-20px_rgba(0,0,0,0.5)] outline-none dark:border-white/[0.12] dark:bg-panel-hi ${
         hasSettled ? 'transition-[left,top] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none' : ''
       }`}
     >
       {arrow}
       <div className="absolute inset-x-0 top-0 h-1 bg-zinc-100 dark:bg-white/[0.06]" aria-hidden="true">
-        <div className="h-full rounded-r-full bg-sky-500 transition-[width] duration-300 dark:bg-sky-400" style={{ width: `${progress}%` }} />
+        <div className="h-full rounded-r-full bg-sky-500 transition-[width] duration-300 motion-reduce:transition-none dark:bg-sky-400" style={{ width: `${progress}%` }} />
       </div>
 
       <div className="flex items-center justify-between gap-3 pt-1">
         <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500 dark:text-zinc-400">
+          <span className="sr-only">{`Step ${index + 1} of ${total}. `}</span>
           {step.eyebrow ?? `Step ${index + 1} of ${total}`}
         </p>
         <div aria-hidden="true" className="flex items-center gap-1">
           {Array.from({ length: total }, (_, dot) => (
-            <span key={dot} className={`h-1.5 rounded-full transition-all ${dot === index ? 'w-4 bg-zinc-800 dark:bg-zinc-200' : dot < index ? 'w-1.5 bg-zinc-500 dark:bg-zinc-400' : 'w-1.5 bg-zinc-300 dark:bg-white/20'}`} />
+            <span key={dot} className={`h-1.5 rounded-full transition-all motion-reduce:transition-none ${dot === index ? 'w-4 bg-zinc-800 dark:bg-zinc-200' : dot < index ? 'w-1.5 bg-zinc-500 dark:bg-zinc-400' : 'w-1.5 bg-zinc-300 dark:bg-white/20'}`} />
           ))}
         </div>
       </div>
