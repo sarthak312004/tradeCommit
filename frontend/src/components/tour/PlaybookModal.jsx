@@ -1,6 +1,8 @@
 import { useContext, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { journalContext, plannerContext } from '../../context/Context'
+import { useGuidance } from '../../hooks/useGuidance'
+import { GUIDES } from '../../utils/guidance'
 import { OPEN_PLAYBOOK_EVENT } from '../../utils/productTour'
 import { CloseIcon } from '../../utils/Icons.jsx'
 import { controlNeutral, controlPrimary, focusRing } from '../common/controlStyles'
@@ -188,34 +190,39 @@ const CHAPTERS = [
 /**
  * THE TRADING PLAYBOOK: a short read-only walkthrough in a modal. It explains the workflow (plan → log → review →
  * improve) with snapshots of the real screens and why each step matters. It never highlights or blocks the app and
- * does not touch tour progress. Opened from the profile menu or the empty-journal screen.
+ * does not touch tour progress. It NEVER opens by itself: only when the user asks (profile menu, the empty-journal screen) or
+ * through the Trading Loop's "Playbook" button. The guidance controller grants it the screen only when no other guide is on it.
  */
 function PlaybookModal({ onCreate }) {
-  const { journals = [] } = useContext(journalContext) ?? {}
-  const { planners = [] } = useContext(plannerContext) ?? {}
-  const [open, setOpen] = useState(false)
-  const [index, setIndex] = useState(0)
-  const dialogRef = useRef(null)
+  const { activeId, request, release } = useGuidance()
   const openerRef = useRef(null)
 
   useEffect(() => {
     const show = () => {
       openerRef.current = document.activeElement
-      setIndex(0)
-      setOpen(true)
+      request(GUIDES.PLAYBOOK, { trigger: 'user' })
     }
     window.addEventListener(OPEN_PLAYBOOK_EVENT, show)
     return () => window.removeEventListener(OPEN_PLAYBOOK_EVENT, show)
-  }, [])
+  }, [request])
+
+  if (activeId !== GUIDES.PLAYBOOK) return null
+  return <PlaybookDialog onCreate={onCreate} openerRef={openerRef} onClose={() => release(GUIDES.PLAYBOOK)} />
+}
+
+function PlaybookDialog({ onCreate, openerRef, onClose }) {
+  const { journals = [] } = useContext(journalContext) ?? {}
+  const { planners = [] } = useContext(plannerContext) ?? {}
+  const [index, setIndex] = useState(0)
+  const dialogRef = useRef(null)
 
   const close = () => {
-    setOpen(false)
+    onClose()
     const opener = openerRef.current
     if (opener instanceof HTMLElement && document.contains(opener)) opener.focus({ preventScroll: true })
   }
 
   useEffect(() => {
-    if (!open) return undefined
     dialogRef.current?.focus({ preventScroll: true })
     const onKey = (event) => {
       if (event.key === 'Escape') {
@@ -239,10 +246,8 @@ function PlaybookModal({ onCreate }) {
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- close only reads a ref
-  }, [open])
-
-  if (!open) return null
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- close only reads a ref and a stable release()
+  }, [])
 
   const chapter = CHAPTERS[index]
   const isLast = index === CHAPTERS.length - 1
@@ -262,6 +267,7 @@ function PlaybookModal({ onCreate }) {
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
+        data-guide-surface=""
         aria-labelledby="playbook-title"
         tabIndex={-1}
         className="relative flex max-h-[92vh] w-full max-w-3xl animate-[fadeIn_.2s_ease-out] flex-col overflow-hidden rounded-t-2xl border border-zinc-200 bg-white text-left shadow-[0_24px_80px_-20px_rgba(0,0,0,0.5)] outline-none motion-reduce:animate-none sm:rounded-2xl dark:border-white/[0.12] dark:bg-panel-hi"

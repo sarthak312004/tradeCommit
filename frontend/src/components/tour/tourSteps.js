@@ -9,6 +9,8 @@
 //   sidebar    true = the step points into the sidebar, so the tour opens it first if it is collapsed
 //   tip        optional "what to do next" line shown under the explanation
 //   checklist  optional numbered list (used by the closing card)
+//   action     true = the step asks the user to click the highlighted element: the card shows "Do it now" and the ring breathes
+//   demo       true = the card shows the read-only sample loop (Strategy, Plan, Trades, AI feedback); hardcoded data, no requests
 //   primary    optional label for the main button
 //
 // "{name}" in a title or body is replaced with the user's first name.
@@ -26,6 +28,16 @@ export const TOURS = {
       title: 'Let’s make your first trade count, {name}',
       body: 'TradeCommit gets useful when you capture the decision behind a trade—not just the profit or loss. We’ll get your workspace ready, then you can log a real or past trade.',
       primary: 'Show me the first step',
+    },
+    {
+      id: 'demo',
+      target: null,
+      demo: true,
+      eyebrow: 'See the result first',
+      title: 'Strategy, plan, trade, feedback',
+      body: 'This is sample data. Select each block to see how the parts connect. The AI mentor compares your plan with your trades.',
+      tip: 'The AI mentor starts after 5 trades.',
+      primary: 'Continue',
     },
     {
       id: 'journals',
@@ -60,30 +72,49 @@ export const TOURS = {
   ],
 
   // shown the first time a journal is on screen, so every step has something to point at
+  // order follows the loop: Strategy -> Plan -> Trade -> AI feedback
   journal: [
     {
       id: 'context',
       target: at('journal-context'),
       placement: 'bottom',
+      action: true,
       title: 'Journal context',
-      body: 'Your journal is ready. Write your strategy and default trade properties here. New trades start with those properties, and the weekly AI mentor checks your trades against this strategy.',
+      body: 'Your journal is ready. Write your strategy and default trade properties here. All trades in this journal share this context. The AI mentor checks each trade against your strategy.',
       tip: 'Do this first: write the 3 to 5 rules you want to follow. The mentor needs them.',
+    },
+    {
+      id: 'link-planner',
+      target: at('sidebar-planners'),
+      placement: 'right',
+      sidebar: true,
+      title: 'Plan, then link',
+      body: 'Create a planner and write your plan for the day. Then link the planner to this journal. The AI mentor compares your plan with your trades.',
+      tip: 'This is optional. A day without a plan is never a mistake.',
     },
     {
       id: 'add-trade',
       target: at('add-trade'),
       placement: 'bottom',
+      action: true,
       title: 'Log a trade',
       body: 'Add the asset, entry, exit and stop loss, then write why you took it. Paste chart screenshots into your notes, or press the mic to dictate them by voice.',
-      tip: 'Log it right after the trade, while the reasoning is fresh.',
+      tip: 'Log it right after the trade. Add 5 trades to unlock the AI mentor.',
+    },
+    {
+      id: 'mentor-orb',
+      target: at('mentor-orb'),
+      placement: 'left',
+      title: 'Your AI mentor',
+      body: 'This glowing orb is your AI mentor. It shows how your plan and your trades are different. It stays in the bottom-right corner on every tab.',
+      tip: 'Hover the orb to open the mentor review after 5 trades.',
     },
     {
       id: 'views',
       target: at('journal-views'),
       placement: 'bottom',
       title: 'Trades and Analysis',
-      body: 'Trades lists every entry. Analysis turns them into an equity curve, win rate, profit factor and drawdown. Your AI mentor is the glowing orb in the bottom-right corner, on every tab.',
-      tip: 'Hover the orb to open Mentor review. It needs a strategy and a few trades.',
+      body: 'Trades lists every entry. Analysis turns them into an equity curve, win rate, profit factor and drawdown.',
     },
     {
       id: 'more',
@@ -101,6 +132,7 @@ export const TOURS = {
       id: 'planner-day',
       target: at('planner-today'),
       placement: 'bottom',
+      action: true,
       title: 'Plan any day',
       body: 'Click a day, or its number, to write a plan: the setup, key levels, notes and screenshots. Plans appear as chips on that day, and you click one to reopen it.',
       tip: 'Try it now: click today and plan your next session.',

@@ -7,6 +7,9 @@ import ProfileAvatar from './ProfileAvatar'
 import ResetPasswordDialog from './ResetPasswordDialog'
 import { CompassIcon } from '../tour/tourIcons'
 import { openPlaybook, replayProductTour } from '../../utils/productTour'
+import { isTradingLoopEnabled, openTradingLoop } from '../../utils/tradingLoop'
+import LoopIcon from '../tradingLoop/LoopIcon'
+import { isMissionFinished, isMissionTrackerEnabled, openMission } from '../../utils/missionTracker'
 import { focusRing } from './profileStyles'
 
 const USERNAME_PATTERN = /^[a-z0-9_]{3,20}$/
@@ -170,6 +173,16 @@ function ProfileMenu() {
     openPlaybook()
   }
 
+  const startMission = () => {
+    setIsOpen(false)
+    openMission()
+  }
+
+  const startTradingLoop = () => {
+    setIsOpen(false)
+    openTradingLoop()
+  }
+
   return (
     <div ref={rootRef} className="relative shrink-0">
       <button
@@ -250,6 +263,30 @@ function ProfileMenu() {
               <CompassIcon className="h-3.5 w-3.5" />
               Take the product tour
             </button>
+
+            {isMissionTrackerEnabled() && !isMissionFinished(profile?.username) && (
+              <button
+                type="button"
+                onClick={startMission}
+                tabIndex={isOpen ? 0 : -1}
+                className={`mt-1.5 flex h-9 w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-zinc-300 text-[13px] font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-white/[0.14] dark:text-zinc-200 dark:hover:bg-white/[0.06] ${focusRing}`}
+              >
+                <LoopIcon className="h-3.5 w-3.5" />
+                Setup guide
+              </button>
+            )}
+
+            {isTradingLoopEnabled() && (
+              <button
+                type="button"
+                onClick={startTradingLoop}
+                tabIndex={isOpen ? 0 : -1}
+                className={`mt-1.5 flex h-9 w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-zinc-300 text-[13px] font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-white/[0.14] dark:text-zinc-200 dark:hover:bg-white/[0.06] ${focusRing}`}
+              >
+                <LoopIcon className="h-3.5 w-3.5" />
+                The Trading Loop
+              </button>
+            )}
 
             <button
               type="button"

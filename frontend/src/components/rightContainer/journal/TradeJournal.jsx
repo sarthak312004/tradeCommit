@@ -9,6 +9,7 @@ import JournalActionsMenu from './JournalActionsMenu'
 import MentorOrb from './MentorOrb'
 import MentorUnlockBadge from './MentorUnlockBadge'
 import { useMentorProgress } from '../../../hooks/useMentorProgress'
+import { MISSION_ACTION_EVENT, announceMentorOpened, consumeMissionAction } from '../../../utils/missionTracker'
 import { useProfile } from '../../../hooks/useProfile'
 import { getTourStatus, isTourActive, TOUR_ACTIVITY_CHANGE_EVENT, TOUR_STATUS_CHANGE_EVENT } from '../../../utils/productTour'
 import { CalendarNudge, EmptyWorkspace, FirstTradeCard } from '../../onboarding/GetStarted'
@@ -16,6 +17,7 @@ import { ALL_TIME, describeRangeInline, isRangeActive } from '../../../utils/dat
 import { filterTradesByDate, sortTradesNewestFirst, toDateKey } from '../../../utils/tradeAnalytics'
 import { DEFAULT_CURRENCY } from '../../../utils/currencies'
 import { buildTemplateFields, hasJournalContext } from '../../../utils/customFields'
+import { isRichTextEmpty } from '../../../utils/richText'
 import { buildFieldChoices, collectCustomFieldOptions, resolveCardFields } from '../../../utils/tradeCardFields'
 import { useTradeCardFields } from '../../../hooks/useTradeCardFields'
 import { useTradeView } from '../../../hooks/useTradeView'
@@ -141,6 +143,7 @@ function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades,
   const isMentorOpenRef = useRef(false)
 
   const openMentor = useCallback(() => {
+    announceMentorOpened()
     isMentorOpenRef.current = true
     setHasReadyMentorReview(false)
     setIsMentorMounted(true)
@@ -214,6 +217,23 @@ function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades,
     setIsFormOpen(true)
   }
 
+  // The mission tracker hands off actions to the journal's real trade form and AI mentor.
+  const missionHandlers = useRef({})
+  useEffect(() => {
+    missionHandlers.current = { 'new-trade': () => handleOpenNewTrade(), mentor: openMentor }
+  })
+  const journalIdForMission = journal?.id
+  useEffect(() => {
+    if (!journalIdForMission) return undefined
+    const run = () => {
+      const action = consumeMissionAction(journalIdForMission)
+      if (action) missionHandlers.current[action]?.()
+    }
+    run()
+    window.addEventListener(MISSION_ACTION_EVENT, run)
+    return () => window.removeEventListener(MISSION_ACTION_EVENT, run)
+  }, [journalIdForMission])
+
   const handleOpenEditTrade = (trade) => {
     if (trade.syncState) return // still saving, or failed: use the card's Retry / Discard instead
     writeFormDraft(tradeFormStateKey, { open: true, tradeId: trade.id, date: null })
@@ -267,6 +287,7 @@ function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades,
   }
 
   const currency = journal.currency ?? DEFAULT_CURRENCY
+  const hasJournalStrategy = !isRichTextEmpty(journal.context?.strategy?.trim())
   const isFiltered = isRangeActive(range)
   const subtitle = isFiltered
     ? `${visibleTrades.length} of ${journal.trades.length} trades, ${describeRangeInline(range)}`
@@ -457,6 +478,8 @@ function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades,
       ) : journal.trades.length === 0 ? (
         <FirstTradeCard
           journalName={journal.name}
+          hasStrategy={hasJournalStrategy}
+          mentorProgress={mentorProgress}
           onAddTrade={handleOpenNewTrade}
           onOpenContext={handleOpenContext}
           onCreate={onOpenCreateForm}

@@ -5,8 +5,11 @@ import { fetchPrefetched } from './utils/prefetch'
 import { SessionError, SessionLoading } from './components/common/SessionScreen'
 import ProductTour from './components/tour/ProductTour'
 import PlaybookModal from './components/tour/PlaybookModal'
+import TradingLoopExperience from './components/tradingLoop/TradingLoopExperience'
+import MissionCelebration from './components/onboarding/MissionCelebration'
 import { journalContext } from './context/Context'
 import { DeepFocusProvider } from './context/DeepFocusProvider'
+import GuidanceProvider from './context/GuidanceProvider'
 import DeepFocusDock from './components/rightContainer/planner/DeepFocusDock'
 import { MOBILE_MEDIA_QUERY, useIsMobile } from './hooks/useMediaQuery'
 
@@ -124,6 +127,7 @@ function Home() {
 
   return (
     <DeepFocusProvider>
+    <GuidanceProvider>
     <>
       <div className="fixed inset-0 flex overflow-hidden bg-canvas text-zinc-900 transition-colors duration-200 dark:bg-night dark:text-zinc-100">
         {isMobile && (
@@ -152,7 +156,12 @@ function Home() {
       <DeepFocusDock />
       <PlaybookModal onCreate={openCreateForm} />
       <ProductTour isSidebarOpen={navOpen} setIsSidebarOpen={setNavOpen} autoCloseSidebar={isMobile} onTourEnd={handleTourEnd} />
+      {/* All guides share one owner; The Trading Loop remains inert unless its rollout switch is enabled. */}
+      <TradingLoopExperience onComplete={handleTourEnd} />
+      {/* One-time completion popup, managed by the same guidance controller. */}
+      <MissionCelebration />
     </>
+    </GuidanceProvider>
     </DeepFocusProvider>
   )
 }

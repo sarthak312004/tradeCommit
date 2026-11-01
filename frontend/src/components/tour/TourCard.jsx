@@ -1,11 +1,14 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { controlNeutral, controlPrimary, focusRing } from '../common/controlStyles'
 import { LightbulbIcon } from './tourIcons'
+import TourDemo from './TourDemo'
+import { DEMO_BLOCKS } from './tourDemoData'
 
 const GAP = 14 // space between the highlight and the card
 const MARGIN = 12 // minimum space between the card and the window edge
 const CARD_WIDTH = 320
 const CENTER_WIDTH = 380
+const DEMO_WIDTH = 440
 
 const OPPOSITE = { right: 'left', left: 'right', top: 'bottom', bottom: 'top' }
 
@@ -44,11 +47,15 @@ function TourCard({ step, index, total, rect, name, onNext, onBack, onSkip }) {
   const [size, setSize] = useState({ w: step.target ? CARD_WIDTH : CENTER_WIDTH, h: 220 })
   const [viewport, setViewport] = useState(() => ({ w: window.innerWidth, h: window.innerHeight }))
   const [hasSettled, setHasSettled] = useState(false)
+  const [demoBlock, setDemoBlock] = useState(0) // demo step only: the block that is open
 
   const isFirst = index === 0
   const isLast = index === total - 1
   const isCentered = !rect
-  const width = isCentered ? CENTER_WIDTH : CARD_WIDTH
+  const width = step.demo ? DEMO_WIDTH : isCentered ? CENTER_WIDTH : CARD_WIDTH
+  // in the demo step the main button opens the next block first; after the last block it moves to the next step
+  const hasMoreDemo = Boolean(step.demo) && demoBlock < DEMO_BLOCKS.length - 1
+  const handleNext = () => (hasMoreDemo ? setDemoBlock((current) => current + 1) : onNext())
 
   useEffect(() => {
     const handleResize = () => setViewport({ w: window.innerWidth, h: window.innerHeight })
@@ -88,7 +95,7 @@ function TourCard({ step, index, total, rect, name, onNext, onBack, onSkip }) {
   let arrow = null
   if (placement?.side) {
     const along = (center, start, length) => Math.min(Math.max(center - start, 18), length - 18) - 5
-    const arrowBase = 'absolute h-2.5 w-2.5 rotate-45 border-zinc-300 bg-white dark:border-white/[0.13] dark:bg-panel-hi'
+    const arrowBase = 'absolute h-2.5 w-2.5 rotate-45 border-zinc-200 bg-white dark:border-white/[0.12] dark:bg-panel-hi'
     const byRight = { left: -6, top: along(placement.centerY, y, size.h) }
     const byLeft = { right: -6, top: along(placement.centerY, y, size.h) }
     const below = { top: -6, left: along(placement.centerX, x, width) }
@@ -114,7 +121,7 @@ function TourCard({ step, index, total, rect, name, onNext, onBack, onSkip }) {
     }
   }
 
-  const primaryLabel = step.primary ?? (isLast ? 'Finish' : 'Next')
+  const primaryLabel = hasMoreDemo ? `Next: ${DEMO_BLOCKS[demoBlock + 1].name}` : (step.primary ?? (isLast ? 'Finish' : 'Next'))
   const progress = ((index + 1) / total) * 100
 
   return (
@@ -128,13 +135,16 @@ function TourCard({ step, index, total, rect, name, onNext, onBack, onSkip }) {
       tabIndex={-1}
       onKeyDown={trapTab}
       style={{ left: x, top: y, width }}
-      className={`fixed z-[91] max-w-[calc(100vw-24px)] animate-[fadeIn_.2s_ease-out] motion-reduce:animate-none overflow-hidden rounded-2xl border border-zinc-200 bg-white p-5 text-left shadow-[0_24px_80px_-20px_rgba(0,0,0,0.5)] outline-none dark:border-white/[0.12] dark:bg-panel-hi ${
+      className={`fixed z-[91] max-w-[calc(100vw-24px)] animate-[fadeIn_.2s_ease-out] motion-reduce:animate-none ${step.demo ? 'max-h-[calc(100dvh-24px)] overflow-y-auto' : ''} rounded-2xl border border-zinc-200 bg-white p-5 text-left shadow-[0_24px_80px_-20px_rgba(0,0,0,0.5)] outline-none dark:border-white/[0.12] dark:bg-panel-hi ${
         hasSettled ? 'transition-[left,top] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none' : ''
       }`}
     >
       {arrow}
-      <div className="absolute inset-x-0 top-0 h-1 bg-zinc-100 dark:bg-white/[0.06]" aria-hidden="true">
-        <div className="h-full rounded-r-full bg-sky-500 transition-[width] duration-300 motion-reduce:transition-none dark:bg-sky-400" style={{ width: `${progress}%` }} />
+      {/* clips the bar to the card's inner corner (16px radius minus the 1px border); the pointer arrow stays outside it */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-[15px]" aria-hidden="true">
+        <div className="absolute inset-x-0 top-0 h-1 bg-zinc-100 dark:bg-white/[0.06]">
+          <div className="h-full rounded-r-full bg-sky-500 transition-[width] duration-300 motion-reduce:transition-none dark:bg-sky-400" style={{ width: `${progress}%` }} />
+        </div>
       </div>
 
       <div className="flex items-center justify-between gap-3 pt-1">
@@ -142,7 +152,8 @@ function TourCard({ step, index, total, rect, name, onNext, onBack, onSkip }) {
           <span className="sr-only">{`Step ${index + 1} of ${total}. `}</span>
           {step.eyebrow ?? `Step ${index + 1} of ${total}`}
         </p>
-        <div aria-hidden="true" className="flex items-center gap-1">
+        <div aria-hidden="true" className="flex shrink-0 items-center gap-1.5">
+          {step.eyebrow && <span className="mr-0.5 whitespace-nowrap text-[10px] font-medium tabular-nums text-zinc-600 dark:text-zinc-400">{index + 1} / {total}</span>}
           {Array.from({ length: total }, (_, dot) => (
             <span key={dot} className={`h-1.5 rounded-full transition-all motion-reduce:transition-none ${dot === index ? 'w-4 bg-zinc-800 dark:bg-zinc-200' : dot < index ? 'w-1.5 bg-zinc-500 dark:bg-zinc-400' : 'w-1.5 bg-zinc-300 dark:bg-white/20'}`} />
           ))}
@@ -159,12 +170,21 @@ function TourCard({ step, index, total, rect, name, onNext, onBack, onSkip }) {
         </div>
       )}
 
-      <h2 id="tour-title" className="mt-3 text-base font-semibold tracking-[-0.025em] text-zinc-900 dark:text-zinc-50">
+      {step.action && (
+        <p className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-sky-600/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-sky-800 dark:bg-sky-400/10 dark:text-sky-300">
+          <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-sky-600 motion-safe:animate-pulse dark:bg-sky-400" />
+          Do it now
+        </p>
+      )}
+
+      <h2 id="tour-title" className={`${step.action ? 'mt-2' : 'mt-3'} text-base font-semibold tracking-[-0.025em] text-zinc-900 dark:text-zinc-50`}>
         {fill(step.title, name)}
       </h2>
       <p id="tour-body" className="mt-2 text-[13px] leading-relaxed text-zinc-600 dark:text-zinc-300">
         {fill(step.body, name)}
       </p>
+
+      {step.demo && <TourDemo active={demoBlock} onSelect={setDemoBlock} />}
 
       {step.checklist && (
         <ol className="mt-4 space-y-2.5 rounded-xl border border-zinc-200/80 bg-zinc-50/80 p-3 dark:border-white/[0.08] dark:bg-white/[0.025]">
@@ -185,20 +205,16 @@ function TourCard({ step, index, total, rect, name, onNext, onBack, onSkip }) {
       )}
 
       <div className="mt-5 flex items-center justify-between gap-3 border-t border-zinc-200 pt-4 dark:border-white/[0.10]">
-        {isLast ? (
-          <span />
-        ) : (
-          <button type="button" onClick={onSkip} className={`cursor-pointer rounded px-1 text-xs font-medium text-zinc-600 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 ${focusRing}`}>
-            Skip tour
-          </button>
-        )}
+        <button type="button" onClick={onSkip} className={`cursor-pointer rounded px-1 text-xs font-medium text-zinc-600 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 ${focusRing}`}>
+          {isLast ? 'Close' : 'Skip tour'}
+        </button>
         <div className="flex items-center gap-2">
           {!isFirst && (
             <button type="button" onClick={onBack} className={controlNeutral}>
               Back
             </button>
           )}
-          <button ref={nextRef} type="button" onClick={onNext} className={controlPrimary}>
+          <button ref={nextRef} type="button" onClick={handleNext} className={controlPrimary}>
             {primaryLabel}
           </button>
         </div>

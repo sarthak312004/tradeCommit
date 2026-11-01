@@ -12,12 +12,18 @@ const bigPrimary =
 const bigSecondary =
   'inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-lg border border-zinc-300 bg-white px-5 text-sm font-semibold text-zinc-800 shadow-sm transition-colors hover:bg-zinc-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 dark:border-white/[0.16] dark:bg-white/[0.04] dark:text-zinc-100 dark:shadow-none dark:hover:bg-white/[0.08]'
 
-/** "1 of 3 done" strip: create a journal, log a trade, plan a session. Shown while the account is still new. */
-function ProgressChecklist({ hasJournal, hasTrade, hasPlanner }) {
+// Fallback only: the real number comes from the server (progress.target).
+const DEFAULT_TRADE_TARGET = 5
+
+/** "1 of 4 done" strip: create a journal, write strategy context, connect a planner, get AI feedback. Shown while the account is still new. */
+function ProgressChecklist({ hasJournal, hasStrategy, hasLinkedPlanner, mentorProgress }) {
+  const tradeTarget = mentorProgress?.target ?? DEFAULT_TRADE_TARGET
+  const tradeCount = Math.min(mentorProgress?.count ?? 0, tradeTarget)
   const steps = [
     { label: 'Create a journal', done: hasJournal },
-    { label: 'Log your first trade', done: hasTrade },
-    { label: 'Plan a session', done: hasPlanner, optional: true },
+    { label: 'Write strategy context', done: hasStrategy },
+    { label: 'Connect a planner', done: hasLinkedPlanner, optional: true },
+    { label: 'Get AI feedback', done: Boolean(mentorProgress?.completed), note: `${tradeCount} of ${tradeTarget} trades logged` },
   ]
   const doneCount = steps.filter((step) => step.done).length
 
@@ -52,6 +58,7 @@ function ProgressChecklist({ hasJournal, hasTrade, hasPlanner }) {
               {step.label}
               {step.optional && !step.done && <span className="ml-1.5 text-[11px] text-zinc-500 dark:text-zinc-400">optional</span>}
             </span>
+            {step.note && <span className="ml-auto text-[11px] font-medium text-zinc-600 dark:text-zinc-400">{step.note}</span>}
           </li>
         ))}
       </ul>
@@ -83,6 +90,7 @@ export function EmptyWorkspace({ onCreate }) {
   }
 
   const hasPlanner = planners.length > 0
+  const hasLinkedPlanner = planners.some((planner) => planner.linkedJournalId)
 
   return (
     <section className={panel}>
@@ -116,7 +124,7 @@ export function EmptyWorkspace({ onCreate }) {
       </div>
 
       <div className="mx-auto max-w-md">
-        <ProgressChecklist hasJournal={false} hasTrade={false} hasPlanner={hasPlanner} />
+        <ProgressChecklist hasJournal={false} hasStrategy={false} hasLinkedPlanner={hasLinkedPlanner} />
       </div>
     </section>
   )
@@ -126,9 +134,10 @@ export function EmptyWorkspace({ onCreate }) {
  * Shown inside a journal that has no trades yet (Trades and Analysis tabs). One obvious next step: log a trade.
  * The planner button appears only while the user has no planner.
  */
-export function FirstTradeCard({ journalName, onAddTrade, onOpenContext, onCreate }) {
+export function FirstTradeCard({ journalName, hasStrategy, mentorProgress, onAddTrade, onOpenContext, onCreate }) {
   const { planners } = useContext(plannerContext)
   const hasPlanner = planners.length > 0
+  const hasLinkedPlanner = planners.some((planner) => planner.linkedJournalId)
 
   return (
     <section className={panel}>
@@ -163,7 +172,7 @@ export function FirstTradeCard({ journalName, onAddTrade, onOpenContext, onCreat
       </div>
 
       <div className="mx-auto max-w-md">
-        <ProgressChecklist hasJournal hasTrade={false} hasPlanner={hasPlanner} />
+        <ProgressChecklist hasJournal hasStrategy={Boolean(hasStrategy)} hasLinkedPlanner={hasLinkedPlanner} mentorProgress={mentorProgress} />
       </div>
     </section>
   )

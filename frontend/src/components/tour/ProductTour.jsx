@@ -3,8 +3,11 @@ import { createPortal } from 'react-dom'
 import { useLocation } from 'react-router'
 import { journalContext, plannerContext } from '../../context/Context'
 import { useProfile } from '../../hooks/useProfile'
-import { TOUR_REPLAY_EVENT, clearTourProgress, getTourProgress, getTourStatus, hasTourEnded, markTourEnded, openPlaybook, setTourActive, setTourProgress, setTourStatus } from '../../utils/productTour'
+import { useGuidance } from '../../hooks/useGuidance'
+import { tourGuideId, tourIdOf } from '../../utils/guidance'
+import { TOUR_REPLAY_EVENT, clearTourProgress, getTourProgress, getTourStatus, hasTourEnded, markTourEnded, setTourActive, setTourProgress, setTourStatus } from '../../utils/productTour'
 import TourCard from './TourCard'
+import TourSpotlight from './TourSpotlight'
 import { TOURS, buildSteps } from './tourSteps'
 import { useTargetRect } from './useTargetRect'
 
@@ -14,11 +17,10 @@ const SPOT_PADDING = 6
 const isPlannerPath = (pathname) => pathname.startsWith('/planner/')
 const pageOf = (tourId) => (tourId === 'planner' ? 'planner' : 'journals')
 
-function TourSession({ tourId, hasJournal, username, name, resumeId, isSidebarOpen, setIsSidebarOpen, autoCloseSidebar, onEnd }) {
+function TourSession({ tourId, hasJournal, username, name, resumeId, isSidebarOpen, setIsSidebarOpen, autoCloseSidebar, suspended, onEnd }) {
   const [steps] = useState(() => buildSteps(tourId, hasJournal))
   // a refresh or a trip to another page resumes at the step the tour was on
   const [nav, setNav] = useState(() => ({ index: Math.max(0, resumeId ? steps.findIndex((item) => item.id === resumeId) : 0), direction: 1 }))
-  const [suspended, setSuspended] = useState(false)
   const shownRef = useRef(false) // at least one card has been on screen
   const reachedRef = useRef(nav.index) // furthest step shown
   const step = steps[nav.index]
@@ -34,13 +36,7 @@ function TourSession({ tourId, hasJournal, username, name, resumeId, isSidebarOp
     reachedRef.current = Math.max(reachedRef.current, nav.index)
   }, [status, nav.index])
 
-  // another dialog or form opened (e.g. the highlighted button was clicked): step aside until it closes
-  useEffect(() => {
-    const check = () => setSuspended(Boolean(document.querySelector('[aria-modal="true"]:not([data-tour-card])')))
-    check()
-    const timer = setInterval(check, 250)
-    return () => clearInterval(timer)
-  }, [])
+  // `suspended` (from the guidance controller): a real dialog or form opened (e.g. the highlighted button was clicked), so step aside until it closes
 
   useEffect(() => {
     setTourActive(username, tourId, true)
@@ -92,6 +88,7 @@ function TourSession({ tourId, hasJournal, username, name, resumeId, isSidebarOp
   }
 
   // a step whose target never showed up is skipped, in the direction of travel
+  /* eslint-disable react-hooks/set-state-in-effect -- Advance after the target observer confirms the current step is missing. */
   useEffect(() => {
     if (status !== 'missing') return
     if (nav.direction < 0 && nav.index > 0) setNav((current) => ({ index: current.index - 1, direction: -1 }))
@@ -99,6 +96,7 @@ function TourSession({ tourId, hasJournal, username, name, resumeId, isSidebarOp
     else setNav((current) => ({ index: current.index + 1, direction: 1 }))
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reacts only to this step giving up
   }, [status])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const handleKey = useEffectEvent((event) => {
     if (suspended || event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return
@@ -143,18 +141,7 @@ function TourSession({ tourId, hasJournal, username, name, resumeId, isSidebarOp
         <div aria-hidden="true" className="fixed inset-0 z-[89]" />
       )}
 
-      {spot ? (
-        // the huge shadow is the dimmed page; the box itself is the "hole" around the element
-        <div
-          aria-hidden="true"
-          style={{ left: spot.left, top: spot.top, width: spot.width, height: spot.height, boxShadow: '0 0 0 9999px rgba(9, 9, 11, 0.5)' }}
-          className="pointer-events-none fixed z-[90] rounded-lg ring-2 ring-sky-500/70 transition-[left,top,width,height] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none dark:ring-sky-400/70"
-        />
-      ) : (
-        // blurred only behind the centred welcome / closing cards. While a target is being looked up it is a plain dim,
-        // so the screen never blurs and un-blurs by itself.
-        <div aria-hidden="true" className={`pointer-events-none fixed inset-0 z-[90] bg-black/45 ${status === 'none' ? 'backdrop-blur-[2px]' : ''}`} />
-      )}
+      <TourSpotlight spot={spot} stepId={step.id} blur={status === 'none'} pulse={Boolean(step.action)} />
 
       {status !== 'searching' && (
         <TourCard
@@ -175,9 +162,11 @@ function TourSession({ tourId, hasJournal, username, name, resumeId, isSidebarOp
 }
 
 /**
- * First-run guide. Starts by itself, once per tour, for an account that has just finished onboarding (the pages set the
- * flags), and again whenever "Take the product tour" is chosen in the profile menu. Rendered by Home so the sidebar and
- * every page are already on screen behind it.
+ * Legacy spotlight tours. They no longer decide on their own whether they may be on screen: they ask the guidance
+ * controller (useGuidance) and render only while it grants them the screen. Starts by itself, once per tour, for an
+ * account that has just finished onboarding (the pages set the flags) while The Trading Loop is switched OFF; with the
+ * loop ON they only start when asked ("Take the product tour"). Rendered by Home so the sidebar and every page are
+ * already on screen behind it.
  *
  *   main     first visit: welcome, create one focused journal, and start logging
  *   journal  the first time a journal is on screen (a new account has none until it creates one)
@@ -188,7 +177,8 @@ function ProductTour({ isSidebarOpen, setIsSidebarOpen, autoCloseSidebar = false
   const { profile } = useProfile()
   const { selectedJournal, isLoading: journalsLoading } = useContext(journalContext)
   const plannersLoading = useContext(plannerContext)?.isLoading
-  const [activeTour, setActiveTour] = useState(null)
+  const { activeId, suspended, request, release } = useGuidance()
+  const activeTour = tourIdOf(activeId) // the tour the controller granted the screen to, if any
 
   const username = profile?.username
   const name = profile?.fullname?.trim().split(/\s+/)[0] ?? ''
@@ -196,10 +186,11 @@ function ProductTour({ isSidebarOpen, setIsSidebarOpen, autoCloseSidebar = false
   // a journal still being created (temporary id) does not count: wait until it is real, so nothing re-mounts under the tour
   const journalId = selectedJournal && !String(selectedJournal.id).startsWith('pending-') ? selectedJournal.id : null
 
-  // start by itself when a tour is waiting for this page. Order: main first, then journal / planner.
+  // ask to start by itself when a tour is waiting for this page. Order: main first, then journal / planner.
+  // The controller decides: one guide at a time, nothing while a form is open, nothing right after another guide ended.
   useEffect(() => {
     // wait until journals and planners have loaded, so a returning user is not shown "create your first journal"
-    if (!username || activeTour || journalsLoading || plannersLoading) return undefined
+    if (!username || activeId || journalsLoading || plannersLoading) return undefined
 
     const waiting = (tourId) => getTourStatus(username, tourId) === 'pending' && !hasTourEnded(username, tourId)
     let candidate = null
@@ -208,39 +199,29 @@ function ProductTour({ isSidebarOpen, setIsSidebarOpen, autoCloseSidebar = false
     else if (waiting('journal') && journalId) candidate = 'journal'
     if (!candidate) return undefined
 
-    let timer
-    const attempt = () => {
-      // never open on top of another dialog or form (e.g. a plan form restored after a refresh): try again shortly
-      if (document.querySelector('[aria-modal="true"]')) {
-        timer = setTimeout(attempt, 1000)
-        return
-      }
-      setTourActive(username, candidate, true)
-      setActiveTour(candidate)
-    }
-    timer = setTimeout(attempt, START_DELAY_MS)
+    const timer = setTimeout(() => request(tourGuideId(candidate), { trigger: 'auto' }), START_DELAY_MS)
     return () => clearTimeout(timer)
-  }, [username, onPlanner, journalId, activeTour, journalsLoading, plannersLoading])
+  }, [username, onPlanner, journalId, activeId, journalsLoading, plannersLoading, request])
 
   // "Take the product tour" in the profile menu: the planner page replays its walkthrough, everything else the main tour
   useEffect(() => {
     const replay = () => {
       if (!username) return
       const tourId = onPlanner ? 'planner' : 'main'
+      if (activeId) return // a guide is already on screen: never interrupt it
       clearTourProgress(username, tourId) // a replay always starts from the first step
-      setTourActive(username, tourId, true)
-      setActiveTour(tourId)
+      request(tourGuideId(tourId), { trigger: 'user' })
     }
     window.addEventListener(TOUR_REPLAY_EVENT, replay)
     return () => window.removeEventListener(TOUR_REPLAY_EVENT, replay)
-  }, [onPlanner, username])
+  }, [onPlanner, username, activeId, request])
 
   // a tour belongs to the page it started on; leaving that page puts it away (its step is remembered) so the page you
   // arrive on can offer its own tour
   const onTourPage = Boolean(activeTour) && pageOf(activeTour) === (onPlanner ? 'planner' : 'journals')
   useEffect(() => {
-    if (activeTour && !onTourPage) setActiveTour(null)
-  }, [activeTour, onTourPage])
+    if (activeTour && !onTourPage) release(tourGuideId(activeTour))
+  }, [activeTour, onTourPage, release])
 
   if (!username || !activeTour || !onTourPage) return null
 
@@ -255,10 +236,11 @@ function ProductTour({ isSidebarOpen, setIsSidebarOpen, autoCloseSidebar = false
       isSidebarOpen={isSidebarOpen}
       setIsSidebarOpen={setIsSidebarOpen}
       autoCloseSidebar={autoCloseSidebar}
-      onEnd={({ persist = true, journalTourCompleted = false } = {}) => {
+      suspended={suspended}
+      onEnd={({ persist = true } = {}) => {
         const endedTour = activeTour
-        setActiveTour(null)
-        if (journalTourCompleted) openPlaybook()
+        release(tourGuideId(endedTour))
+        // the Playbook no longer opens by itself after the journal tour; it stays one click away in the profile menu
         // after the first-run tour, hand the user to the next action (Home opens the "new journal" form)
         if (endedTour === 'main' && persist) onTourEnd?.()
       }}
