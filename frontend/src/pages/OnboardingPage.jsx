@@ -4,8 +4,6 @@ import { useProfile } from "../hooks/useProfile"
 import { requestJson } from "../utils/http"
 import { clearProfileCache } from "../services/profileApi"
 import { queueProductTours } from "../utils/productTour"
-import { isTradingLoopEnabled, queueTradingLoopOnboarding } from "../utils/tradingLoop"
-import { queueMission } from "../utils/missionTracker"
 import { SERIF } from "../components/auth/authStyles"
 
 const STYLES = [
@@ -35,11 +33,7 @@ export default function OnboardingPage() {
       // returning home so Home does not redirect the user back to onboarding.
       clearProfileCache()
       // a brand-new workspace gets the guided tour on its first visit
-      // When enabled, The Trading Loop replaces the welcome tour; otherwise preserve the existing flow.
-      if (isTradingLoopEnabled()) queueTradingLoopOnboarding(profile?.username)
-      else queueProductTours(profile?.username)
-      // Only new accounts are offered the mission tracker; its own rollout switch controls whether it queues.
-      queueMission(profile?.username)
+      queueProductTours(profile?.username)
       navigate("/", { replace: true })
     } catch (error) {
       setMessage(error.message || "Could not save your setup. Please try again.")

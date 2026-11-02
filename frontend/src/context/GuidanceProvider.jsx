@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react'
 import { useLocation } from 'react-router'
 import { guidanceReducer, initialGuidanceState, isSuspended } from '../utils/guidance'
-import { isTradingLoopEnabled } from '../utils/tradingLoop'
 import { GuidanceContext } from './guidanceContext'
 
 const SETTLE_MS = 40 // requests made in the same moment are collected, then ONE is started
@@ -13,8 +12,8 @@ const isVisibleForeignModal = (element) => (
 )
 
 /**
- * Mounted once by Home. Owns which guide (Trading Loop, Playbook, legacy tour) is on screen. Guides ask with
- * request(id), render only while `activeId === id`, and give control back with release(id).
+ * Mounted once by Home. A Product Tour spotlight requests the screen, renders while `activeId === id`, and releases it
+ * when finished.
  */
 export default function GuidanceProvider({ children }) {
   const { pathname } = useLocation()
@@ -59,23 +58,17 @@ export default function GuidanceProvider({ children }) {
   }, [state.active, state.modalOpen, state.pending])
 
   const request = useCallback((id, { trigger = 'auto', meta = null } = {}) => {
-    dispatch({ type: 'request', id, trigger, meta, route: routeRef.current, loopEnabled: isTradingLoopEnabled() })
+    dispatch({ type: 'request', id, trigger, meta, route: routeRef.current })
   }, [])
   const release = useCallback((id) => dispatch({ type: 'release', id, route: routeRef.current }), [])
-  const handoff = useCallback((from, to, fromMeta) => dispatch({ type: 'handoff', from, to, fromMeta }), [])
 
   const value = useMemo(() => ({
     activeId: state.active?.id ?? null,
-    activeTrigger: state.active?.trigger ?? null,
-    activeMeta: state.active?.meta ?? null,
-    activeSeq: state.active?.seq ?? 0,
-    pausedId: state.paused?.id ?? null,
     suspended: isSuspended(state),
     modalOpen: state.modalOpen,
     request,
     release,
-    handoff,
-  }), [state, request, release, handoff])
+  }), [state, request, release])
 
   return <GuidanceContext.Provider value={value}>{children}</GuidanceContext.Provider>
 }

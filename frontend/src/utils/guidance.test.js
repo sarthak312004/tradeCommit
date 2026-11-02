@@ -1,78 +1,53 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { GUIDES, guidanceReducer as reduce, initialGuidanceState, isSuspended } from './guidance.js'
+import { GUIDES, guidanceReducer as reduce, initialGuidanceState, isSuspended, tourGuideId, tourIdOf } from './guidance.js'
 
 const run = (actions, start = initialGuidanceState) => actions.reduce(reduce, start)
-const ask = (id, extra = {}) => ({ type: 'request', id, trigger: 'auto', route: '/', loopEnabled: false, ...extra })
+const ask = (id, extra = {}) => ({ type: 'request', id, trigger: 'auto', route: '/', ...extra })
 const settle = { type: 'resolve' }
 const activeId = (state) => state.active?.id ?? null
 
-test('1. Trading Loop opens while the legacy tours are still pending (switch on)', () => {
-  const state = run([
-    ask(GUIDES.TOUR_MAIN, { loopEnabled: true }),
-    ask(GUIDES.TOUR_JOURNAL, { loopEnabled: true }),
-    ask(GUIDES.TOUR_PLANNER, { loopEnabled: true }),
-    ask(GUIDES.LOOP, { loopEnabled: true }),
-    settle,
-  ])
-  assert.equal(activeId(state), GUIDES.LOOP)
-  assert.equal(state.pending.length, 0)
+test('only Product Tour guides are requestable', () => {
+  assert.deepEqual(Object.values(GUIDES).sort(), ['tour:journal', 'tour:main', 'tour:planner'])
+  for (const id of ['trading-loop', 'trading-loop-preview', 'playbook', 'mission-complete']) {
+    assert.equal(reduce(initialGuidanceState, ask(id, { trigger: 'user' })), initialGuidanceState)
+  }
 })
 
-test('2. Playbook requested during another guide is ignored; it never opens by itself', () => {
-  let state = run([ask(GUIDES.LOOP, { loopEnabled: true }), settle])
-  state = reduce(state, ask(GUIDES.PLAYBOOK, { trigger: 'user' }))
-  assert.equal(activeId(state), GUIDES.LOOP)
-  assert.equal(state.pending.length, 0)
-  // an automatic playbook request is refused even when nothing else is open
-  assert.equal(reduce(initialGuidanceState, ask(GUIDES.PLAYBOOK)).pending.length, 0)
+test('tour id helpers round-trip', () => {
+  assert.equal(tourGuideId('main'), GUIDES.TOUR_MAIN)
+  assert.equal(tourIdOf(GUIDES.TOUR_PLANNER), 'planner')
+  assert.equal(tourIdOf('playbook'), null)
+  assert.equal(tourIdOf(null), null)
 })
 
-test('2b. Playbook through the loop: loop pauses, playbook owns the screen, loop resumes where it was', () => {
-  let state = run([ask(GUIDES.LOOP, { loopEnabled: true, meta: { mode: 'onboarding' } }), settle])
-  const seq = state.active.seq
-  state = reduce(state, { type: 'handoff', from: GUIDES.LOOP, to: GUIDES.PLAYBOOK, fromMeta: { startId: 'planner' } })
-  assert.equal(activeId(state), GUIDES.PLAYBOOK)
-  assert.equal(state.paused.id, GUIDES.LOOP)
-  state = reduce(state, { type: 'release', id: GUIDES.PLAYBOOK, route: '/' })
-  assert.equal(activeId(state), GUIDES.LOOP)
-  assert.equal(state.active.seq, seq)
-  assert.equal(state.active.meta.startId, 'planner')
-  assert.equal(state.active.meta.mode, 'onboarding')
-})
-
-test('2c. only the loop may hand off, and only to the playbook', () => {
-  const state = run([ask(GUIDES.TOUR_MAIN), settle])
-  assert.equal(reduce(state, { type: 'handoff', from: GUIDES.TOUR_MAIN, to: GUIDES.PLAYBOOK }), state)
-})
-
-test('3. Planner/journal guide requested during the loop is ignored, and does not start when the loop ends', () => {
-  let state = run([ask(GUIDES.LOOP, { loopEnabled: true }), settle])
+test('a request made while a guide is active is ignored', () => {
+  let state = run([ask(GUIDES.TOUR_MAIN), settle])
   state = reduce(state, ask(GUIDES.TOUR_PLANNER, { route: '/planner/1' }))
   state = reduce(state, ask(GUIDES.TOUR_PLANNER, { route: '/planner/1', trigger: 'user' }))
-  assert.equal(activeId(state), GUIDES.LOOP)
+  assert.equal(activeId(state), GUIDES.TOUR_MAIN)
   assert.equal(state.pending.length, 0)
-  state = run([{ type: 'release', id: GUIDES.LOOP, route: '/' }, settle], state)
+  state = run([{ type: 'release', id: GUIDES.TOUR_MAIN, route: '/' }, settle], state)
   assert.equal(activeId(state), null)
 })
 
-test('4. A request made while a real modal/form is open is ignored (MissionTracker click)', () => {
+test('a user request is ignored while an application modal is open', () => {
   let state = reduce(initialGuidanceState, { type: 'modal', open: true })
-  state = reduce(state, ask(GUIDES.LOOP, { loopEnabled: true, trigger: 'user' }))
+  state = reduce(state, ask(GUIDES.TOUR_MAIN, { trigger: 'user' }))
   assert.equal(state.pending.length, 0)
   state = run([{ type: 'modal', open: false }, settle], state)
   assert.equal(activeId(state), null)
 })
 
-test('4b. An automatic request waits for the form to close, then starts once', () => {
-  let state = run([{ type: 'modal', open: true }, ask(GUIDES.LOOP, { loopEnabled: true }), settle])
+test('an automatic request waits for an application modal to close', () => {
+  let state = run([{ type: 'modal', open: true }, ask(GUIDES.TOUR_MAIN), settle])
   assert.equal(activeId(state), null)
   assert.equal(state.pending.length, 1)
   state = run([{ type: 'modal', open: false }, settle], state)
-  assert.equal(activeId(state), GUIDES.LOOP)
+  assert.equal(activeId(state), GUIDES.TOUR_MAIN)
 })
 
-test('5. Opening a real form suspends the active guide and keeps its state; closing the form brings it back', () => {
+test('opening a real form suspends the active guide without losing its state', () => {
   let state = run([ask(GUIDES.TOUR_MAIN), settle])
   const before = state.active
   state = reduce(state, { type: 'modal', open: true })
@@ -83,20 +58,15 @@ test('5. Opening a real form suspends the active guide and keeps its state; clos
   assert.equal(state.active, before)
 })
 
-test('6. Refresh restarts a pending loop; skip ends it and nothing relaunches on the same route', () => {
-  // refresh = fresh state, the stored 'pending' status makes the component request again
-  let state = run([ask(GUIDES.LOOP, { loopEnabled: true }), settle])
-  assert.equal(activeId(state), GUIDES.LOOP)
-  state = reduce(state, { type: 'release', id: GUIDES.LOOP, route: '/' }) // skip / close
-  state = run([ask(GUIDES.LOOP, { loopEnabled: true }), settle], state) // the component re-asks (its status is still 'snoozed'/'pending')
-  assert.equal(activeId(state), null, 'no automatic relaunch on the route where the guide just ended')
-  // the Resume pill is an explicit request: it works
-  state = run([ask(GUIDES.LOOP, { loopEnabled: true, trigger: 'user', meta: { mode: 'onboarding', startId: 'planner' } }), settle], state)
-  assert.equal(activeId(state), GUIDES.LOOP)
-  assert.equal(state.active.meta.startId, 'planner')
+test('a tour that ended does not relaunch automatically, but profile replay still works', () => {
+  let state = run([ask(GUIDES.TOUR_MAIN), settle, { type: 'release', id: GUIDES.TOUR_MAIN, route: '/' }])
+  state = run([ask(GUIDES.TOUR_MAIN), settle], state)
+  assert.equal(activeId(state), null)
+  state = run([ask(GUIDES.TOUR_MAIN, { trigger: 'user' }), settle], state)
+  assert.equal(activeId(state), GUIDES.TOUR_MAIN)
 })
 
-test('6b. Navigating lifts the same-route cooldown for automatic guides', () => {
+test('navigating lifts the same-route cooldown for automatic tours', () => {
   let state = run([ask(GUIDES.TOUR_MAIN), settle, { type: 'release', id: GUIDES.TOUR_MAIN, route: '/' }])
   assert.equal(reduce(state, ask(GUIDES.TOUR_JOURNAL)).pending.length, 0)
   state = reduce(state, { type: 'navigate', route: '/planner/1' })
@@ -104,22 +74,22 @@ test('6b. Navigating lifts the same-route cooldown for automatic guides', () => 
   assert.equal(activeId(state), GUIDES.TOUR_PLANNER)
 })
 
-test('7. Nothing requested (existing accounts with completed tours) means nothing opens', () => {
+test('no pending request means no guide is shown', () => {
   assert.equal(run([settle, settle]).active, null)
 })
 
-test('8. Simultaneous requests: exactly one starts; explicit beats automatic; then priority; the rest are dropped', () => {
+test('simultaneous requests start only one; explicit requests win, then tour priority', () => {
   let state = run([ask(GUIDES.TOUR_PLANNER), ask(GUIDES.TOUR_JOURNAL), ask(GUIDES.TOUR_MAIN), settle])
   assert.equal(activeId(state), GUIDES.TOUR_MAIN)
   assert.equal(state.pending.length, 0)
   state = run([{ type: 'release', id: GUIDES.TOUR_MAIN, route: '/' }, settle], state)
-  assert.equal(activeId(state), null, 'no back-to-back launch')
+  assert.equal(activeId(state), null)
 
-  state = run([ask(GUIDES.LOOP, { loopEnabled: true }), ask(GUIDES.PLAYBOOK, { trigger: 'user' }), settle])
-  assert.equal(activeId(state), GUIDES.PLAYBOOK)
+  state = run([ask(GUIDES.TOUR_MAIN), ask(GUIDES.TOUR_PLANNER, { trigger: 'user' }), settle])
+  assert.equal(activeId(state), GUIDES.TOUR_PLANNER)
 })
 
-test('8b. Duplicate requests are ignored (and an explicit duplicate upgrades the waiting one)', () => {
+test('duplicate requests are ignored and an explicit request upgrades a pending automatic one', () => {
   let state = run([ask(GUIDES.TOUR_MAIN), ask(GUIDES.TOUR_MAIN)])
   assert.equal(state.pending.length, 1)
   state = reduce(state, ask(GUIDES.TOUR_MAIN, { trigger: 'user' }))
@@ -129,44 +99,15 @@ test('8b. Duplicate requests are ignored (and an explicit duplicate upgrades the
   assert.equal(reduce(state, ask(GUIDES.TOUR_MAIN)), state)
 })
 
-test('8c. Releasing a guide before it is granted cancels its pending request', () => {
-  const pending = reduce(initialGuidanceState, ask(GUIDES.LOOP, { loopEnabled: true }))
-  const cancelled = reduce(pending, { type: 'release', id: GUIDES.LOOP })
+test('releasing a guide before it is granted cancels its pending request', () => {
+  const pending = reduce(initialGuidanceState, ask(GUIDES.TOUR_MAIN))
+  const cancelled = reduce(pending, { type: 'release', id: GUIDES.TOUR_MAIN })
   assert.equal(cancelled.pending.length, 0)
   assert.equal(activeId(reduce(cancelled, settle)), null)
 })
 
-test('9. Switch off: the loop cannot start (even manually); legacy tours behave as before, one at a time', () => {
-  assert.equal(reduce(initialGuidanceState, ask(GUIDES.LOOP, { trigger: 'user' })).pending.length, 0)
-  const state = run([ask(GUIDES.TOUR_MAIN), ask(GUIDES.TOUR_JOURNAL), settle])
-  assert.equal(activeId(state), GUIDES.TOUR_MAIN)
-  assert.equal(state.pending.length, 0)
-})
-
-test('9b. Switch on: legacy tours never start by themselves but can still be requested by the user', () => {
-  assert.equal(reduce(initialGuidanceState, ask(GUIDES.TOUR_JOURNAL, { loopEnabled: true })).pending.length, 0)
-  const state = run([ask(GUIDES.TOUR_JOURNAL, { loopEnabled: true, trigger: 'user' }), settle])
-  assert.equal(activeId(state), GUIDES.TOUR_JOURNAL)
-})
-
-test('unknown guide ids and releases of a guide that is not active are no-ops', () => {
+test('unknown guides and releases of inactive guides are no-ops', () => {
   const state = run([ask(GUIDES.TOUR_MAIN), settle])
-  assert.equal(reduce(state, ask('nope')), state)
-  assert.equal(reduce(state, { type: 'release', id: GUIDES.LOOP }), state)
-})
-
-test('mission completion can be celebrated after a guide ends on the same route, but not over an active guide', () => {
-  let state = run([ask(GUIDES.TOUR_MAIN), settle, { type: 'release', id: GUIDES.TOUR_MAIN, route: '/' }])
-  state = run([ask(GUIDES.MISSION_COMPLETE), settle], state)
-  assert.equal(activeId(state), GUIDES.MISSION_COMPLETE)
-
-  const busy = run([ask(GUIDES.LOOP, { loopEnabled: true }), settle])
-  assert.equal(reduce(busy, ask(GUIDES.MISSION_COMPLETE)), busy)
-})
-
-test('mission completion waits for a real modal to close', () => {
-  let state = run([{ type: 'modal', open: true }, ask(GUIDES.MISSION_COMPLETE), settle])
-  assert.equal(activeId(state), null)
-  state = run([{ type: 'modal', open: false }, settle], state)
-  assert.equal(activeId(state), GUIDES.MISSION_COMPLETE)
+  assert.equal(reduce(state, ask('unknown-guide')), state)
+  assert.equal(reduce(state, { type: 'release', id: GUIDES.TOUR_JOURNAL }), state)
 })

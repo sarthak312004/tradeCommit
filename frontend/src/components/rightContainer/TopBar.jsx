@@ -6,12 +6,11 @@ import { useHeaderBackdrop } from '../../hooks/useHeaderBackdrop'
 import { useIsDark } from '../../hooks/useIsDark'
 import { MenuIcon } from '../../utils/Icons.jsx'
 import { useDeepFocus } from '../../context/useDeepFocus'
-import MissionTracker from '../onboarding/MissionTracker'
 
 function TopBar({ label = 'Journal', title }) {
   const { backdrop, chooseScene, clear, uploadImage } = useHeaderBackdrop()
   // on phones the sidebar is a slide-over menu, opened from the hamburger in this bar
-  const { openMobileNav, openCreateForm } = useOutletContext() ?? {}
+  const { openMobileNav } = useOutletContext() ?? {}
   const { setMainHeaderHost } = useDeepFocus()
   const dark = useIsDark()
   const hasImage = backdrop.mode === 'image'
@@ -48,9 +47,7 @@ function TopBar({ label = 'Journal', title }) {
         </div>
       )}
 
-      <div ref={setMainHeaderHost} className="absolute left-1/2 top-1/2 z-10 flex -translate-x-1/2 -translate-y-1/2 items-center gap-1">
-        <MissionTracker onCreate={openCreateForm} />
-      </div>
+      <div ref={setMainHeaderHost} className="absolute left-1/2 top-1/2 z-10 flex -translate-x-1/2 -translate-y-1/2 items-center gap-1" />
 
       <div className="relative flex min-w-0 items-center gap-1.5">
         {openMobileNav && (

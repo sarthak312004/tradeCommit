@@ -162,11 +162,9 @@ function TourSession({ tourId, hasJournal, username, name, resumeId, isSidebarOp
 }
 
 /**
- * Legacy spotlight tours. They no longer decide on their own whether they may be on screen: they ask the guidance
- * controller (useGuidance) and render only while it grants them the screen. Starts by itself, once per tour, for an
- * account that has just finished onboarding (the pages set the flags) while The Trading Loop is switched OFF; with the
- * loop ON they only start when asked ("Take the product tour"). Rendered by Home so the sidebar and every page are
- * already on screen behind it.
+ * The Product Tour spotlight tours. They ask the guidance controller (useGuidance) and render only while it grants them
+ * the screen. Starts by itself, once per tour, for an account that has just finished onboarding; "Take Product Tour" in
+ * the profile menu starts it on demand. Rendered by Home so the sidebar and every page are already on screen behind it.
  *
  *   main     first visit: welcome, create one focused journal, and start logging
  *   journal  the first time a journal is on screen (a new account has none until it creates one)
@@ -240,7 +238,6 @@ function ProductTour({ isSidebarOpen, setIsSidebarOpen, autoCloseSidebar = false
       onEnd={({ persist = true } = {}) => {
         const endedTour = activeTour
         release(tourGuideId(endedTour))
-        // the Playbook no longer opens by itself after the journal tour; it stays one click away in the profile menu
         // after the first-run tour, hand the user to the next action (Home opens the "new journal" form)
         if (endedTour === 'main' && persist) onTourEnd?.()
       }}

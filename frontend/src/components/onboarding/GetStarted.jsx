@@ -1,7 +1,6 @@
 import { useContext } from 'react'
 import { journalContext, plannerContext } from '../../context/Context'
 import { CalendarIcon, CheckIcon, FileIcon, PlusIcon } from '../../utils/Icons.jsx'
-import { openPlaybook } from '../../utils/productTour'
 
 const panel =
   'tc-surface rounded-xl border border-zinc-300 bg-white p-6 shadow-sm md:p-8 dark:border-white/[0.14] dark:bg-panel dark:shadow-none'
@@ -116,10 +115,7 @@ export function EmptyWorkspace({ onCreate }) {
           )}
         </div>
         <p className="mt-3 text-xs text-zinc-600 dark:text-zinc-400">
-          Takes about 10 seconds: just a name and a currency.{' '}
-          <button type="button" onClick={openPlaybook} className="cursor-pointer font-medium text-sky-800 underline-offset-2 hover:underline dark:text-sky-300">
-            See how the workflow works
-          </button>
+          Takes about 10 seconds: just a name and a currency.
         </p>
       </div>
 
