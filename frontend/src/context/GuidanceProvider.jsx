@@ -5,7 +5,7 @@ import { GuidanceContext } from './guidanceContext'
 
 const SETTLE_MS = 40 // requests made in the same moment are collected, then ONE is started
 // Our own surfaces are marked; every other aria-modal element (forms, drawers, dialogs) counts as "the app is busy".
-const FOREIGN_MODAL = '[aria-modal="true"]:not([data-tour-card]):not([data-guide-surface])'
+const FOREIGN_MODAL = '[aria-modal="true"]:not([data-tour-card]):not([data-guide-surface]):not([data-guide-pass-through])'
 const isVisibleForeignModal = (element) => (
   !element.closest('[hidden], [aria-hidden="true"], [inert]')
   && window.getComputedStyle(element).display !== 'none'

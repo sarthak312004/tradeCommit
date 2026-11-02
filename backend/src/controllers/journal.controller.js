@@ -2,6 +2,7 @@ import { Journal, MAX_STRATEGY_HTML_LENGTH, MAX_STRATEGY_LENGTH } from "../model
 import { Planner } from "../models/planner.models.js";
 import { Trade } from "../models/trade.models.js";
 import { AiReview } from "../models/aiReview.models.js";
+import { AiRangeReview } from "../models/aiRangeReview.models.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
@@ -9,6 +10,11 @@ import { deleteImagesFromCloudinary } from "../utils/cloudinary.js";
 import { DEFAULT_CURRENCY, isValidCurrency, normalizeCurrency } from "../constants/currency.js";
 import { applyContextToFields, parseCustomFields } from "../utils/customFields.js";
 import { htmlToPlainText, sanitizeRichText } from "../utils/richText.js";
+import {
+  ONBOARDING_ACTION,
+  reconcileOnboardingActionsSafely,
+  recordOnboardingActionSafely,
+} from "../utils/onboardingProgress.js";
 
 const imageUrlsFromHtml = (html = "") =>
   [...html.matchAll(/<img[^>]+src=["']([^"']+)["']/gi)].map((match) => match[1].trim()).filter(Boolean);
@@ -129,6 +135,7 @@ export const createJournal = asyncHandler(async (req, res) => {
     mode: normalizedMode,
     owner: req.user._id,
   });
+  await recordOnboardingActionSafely(req.user._id, ONBOARDING_ACTION.JOURNAL_CREATED, "journal creation");
 
   const populatedJournal = await Journal.findById(journal._id).populate({
     path: "trades",
@@ -201,6 +208,9 @@ export const updateJournal = asyncHandler(async (req, res) => {
     path: "trades",
     options: { sort: { date: -1, createdAt: -1 } },
   });
+  if (context !== undefined) {
+    await recordOnboardingActionSafely(req.user._id, ONBOARDING_ACTION.JOURNAL_CONTEXT_SAVED, "journal context save");
+  }
 
   return res
     .status(200)
@@ -218,9 +228,11 @@ export const deleteJournal = asyncHandler(async (req, res) => {
   const trades = await Trade.find({ journal: journal._id, owner: req.user._id });
   await Trade.deleteMany({ journal: journal._id, owner: req.user._id });
   await AiReview.deleteMany({ journal: journal._id, owner: req.user._id });
+  await AiRangeReview.deleteMany({ journal: journal._id, owner: req.user._id });
   // planners connected to this journal stay, they just are not connected to anything anymore
   await Planner.updateMany({ linkedJournal: journal._id, owner: req.user._id }, { $set: { linkedJournal: null } });
   await Journal.deleteOne({ _id: journal._id, owner: req.user._id });
+  await reconcileOnboardingActionsSafely(req.user._id, "journal deletion");
 
   void deleteImagesFromCloudinary(
     trades.flatMap((trade) => [

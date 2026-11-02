@@ -8,8 +8,8 @@ const settle = { type: 'resolve' }
 const activeId = (state) => state.active?.id ?? null
 const ONBOARDING = GUIDES.ONBOARDING
 
-test('only the guided onboarding is requestable', () => {
-  assert.deepEqual(Object.values(GUIDES), ['onboarding:guide'])
+test('only the main and first-Planner walkthroughs are requestable', () => {
+  assert.deepEqual(Object.values(GUIDES), ['onboarding:guide', 'planner:walkthrough'])
   for (const id of ['tour:main', 'tour:journal', 'tour:planner', 'trading-loop', 'playbook', 'mission-complete']) {
     assert.equal(reduce(initialGuidanceState, ask(id, { trigger: 'user' })), initialGuidanceState)
   }

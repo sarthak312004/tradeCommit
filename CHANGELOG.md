@@ -1,23 +1,20 @@
 # Changelog
 
-## Unreleased — Guided onboarding (Part 1)
+## Unreleased — Persistent onboarding
 
 ### Added
-- Guided onboarding: one continuous Plan → Journal → AI feedback walkthrough (Planner, create first journal, journal
-  context, execution tracking, AI Mentor). Premium card with a thin glowing connector to the real UI, theme-aware dim,
-  responsive (card becomes a top/bottom sheet on phones), reduced-motion aware.
-- Resumes after refresh; moves on by itself when the first journal is created; skippable; replay from the profile menu.
-- Unit tests: `onboardingGuide.test.js` (state, persistence, completion), `guideLayout.test.js` (placement, connector).
-- Handoff notes for Part 2 in `frontend/src/components/onboardingGuide/README.md`.
+- Account-scoped main onboarding status and real-action milestones for saved plans, journal/context/trade activity, and
+  AI Mentor reviews. The segmented header indicator hides after workflow completion.
+- A separate first-Planner walkthrough for Journal Connection, Deep Mode, Quick Plan, and Full Editor, with refresh
+  recovery and one-time skip/completion.
+- Unit tests for workflow milestones, guide state, Planner walkthrough order, and threaded-card layout.
 
 ### Changed
-- `Home.jsx`, `OnboardingPage.jsx`, `ProfileMenu.jsx` ("Take guided tour"), `SidebarSection.jsx` (anchor),
-  `TradeJournal.jsx` (import hint gating), `profileApi.js` (rename carry-over), `utils/guidance.js` + test,
-  `utils/Icons.jsx` (`CompassIcon`), `PROJECT_CONTEXT.md`, `GUIDANCE_REPORT.md`.
-
-### Removed
-- Legacy Product Tour (`components/tour/*`, `utils/productTour.js`) and unreachable Trading Loop / Playbook / mission
-  tracker code that depended on it. Old `tradecommit:tour:*` localStorage keys are simply ignored.
+- Authenticated profile routes and User subdocuments now persist both onboarding systems; domain controllers record
+  genuine user actions idempotently. `GuidanceProvider` arbitrates both walkthroughs.
+- Updated `PROJECT_CONTEXT.md` and `frontend/src/components/onboardingGuide/README.md`.
 
 ### Compatibility
-- No backend, API, route, schema or dependency changes. Existing users are never queued.
+- Existing accounts without an eligible legacy guide retain null onboarding subdocuments and are not queued or reset.
+  No migration or dependency is required; legacy local guide state is restored only when a recorded onboarding trading
+  style identifies a new-user account. All writes are scoped to the authenticated user.

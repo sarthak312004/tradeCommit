@@ -317,7 +317,9 @@ function RangeReviewPanel({ journalId, currency, seed, journalRange, earliestTra
     }
     if (!data) return null
 
-    if (!data.hasStrategy) {
+    const hasStrategyText = data.hasStrategyText ?? data.hasStrategy
+
+    if (!hasStrategyText) {
       return (
         <EmptyState
           title="Write your strategy first"
@@ -359,6 +361,23 @@ function RangeReviewPanel({ journalId, currency, seed, journalRange, earliestTra
         >
           <span className="mb-5 block"><UnlockMeter count={have} target={target} /></span>
           A review needs at least {target} trades in the period you pick, so the mentor can see patterns instead of guessing. You have {data.tradeCount} here.
+        </EmptyState>
+      )
+    }
+
+    if (!data.hasStrategy) {
+      return (
+        <EmptyState
+          title="Add more detail to your strategy"
+          action={
+            onOpenContext && (
+              <button type="button" onClick={onOpenContext} className={buttonPrimary}>
+                Update journal context
+              </button>
+            )
+          }
+        >
+          Your strategy is saved, but the mentor needs at least {data.strategyMinimumLength ?? 15} characters of rules to review trades against. Add a little more detail and come back.
         </EmptyState>
       )
     }

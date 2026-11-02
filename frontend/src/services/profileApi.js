@@ -1,17 +1,61 @@
 import { readJson, requestJson } from '../utils/http'
-import { moveGuideState } from '../utils/onboardingGuide'
+import { getGuideState, hydrateGuideState, moveGuideState } from '../utils/onboardingGuide'
 
 const BASE = '/api/v1/auth'
 const post = (path, body = {}) => requestJson(`${BASE}${path}`, { method: 'POST', body })
 
 // The profile never changes while the page is open, so every header (one per page) shares one request.
 let cachedProfile = null
+let onboardingGuideQueue = Promise.resolve()
+let plannerWalkthroughQueue = Promise.resolve()
+export const PROFILE_UPDATED_EVENT = 'profile-updated'
+
+const hydrateProfile = async (profile) => {
+  const serverGuide = profile?.onboardingGuide
+  if (!profile?.username) return profile
+  const localGuide = getGuideState(profile.username)
+  if (!serverGuide && !localGuide) return profile
+
+  const restoredFromLocal = !serverGuide && Boolean(localGuide)
+  if (!serverGuide && localGuide) {
+    try {
+      const restored = await requestJson(`${BASE}/onboarding/guide`, {
+        method: 'PATCH',
+        body: { status: localGuide.status, step: localGuide.step },
+      })
+      profile = { ...profile, onboardingGuide: restored.onboardingGuide }
+    } catch (error) {
+      console.error('Could not restore saved onboarding guide progress:', error)
+      return profile
+    }
+  }
+
+  const activeGuide = profile.onboardingGuide
+  const serverTimestamp = Date.parse(activeGuide?.updatedAt ?? '') || 0
+  if (!restoredFromLocal && localGuide && activeGuide && localGuide.updatedAt > serverTimestamp) {
+    try {
+      const saved = await requestJson(`${BASE}/onboarding/guide`, {
+        method: 'PATCH',
+        body: { status: localGuide.status, step: localGuide.step },
+      })
+      profile = { ...profile, onboardingGuide: saved.onboardingGuide }
+    } catch (error) {
+      console.error('Could not sync saved onboarding guide progress:', error)
+      return profile
+    }
+  }
+
+  hydrateGuideState(profile.username, profile.onboardingGuide)
+  return profile
+}
 
 export const getProfile = () => {
-  cachedProfile ??= requestJson(`${BASE}/profile`).catch((error) => {
-    cachedProfile = null // let the next call retry
-    throw error
-  })
+  cachedProfile ??= requestJson(`${BASE}/profile`)
+    .then(hydrateProfile)
+    .catch((error) => {
+      cachedProfile = null // let the next call retry
+      throw error
+    })
   return cachedProfile
 }
 
@@ -19,7 +63,45 @@ export const clearProfileCache = () => {
   cachedProfile = null
 }
 
-export const PROFILE_UPDATED_EVENT = 'profile-updated'
+const publishProfileUpdate = (patch) => {
+  if (cachedProfile) {
+    cachedProfile = Promise.resolve(cachedProfile)
+      .then((profile) => ({ ...profile, ...patch }))
+      .catch((error) => {
+        cachedProfile = null
+        throw error
+      })
+  }
+  window.dispatchEvent(new Event(PROFILE_UPDATED_EVENT))
+}
+
+/** Re-fetches profile-owned onboarding progress after a successful Planner, Journal or Mentor action. */
+export const refreshProfile = () => {
+  clearProfileCache()
+  window.dispatchEvent(new Event(PROFILE_UPDATED_EVENT))
+}
+
+export const saveOnboardingGuideState = async ({ status, step }) => {
+  const request = onboardingGuideQueue.then(() => requestJson(`${BASE}/onboarding/guide`, {
+    method: 'PATCH',
+    body: { status, step },
+  }))
+  onboardingGuideQueue = request.catch(() => {})
+  const saved = await request
+  publishProfileUpdate({ onboardingGuide: saved.onboardingGuide })
+  return saved.onboardingGuide
+}
+
+export const savePlannerWalkthroughState = async ({ plannerId, status, step }) => {
+  const request = plannerWalkthroughQueue.then(() => requestJson(`${BASE}/onboarding/planner-walkthrough`, {
+    method: 'PATCH',
+    body: { plannerId, status, step },
+  }))
+  plannerWalkthroughQueue = request.catch(() => {})
+  const saved = await request
+  publishProfileUpdate({ plannerWalkthrough: saved.plannerWalkthrough })
+  return saved.plannerWalkthrough
+}
 
 /** Saves the name and/or username (sign-up no longer asks for them). Resolves to `{ fullname, username }`. */
 export const updateProfile = async (changes) => {

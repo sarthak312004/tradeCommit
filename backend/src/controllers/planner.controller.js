@@ -6,6 +6,12 @@ import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { deleteImagesFromCloudinary, uploadOnCloudinary } from "../utils/cloudinary.js";
+import {
+  ONBOARDING_ACTION,
+  queueFirstPlannerWalkthroughSafely,
+  reconcileOnboardingActionsSafely,
+  recordOnboardingActionSafely,
+} from "../utils/onboardingProgress.js";
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const DEFAULT_TYPE = "Intraday";
@@ -120,6 +126,10 @@ export const createPlanner = asyncHandler(async (req, res) => {
     linkedJournal: linkedJournal ?? null,
     owner: req.user._id,
   });
+  await queueFirstPlannerWalkthroughSafely(req.user._id, planner._id);
+  if (linkedJournal) {
+    await recordOnboardingActionSafely(req.user._id, ONBOARDING_ACTION.PLANNER_CONNECTED, "Planner connection");
+  }
 
   return res.status(201).json(new ApiResponse(201, serializePlanner(planner), "Planner created successfully"));
 });
@@ -128,11 +138,17 @@ export const updatePlanner = asyncHandler(async (req, res) => {
   const planner = await findOwnedPlanner(req);
   const { name, type } = parsePlannerPayload(req.body, { requireName: false });
   const linkedJournal = await parseLinkedJournal(req.body, req.user._id);
+  const hadLinkedJournal = Boolean(planner.linkedJournal);
 
   if (name) planner.name = name;
   if (type) planner.type = type;
   if (linkedJournal !== undefined) planner.linkedJournal = linkedJournal;
   await planner.save();
+  if (linkedJournal !== undefined && linkedJournal) {
+    await recordOnboardingActionSafely(req.user._id, ONBOARDING_ACTION.PLANNER_CONNECTED, "Planner connection");
+  } else if (linkedJournal === null && hadLinkedJournal) {
+    await reconcileOnboardingActionsSafely(req.user._id, "Planner disconnection");
+  }
 
   return res.status(200).json(new ApiResponse(200, serializePlanner(planner), "Planner updated successfully"));
 });
@@ -143,6 +159,7 @@ export const deletePlanner = asyncHandler(async (req, res) => {
   const entries = await PlanEntry.find({ planner: planner._id, owner: req.user._id });
   await PlanEntry.deleteMany({ planner: planner._id, owner: req.user._id });
   await Planner.deleteOne({ _id: planner._id, owner: req.user._id });
+  await reconcileOnboardingActionsSafely(req.user._id, "Planner deletion");
 
   void deleteImagesFromCloudinary(
     entries.flatMap(getEntryImages),
@@ -168,6 +185,7 @@ export const createPlanEntry = asyncHandler(async (req, res) => {
   const parsed = parseEntryPayload(req.body);
 
   const entry = await PlanEntry.create({ ...parsed, owner: req.user._id, planner: planner._id });
+  await recordOnboardingActionSafely(req.user._id, ONBOARDING_ACTION.PLAN_CREATED, "plan creation");
 
   const retainedImages = new Set(parsed.images);
   void deleteImagesFromCloudinary(
@@ -211,6 +229,7 @@ export const deletePlanEntry = asyncHandler(async (req, res) => {
   if (!entry) throw new ApiError(404, "Plan not found");
 
   void deleteImagesFromCloudinary(getEntryImages(entry), `trade-planner/${planner._id}`);
+  await reconcileOnboardingActionsSafely(req.user._id, "plan deletion");
 
   return res.status(200).json(new ApiResponse(200, { entryId }, "Plan deleted successfully"));
 });

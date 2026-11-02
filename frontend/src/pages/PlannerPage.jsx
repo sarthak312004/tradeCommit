@@ -1,6 +1,7 @@
-import { lazy, Suspense, useContext, useEffect, useState } from 'react'
+import { lazy, Suspense, useCallback, useContext, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { plannerContext } from '../context/Context'
+import { useProfile } from '../hooks/useProfile'
 import { usePlanEntries } from '../hooks/usePlanEntries'
 import TopBar from '../components/rightContainer/TopBar'
 import PlannerCalendar from '../components/rightContainer/planner/PlannerCalendar'
@@ -11,11 +12,14 @@ import { CalendarIcon } from '../utils/Icons.jsx'
 import { loadPlanForm, preloadPlanForm } from '../utils/formLoaders'
 import { getCarryForward } from '../services/aiRangeReviewApi'
 import { clearFormDraft, readFormDraft, writeFormDraft } from '../utils/formDraftStorage'
+import PlannerWalkthrough from '../components/onboardingGuide/PlannerWalkthrough'
+import { PLANNER_WALKTHROUGH_INTERACTION_EVENT } from '../utils/plannerWalkthrough'
 
 const pageBody = 'subtle-scrollbar min-h-0 flex-1 overflow-y-auto p-3 sm:p-6 md:p-8'
 const PlanForm = lazy(loadPlanForm)
 
 function PlannerWorkspace({ planner }) {
+  const { profile } = useProfile()
   const { entries, isLoading, error, addEntry, updateEntry, removeEntry, uploadImage } = usePlanEntries(planner.id)
   // null = drawer closed, { entry: null, date } = new plan, { entry } = editing
   const formStateKey = `tradecommit:open-plan-form:${planner.id}`
@@ -23,11 +27,17 @@ function PlannerWorkspace({ planner }) {
     const saved = readFormDraft(formStateKey)
     return saved && (typeof saved.date === 'string' || typeof saved.entryId === 'string') ? saved : null
   })
+  const [plannerGuideActive, setPlannerGuideActive] = useState(false)
+  const [plannerGuideStep, setPlannerGuideStep] = useState(null)
   const currentEntry = formState?.entry ?? entries.find((entry) => entry.id === formState?.entryId) ?? null
   const planDraftKey = `tradecommit:plan-form-draft:${planner.id}:${currentEntry?.id ?? formState?.entryId ?? 'new'}`
   // the change the linked journal's latest mentor review asked for: shown inside the plan form so feedback reaches the next plan
   const [carryForward, setCarryForward] = useState(null)
   const linkedJournalId = planner.linkedJournalId
+  const plannerWalkthrough = profile?.plannerWalkthrough
+  const showConnectionHint = plannerWalkthrough?.plannerId === planner.id
+    && plannerWalkthrough.step === 'connection'
+    && (plannerWalkthrough.status === 'pending' || plannerWalkthrough.status === 'in_progress')
   useEffect(() => {
     if (!linkedJournalId) return undefined
     let cancelled = false
@@ -55,10 +65,24 @@ function PlannerWorkspace({ planner }) {
   const handleSubmit = (values, prepare) =>
     currentEntry ? updateEntry(currentEntry.id, values, prepare) : addEntry(values, prepare)
 
-  const openNewPlan = (date) => {
+  const openNewPlan = useCallback((date) => {
     writeFormDraft(formStateKey, { open: true, entryId: null, date })
     setFormState({ entry: null, date })
-  }
+  }, [formStateKey])
+
+  const openPlanFromCalendar = useCallback((date) => {
+    openNewPlan(date)
+    window.dispatchEvent(new CustomEvent(PLANNER_WALKTHROUGH_INTERACTION_EVENT, { detail: { step: 'open-plan' } }))
+  }, [openNewPlan])
+
+  const openTourPlan = useCallback(() => {
+    if (!formState) openNewPlan(todayKey())
+  }, [formState, openNewPlan])
+
+  const handlePlannerGuideChange = useCallback((active, step) => {
+    setPlannerGuideActive(active)
+    setPlannerGuideStep(step)
+  }, [])
 
   const openPlan = (entry) => {
     writeFormDraft(formStateKey, { open: true, entryId: entry.id, date: entry.date })
@@ -76,14 +100,15 @@ function PlannerWorkspace({ planner }) {
       <TopBar label={`Trade planner · ${planner.type}`} title={planner.name} />
       <ScrollFade className="flex min-h-0 flex-1 flex-col" scrollClassName={pageBody}>
         <div className="mb-4 flex flex-wrap items-center gap-2">
-          <PlannerJournalLink planner={planner} />
+          <PlannerJournalLink planner={planner} showEmptyState={showConnectionHint} />
         </div>
         {error && <p role="alert" className="mb-4 text-sm text-rose-500">{error}</p>}
         {isLoading && <p role="status" className="mb-2 text-xs text-zinc-500 dark:text-zinc-400">Loading plans…</p>}
         <PlannerCalendar
           entries={entries}
           selectedDate={currentEntry?.date ?? formState?.date ?? null}
-          onCreateForDate={openNewPlan}
+          isOpenPlanTourActive={plannerGuideActive && plannerGuideStep === 'open-plan'}
+          onCreateForDate={openPlanFromCalendar}
           onOpenEntry={openPlan}
           headerHint={!isLoading && (
             <div className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-zinc-200 bg-white/80 py-1 pl-2.5 pr-1 text-xs text-zinc-600 shadow-sm dark:border-white/[0.10] dark:bg-white/[0.03] dark:text-zinc-300">
@@ -118,9 +143,16 @@ function PlannerWorkspace({ planner }) {
             onClose={closeForm}
             onUploadImage={uploadImage}
             carryForward={linkedJournalId ? carryForward : null}
+            guideOverlayActive={plannerGuideActive}
           />
         </Suspense>
       )}
+      <PlannerWalkthrough
+        plannerId={planner.id}
+        isPlanOpen={Boolean(formState)}
+        onOpenPlan={openTourPlan}
+        onActiveChange={handlePlannerGuideChange}
+      />
     </>
   )
 }

@@ -1,13 +1,14 @@
 import { useContext, useState } from 'react'
 import { journalContext, plannerContext } from '../../../context/Context'
 import JournalPicker from '../../common/JournalPicker'
+import { PLANNER_WALKTHROUGH_INTERACTION_EVENT } from '../../../utils/plannerWalkthrough'
 
 /**
  * Compact control to connect this planner to one existing journal. The AI mentor then reads the plans written
  * here next to the trades executed in that journal, so it knows what was planned when it reviews what was done.
  * Days without a plan, plans that never triggered and skipped plans are never treated as mistakes.
  */
-function PlannerJournalLink({ planner }) {
+function PlannerJournalLink({ planner, showEmptyState = false }) {
   const { journals } = useContext(journalContext)
   const { updatePlanner } = useContext(plannerContext)
   const [isSaving, setIsSaving] = useState(false)
@@ -21,6 +22,7 @@ function PlannerJournalLink({ planner }) {
     setIsSaving(true)
     try {
       await updatePlanner(planner.id, { linkedJournalId: journalId || null })
+      window.dispatchEvent(new CustomEvent(PLANNER_WALKTHROUGH_INTERACTION_EVENT, { detail: { step: 'connection' } }))
     } catch (changeError) {
       setError(changeError instanceof TypeError ? "Can't reach the server. Check your connection and try again." : changeError.message || 'Could not connect the journal')
     } finally {
@@ -28,7 +30,15 @@ function PlannerJournalLink({ planner }) {
     }
   }
 
-  if (options.length === 0) return null
+  if (options.length === 0) {
+    if (!showEmptyState) return null
+    return (
+      <div data-tour="planner-journal" className="flex w-fit max-w-full flex-wrap items-center gap-x-3 gap-y-1.5">
+        <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Journal connection</span>
+        <span className="text-[11px] text-zinc-500 dark:text-zinc-400">Create a journal before connecting it here.</span>
+      </div>
+    )
+  }
 
   return (
     <div data-tour="planner-journal" className="flex w-fit max-w-full flex-wrap items-center gap-x-3 gap-y-1.5">

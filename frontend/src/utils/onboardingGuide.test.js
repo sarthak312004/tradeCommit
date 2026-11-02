@@ -15,6 +15,7 @@ import {
   restartOnboardingGuide,
   resolveGuideStep,
   completeOnboardingGuide,
+  hydrateGuideState,
   setGuideStep,
   skipOnboardingGuide,
 } from './onboardingGuide.js'
@@ -38,6 +39,19 @@ test('queueing starts at the planner step and survives a reload', () => {
   const reloaded = getGuideState('ada', storage) // username is case-insensitive
   assert.equal(reloaded.status, S.PENDING)
   assert.equal(reloaded.step, STEP.PLANNER)
+})
+
+test('authenticated server state hydrates the account-specific local resume copy', () => {
+  const storage = fakeStorage()
+  hydrateGuideState('ada', { status: S.IN_PROGRESS, step: STEP.JOURNAL_EXECUTION, updatedAt: '2026-01-01T00:00:00.000Z' }, storage)
+
+  assert.deepEqual(getGuideState('ada', storage), {
+    v: 1,
+    status: S.IN_PROGRESS,
+    step: STEP.JOURNAL_EXECUTION,
+    updatedAt: Date.parse('2026-01-01T00:00:00.000Z'),
+  })
+  assert.equal(getGuideState('other', storage), null)
 })
 
 test('a finished guide is never queued again', () => {
@@ -85,9 +99,9 @@ test('a deleted journal sends the guide back instead of pointing at nothing', ()
   assert.equal(resolveGuideStep(state, none).step, STEP.CREATE_JOURNAL)
 })
 
-test('an account that already logs trades completes silently', () => {
+test('a saved trade does not skip the remaining contextual guide steps', () => {
   const state = { status: S.PENDING, step: STEP.PLANNER }
-  assert.equal(resolveGuideStep(state, { hasJournal: true, hasTrades: true }).status, S.COMPLETED)
+  assert.deepEqual(resolveGuideStep(state, { hasJournal: true, hasTrades: true }), state)
 })
 
 test('a replay by an account with trades is not cut short', () => {

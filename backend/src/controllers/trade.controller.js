@@ -7,6 +7,11 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { deleteImagesFromCloudinary, uploadOnCloudinary } from "../utils/cloudinary.js";
 import { parseCustomFields } from "../utils/customFields.js";
 import { recordNewTrade } from "../utils/mentorProgress.js";
+import {
+  ONBOARDING_ACTION,
+  reconcileOnboardingActionsSafely,
+  recordOnboardingActionSafely,
+} from "../utils/onboardingProgress.js";
 
 const serializeTrade = (trade) => {
   const direction = trade.direction === "long" ? "Long" : "Short";
@@ -186,6 +191,7 @@ export const createTrade = asyncHandler(async (req, res) => {
   } catch (error) {
     console.error("mentor progress update failed", error);
   }
+  await recordOnboardingActionSafely(req.user._id, ONBOARDING_ACTION.TRADE_LOGGED, "trade creation");
 
   return res
     .status(201)
@@ -248,6 +254,7 @@ export const deleteTrade = asyncHandler(async (req, res) => {
   }
 
   void deleteImagesFromCloudinary(getTradeImages(trade), `trading-journal/${journal._id}`);
+  await reconcileOnboardingActionsSafely(req.user._id, "trade deletion");
 
   return res.status(200).json(new ApiResponse(200, { journalId, tradeId }, "Trade deleted successfully"));
 });

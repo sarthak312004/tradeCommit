@@ -4,7 +4,7 @@
 //   queueOnboardingGuide(username)  - called once, when onboarding finishes: the guide becomes "pending"
 //   getGuideState(username)         - { status, step, ... } | null (null = never queued, e.g. an account that predates it)
 //   resolveGuideStep(state, facts)  - the step that should be on screen, given what exists in the account
-//   getGuideProgress(state)         - { total, completed, fraction, ... } (for the Part 2 header indicator)
+//   getGuideProgress(state)         - the explanatory modal's step position (workflow progress is separate)
 //
 // Only a fresh sign-up is ever queued, so nobody who already knows the app is shown a guide they did not ask for.
 // Progress lives in localStorage under the username (same scope the legacy tour used, and carried over on rename).
@@ -109,6 +109,28 @@ export const saveGuideState = (username, state, storage = defaultStorage()) => {
   return next
 }
 
+/** Applies the authenticated server copy without discarding the local fallback used during a network outage. */
+export const hydrateGuideState = (username, state, storage = defaultStorage()) => {
+  if (!username || !state) return null
+  const updatedAt = typeof state.updatedAt === 'string' ? Date.parse(state.updatedAt) : Number(state.updatedAt)
+  const next = parseGuideState({
+    status: state.status,
+    step: state.step,
+    updatedAt: Number.isFinite(updatedAt) ? updatedAt : 0,
+  })
+  if (!next) return null
+
+  const key = storageKey(username)
+  memory.set(key, JSON.stringify(next))
+  try {
+    storage?.setItem(key, JSON.stringify(next))
+  } catch {
+    // the in-memory copy still keeps this tab in sync
+  }
+  emit(username, next)
+  return next
+}
+
 const queuedState = () => ({ status: GUIDE_STATUS.PENDING, step: GUIDE_STEP.PLANNER })
 
 /** Called once, when a brand-new account finishes onboarding. Never overrides a guide that was already finished. */
@@ -162,13 +184,11 @@ export const isJournalStep = (step) => JOURNAL_STEPS.has(step)
  *
  *   - Creating the journal completes `create-journal` by itself (the guide moves on and shows the journal).
  *   - A journal that disappears (deleted mid-guide) sends the guide back to `create-journal` instead of pointing at nothing.
- *   - An account that already logs trades is not onboarding any more: a guide that never started completes silently.
- *     (A replay from the profile menu is `in_progress`, so veterans can still take the guide on request.)
+ *   - Actual workflow completion is stored separately from this explanatory guide, so a saved trade alone does not
+ *     silently dismiss the remaining feedback steps.
  */
 export const resolveGuideStep = (state, facts) => {
   if (!isGuideRunnable(state)) return { status: state?.status ?? null, step: state?.step ?? null }
-  // only a guide that was queued but never started: someone who asked for it (replay) or is mid-guide keeps going
-  if (facts.hasTrades && state.status === GUIDE_STATUS.PENDING) return { status: GUIDE_STATUS.COMPLETED, step: GUIDE_STEP.AI_MENTOR }
   if (state.step === GUIDE_STEP.CREATE_JOURNAL && facts.hasJournal) return { status: state.status, step: GUIDE_STEP.JOURNAL_CONTEXT }
   if (isJournalStep(state.step) && !facts.hasJournal) return { status: state.status, step: GUIDE_STEP.CREATE_JOURNAL }
   return { status: state.status, step: state.step }
@@ -184,7 +204,7 @@ export const previousGuideStep = (step) => {
   return null
 }
 
-/** For the header progress indicator (Part 2): how far along the guide is. */
+/** Position within the explanatory modal, separate from the action-based header workflow indicator. */
 export const getGuideProgress = (state) => {
   const total = GUIDE_STEP_ORDER.length
   if (!state) return { total, completed: 0, fraction: 0, status: null, step: null }

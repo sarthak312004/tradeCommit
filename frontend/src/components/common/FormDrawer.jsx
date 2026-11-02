@@ -25,7 +25,7 @@ const EXPANDED_WIDTH = 1400 // clamped by max-w-full on small screens
  * `onBeforeClose` is optional: it runs before every close (Esc, the X button, Cancel). Return `false` to keep the drawer open,
  * e.g. to ask whether to discard unsaved text. Forms that don't pass it close exactly as before.
  */
-function FormDrawer({ ref, ariaTitle, breadcrumb, onSubmit, onClose, footer, children, canClose = true, canSubmit = true, deepMode = false, deepTheme = 'sage', headerExtra = null, sidePanel = null, onBeforeClose = null }) {
+function FormDrawer({ ref, ariaTitle, breadcrumb, onSubmit, onClose, footer, children, canClose = true, canSubmit = true, deepMode = false, deepTheme = 'sage', headerExtra = null, sidePanel = null, onBeforeClose = null, guideOverlayActive = false }) {
   const [drawerWidth, setDrawerWidth] = useState(DEFAULT_WIDTH)
   const [expanded, setExpanded] = useState(false)
   const isFullScreen = deepMode || expanded
@@ -97,6 +97,7 @@ function FormDrawer({ ref, ariaTitle, breadcrumb, onSubmit, onClose, footer, chi
       role="dialog"
       aria-modal="true"
       aria-label={ariaTitle}
+      data-guide-pass-through={guideOverlayActive ? '' : undefined}
     >
       <form
         ref={formRef}

@@ -35,7 +35,15 @@ export function useProfile() {
   // the name or username was edited in the profile card: show the saved values everywhere at once
   useEffect(() => {
     const handleProfileUpdated = () => {
-      getProfile().then(setProfile).catch(() => {})
+      getProfile()
+        .then((data) => {
+          setProfile(data)
+          setError('')
+        })
+        .catch((loadError) => {
+          console.error('Could not refresh your profile:', loadError)
+          setError(loadError.message || 'Could not refresh your profile')
+        })
     }
     window.addEventListener(PROFILE_UPDATED_EVENT, handleProfileUpdated)
     return () => window.removeEventListener(PROFILE_UPDATED_EVENT, handleProfileUpdated)

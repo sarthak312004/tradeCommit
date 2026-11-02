@@ -1,4 +1,5 @@
 import { requestJson } from '../utils/http'
+import { refreshProfile } from './profileApi'
 
 const base = (journalId) => `/api/v1/journals/${journalId}/ai-range-reviews`
 
@@ -10,7 +11,7 @@ const base = (journalId) => `/api/v1/journals/${journalId}/ai-range-reviews`
 
 /**
  * Saved review for exactly this range (never calls the AI, never uses allowance). `start` / `end` are YYYY-MM-DD, inclusive.
- * Resolves to { kind: 'range', id, rangeStart, rangeEnd, days, currency, hasStrategy, tradeCount, planner,
+ * Resolves to { kind: 'range', id, rangeStart, rangeEnd, days, currency, hasStrategy, hasStrategyText, strategyMinimumLength, tradeCount, planner,
  *   stats: { trades, closed, netPnl, winRate, expectancyR, rewardRisk, payoffRatio, avgRrr (legacy alias of expectancyR) }, review, model, generatedAt, stale, access }
  * `access` has the same shape as for weekly reviews (canGenerate, reason, message, newTrades, threshold, usage...).
  */
@@ -18,7 +19,11 @@ export const previewRangeReview = (journalId, start, end) =>
   requestJson(`${base(journalId)}/preview?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`, { cache: 'no-store' })
 
 /** Returns the saved review when it is current, otherwise asks the mentor. Rejects with the server's explanation when not allowed. */
-export const createRangeReview = (journalId, start, end) => requestJson(base(journalId), { method: 'POST', body: { start, end }, timeoutMs: 200_000 })
+export const createRangeReview = async (journalId, start, end) => {
+  const review = await requestJson(base(journalId), { method: 'POST', body: { start, end }, timeoutMs: 200_000 })
+  refreshProfile()
+  return review
+}
 
 /**
  * Cheap check (never calls the AI, never uses allowance): { generating, savedAt }. `generating` is true while the server is

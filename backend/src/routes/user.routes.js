@@ -3,6 +3,8 @@ import {
   getProfile,
   updateProfile,
   completeOnboarding,
+  updateOnboardingGuide,
+  updatePlannerWalkthrough,
   setHeaderBackdrop,
   setFocusPreferences,
   uploadHeaderBackdropImage,
@@ -48,6 +50,8 @@ router.get("/profile", verifyJWT, getProfile)
 // add / edit the display name and username (sign-up no longer asks for them)
 router.patch("/profile", verifyJWT, updateProfile)
 router.post("/onboarding/complete", verifyJWT, completeOnboarding)
+router.patch("/onboarding/guide", verifyJWT, updateOnboardingGuide)
+router.patch("/onboarding/planner-walkthrough", verifyJWT, updatePlannerWalkthrough)
 // header background: a built-in scene / none (JSON), or the user's own picture (multipart)
 router.put("/header-backdrop", verifyJWT, setHeaderBackdrop)
 router.put("/focus-preferences", verifyJWT, setFocusPreferences)

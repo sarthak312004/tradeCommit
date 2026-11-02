@@ -4,6 +4,7 @@ import { journalContext } from "./Context"
 import { DEFAULT_CURRENCY } from "../utils/currencies"
 import { fetchPrefetched } from "../utils/prefetch"
 import { MAX_IMPORT_BATCH_SIZE } from "../services/importApi"
+import { refreshProfile } from "../services/profileApi"
 
 const API_BASE = "/api/v1/journals"
 const TEMP_PREFIX = "pending-"
@@ -191,6 +192,7 @@ function JournalContextProvider({children}){
             const created = { ...normalizeJournalForFrontend(await readJson(response)), createdInSession: true }
             setJournals((current) => current.map((journal) => journal.id === tempId ? created : journal))
             setSelectedJournalId((currentId) => currentId === tempId ? created.id : currentId)
+            refreshProfile()
             return created
         } catch (error) {
             setJournals((current) => current.filter((journal) => journal.id !== tempId))
@@ -247,6 +249,7 @@ function JournalContextProvider({children}){
             mode: saved.mode,
             trades: journal.trades.map((trade) => savedFields.has(String(trade.id)) ? { ...trade, customFields: savedFields.get(String(trade.id)) } : trade)
         } : journal))
+        refreshProfile()
         return saved.context
     }
 
@@ -263,6 +266,7 @@ function JournalContextProvider({children}){
             setSelectedJournalId((currentId) => currentId === id ? remaining[0]?.id ?? null : currentId)
             return remaining
         })
+        refreshProfile()
     }
 
     const selectJournal = (id) => {
@@ -320,6 +324,7 @@ function JournalContextProvider({children}){
                 const created = normalizeTradeForFrontend(await readJson(response))
                 tradeSyncRef.current.delete(tempId)
                 patchTrade(journalId, tempId, () => created)
+                refreshProfile()
                 return created
             } catch (error) {
                 patchTrade(journalId, tempId, { syncState: "failed", syncError: saveErrorText(error, "Could not save this trade.") })
@@ -393,6 +398,7 @@ function JournalContextProvider({children}){
                 ? { ...journal, trades: journal.trades.filter((trade) => trade.id !== tradeId), updated: "Just now" }
                 : journal
         )))
+        refreshProfile()
     }
 
     // Saves the trades a person reviewed in the import dialog: `groups` is [{ journalId, trades }], one entry per

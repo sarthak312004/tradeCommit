@@ -5,6 +5,7 @@ import { useFocusTimer } from '../../../hooks/useFocusTimer'
 import FocusTimerPanel from './FocusTimerPanel'
 import MusicDialog, { MusicIcon } from './MusicDialog'
 import { SlidersIcon } from '../../../utils/Icons.jsx'
+import { PLANNER_WALKTHROUGH_INTERACTION_EVENT } from '../../../utils/plannerWalkthrough'
 
 const THEMES = [
   { value: 'sage', label: 'Sage', swatch: 'bg-[#8b9b83]' },
@@ -106,9 +107,11 @@ function DeepFocusDock() {
         </button>}
 
         <button
+          data-tour="planner-deep-mode"
           type="button"
           onClick={() => {
             setIsEnabled((enabled) => !enabled)
+            window.dispatchEvent(new CustomEvent(PLANNER_WALKTHROUGH_INTERACTION_EVENT, { detail: { step: 'deep-mode' } }))
             if (isEnabled) {
               resetTimer()
               setIsSettingsOpen(false)

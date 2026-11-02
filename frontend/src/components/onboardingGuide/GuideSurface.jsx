@@ -40,16 +40,19 @@ function useViewport() {
   return viewport
 }
 
-function StageRail({ stage }) {
+function StageRail({ stage, label, progress = [] }) {
   return (
-    <ol className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.16em]" aria-label="Where you are in the loop">
+    <ol className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.16em]" aria-label={label}>
       {GUIDE_STAGES.map((item, index) => {
         const active = item.id === stage
+        const completed = progress.find((entry) => entry.id === item.id)?.completed
         return (
           <li key={item.id} className="flex items-center gap-1.5" aria-current={active ? 'step' : undefined}>
             {index > 0 && <span aria-hidden="true" className="h-px w-3 bg-zinc-900/15 dark:bg-white/15" />}
             <span className={`flex items-center gap-1.5 transition-colors ${active ? 'text-zinc-900 dark:text-zinc-100' : 'text-zinc-400 dark:text-zinc-500'}`}>
-              {active && <span aria-hidden="true" className="h-1 w-1 rounded-full bg-sky-600 shadow-[0_0_6px_rgb(2_132_199/0.7)] dark:bg-sky-400 dark:shadow-[0_0_6px_rgb(56_189_248/0.8)]" />}
+              {completed
+                ? <span aria-hidden="true" className="text-[9px] text-emerald-600 dark:text-emerald-400">✓</span>
+                : active && <span aria-hidden="true" className="h-1 w-1 rounded-full bg-sky-600 shadow-[0_0_6px_rgb(2_132_199/0.7)] dark:bg-sky-400 dark:shadow-[0_0_6px_rgb(56_189_248/0.8)]" />}
               {item.label}
             </span>
           </li>
@@ -59,10 +62,10 @@ function StageRail({ stage }) {
   )
 }
 
-function Segments({ index }) {
+function Segments({ index, steps }) {
   return (
     <div className="mt-3 flex gap-1" aria-hidden="true">
-      {GUIDE_STEP_ORDER.map((id, position) => (
+      {steps.map((id, position) => (
         <span key={id} className={`h-[2px] flex-1 rounded-full transition-colors duration-300 ${position <= index ? 'bg-zinc-900/70 dark:bg-zinc-100/70' : 'bg-zinc-900/10 dark:bg-white/10'}`} />
       ))}
     </div>
@@ -76,7 +79,24 @@ function Segments({ index }) {
  *   rect         target box in viewport coordinates, or null (centred card)
  *   interactive  the highlighted element stays clickable
  */
-export default function GuideSurface({ stepId, step, rect, interactive, waiting, canGoBack, onPrimary, onBack, onSkip }) {
+export default function GuideSurface({
+  stepId,
+  step,
+  rect,
+  interactive,
+  waiting,
+  canGoBack,
+  onPrimary,
+  primaryDisabled = false,
+  onBack,
+  onSkip,
+  progressSteps = GUIDE_STEP_ORDER,
+  progressIndex = GUIDE_STEP_ORDER.indexOf(stepId),
+  stageLabel = 'Where you are in the loop',
+  stageOverride,
+  stageProgress,
+  error,
+}) {
   const viewport = useViewport()
   const compact = viewport.width < COMPACT_BREAKPOINT
   const cardRef = useRef(null)
@@ -85,8 +105,8 @@ export default function GuideSurface({ stepId, step, rect, interactive, waiting,
   const titleId = useId()
   const bodyId = useId()
 
-  const stage = stageOf(stepId)
-  const index = GUIDE_STEP_ORDER.indexOf(stepId)
+  const stage = stageOverride ?? stageOf(stepId)
+  const index = progressIndex
   const cardWidth = compact ? Math.min(viewport.width - 32, 400) : CARD_WIDTH
 
   // measure the real card, so the connector meets its edge exactly
@@ -176,8 +196,8 @@ export default function GuideSurface({ stepId, step, rect, interactive, waiting,
           data-guide-card
           className="guide-card-in rounded-2xl border border-zinc-900/10 bg-gradient-to-b from-white to-[#f9f6f0] p-5 shadow-[0_18px_44px_-18px_rgb(28_25_23/0.38),0_2px_6px_-2px_rgb(28_25_23/0.1)] dark:border-white/[0.12] dark:from-[#242424] dark:to-[#1b1b1b] dark:shadow-[0_22px_50px_-18px_rgb(0_0_0/0.85)]"
         >
-          <StageRail stage={stage} />
-          <Segments index={index} />
+          <StageRail stage={stage} label={stageLabel} progress={stageProgress} />
+          <Segments index={index} steps={progressSteps} />
 
           <h2 id={titleId} className={`${SERIF} mt-4 text-[22px] font-medium leading-[1.2] tracking-[-0.015em] text-zinc-900 dark:text-zinc-50`}>
             {step.title}
@@ -186,6 +206,7 @@ export default function GuideSurface({ stepId, step, rect, interactive, waiting,
             {step.body}
           </p>
           {step.note && <p className="mt-3 border-l border-zinc-900/15 pl-3 text-xs leading-relaxed text-zinc-500 dark:border-white/15 dark:text-zinc-500">{step.note}</p>}
+          {error && <p role="alert" className="mt-3 text-xs leading-relaxed text-rose-700 dark:text-rose-300">{error}</p>}
 
           <div className="mt-5 flex items-center justify-between gap-3">
             <button
@@ -216,7 +237,8 @@ export default function GuideSurface({ stepId, step, rect, interactive, waiting,
                 ref={primaryRef}
                 type="button"
                 onClick={onPrimary}
-                className="h-8 rounded-lg bg-zinc-900 px-3.5 text-xs font-semibold text-white transition-colors hover:bg-zinc-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/60 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white dark:focus-visible:ring-offset-[#1f1f1f]"
+                disabled={primaryDisabled}
+                className="h-8 rounded-lg bg-zinc-900 px-3.5 text-xs font-semibold text-white transition-colors hover:bg-zinc-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/60 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white dark:focus-visible:ring-offset-[#1f1f1f]"
               >
                 {step.primaryLabel}
               </button>

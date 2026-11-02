@@ -1,4 +1,5 @@
 import { requestJson } from '../utils/http'
+import { refreshProfile } from './profileApi'
 
 const base = (journalId) => `/api/v1/journals/${journalId}/ai-review`
 
@@ -17,7 +18,11 @@ export const getAiReview = (journalId, weekStart) =>
  * Returns the saved review when it is still current, otherwise asks the AI mentor. Rejects with the server's
  * explanation (403 not unlocked yet, 429 limit reached or mentor busy) when a new review is not allowed.
  */
-export const createAiReview = (journalId, weekStart) => requestJson(base(journalId), { method: 'POST', body: { weekStart } })
+export const createAiReview = async (journalId, weekStart) => {
+  const review = await requestJson(base(journalId), { method: 'POST', body: { weekStart } })
+  refreshProfile()
+  return review
+}
 
 /**
  * The trader's allowance, shared by weekly and date-range reviews (a review written in either one counts in both).

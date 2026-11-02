@@ -16,6 +16,7 @@ import { runQueued } from "../utils/geminiQueue.js";
 import { htmlToPlainText } from "../utils/richText.js";
 import { findLastCommitment } from "../utils/flywheel.js";
 import { addDays, dateKey, isDateKey, mondayOf, summaryStats } from "../utils/tradeStats.js";
+import { ONBOARDING_ACTION, recordOnboardingActionSafely } from "../utils/onboardingProgress.js";
 
 // A strategy shorter than this has no rules to check trades against.
 const MIN_STRATEGY_LENGTH = 15;
@@ -173,6 +174,7 @@ export const createAiReview = asyncHandler(async (req, res) => {
   const ownerId = req.user._id;
   const key = `${week.journal._id}:${week.weekStart}`;
   const respond = async (saved) => {
+    await recordOnboardingActionSafely(ownerId, ONBOARDING_ACTION.MENTOR_REVIEW_CREATED, "weekly mentor review");
     const access = await evaluateAccess({ week, saved, ownerId });
     return res.status(200).json(new ApiResponse(200, serialize(week, saved, access), "AI review ready"));
   };

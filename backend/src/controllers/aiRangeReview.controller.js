@@ -18,6 +18,7 @@ import { runQueued } from "../utils/geminiQueue.js";
 import { htmlToPlainText } from "../utils/richText.js";
 import { findLastCommitment } from "../utils/flywheel.js";
 import { addDays, dateKey, isDateKey, summaryStats } from "../utils/tradeStats.js";
+import { ONBOARDING_ACTION, recordOnboardingActionSafely } from "../utils/onboardingProgress.js";
 
 // A strategy shorter than this has no rules to check trades against.
 const MIN_STRATEGY_LENGTH = 15;
@@ -106,6 +107,7 @@ const loadRange = async ({ ownerId, journalId, start, end }) => {
     planners,
     planEntries,
     plansTruncated,
+    strategyText: strategy.trim(),
     hasStrategy: strategy.length >= MIN_STRATEGY_LENGTH,
     inputHash,
     contextHash,
@@ -128,6 +130,8 @@ const serialize = (range, saved, access) => ({
   days: daysInclusive(range.rangeStart, range.rangeEnd),
   currency: range.journal.currency,
   hasStrategy: range.hasStrategy,
+  hasStrategyText: Boolean(range.strategyText),
+  strategyMinimumLength: MIN_STRATEGY_LENGTH,
   tradeCount: range.rangeTrades.length,
   planner: { connected: range.planners.length, plans: range.planEntries.length },
   stats: rangeStats(range.rangeTrades),
@@ -198,6 +202,7 @@ export const createRangeReview = asyncHandler(async (req, res) => {
 
   const key = `${range.journal._id}:${range.rangeStart}:${range.rangeEnd}`;
   const respond = async (saved) => {
+    await recordOnboardingActionSafely(ownerId, ONBOARDING_ACTION.MENTOR_REVIEW_CREATED, "range mentor review");
     const access = await evaluateAccess({ week: range, saved, ownerId });
     return res.status(200).json(new ApiResponse(200, serialize(range, saved, access), "AI range review ready"));
   };

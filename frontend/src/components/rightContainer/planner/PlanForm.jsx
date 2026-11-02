@@ -13,6 +13,7 @@ import { useDeepFocus } from '../../../context/useDeepFocus'
 import { clearFormDraft, readFormDraft, writeFormDraft } from '../../../utils/formDraftStorage'
 import { EMPTY_QUICK, MAX_TITLE, buildQuickPlanHtml, deriveTitle, hasQuickContent, htmlHasText, sanitizeQuick } from '../../../utils/quickPlan'
 import { BLANK_TEMPLATE_ID, getTemplate } from '../../../utils/quickPlanTemplates'
+import { PLANNER_WALKTHROUGH_INTERACTION_EVENT } from '../../../utils/plannerWalkthrough'
 
 // Which writing mode a NEW plan opens in. Remembered per browser; editing an existing plan always uses the full editor.
 const MODE_PREF_KEY = 'tradecommit:plan-form-mode'
@@ -75,7 +76,7 @@ const deepModeStyles = `
  * @param {Function} onUploadImage   (file) => Promise<url>
  * @param {object}   [carryForward]  { rule, planLine, checkpoint } the linked journal's latest mentor review asked the trader to apply
  */
-function PlanForm({ plannerName, plannerType, initialEntry = null, initialDate, draftKey, onSubmit, onDelete, onClose, onUploadImage, carryForward = null }) {
+function PlanForm({ plannerName, plannerType, initialEntry = null, initialDate, draftKey, onSubmit, onDelete, onClose, onUploadImage, carryForward = null, guideOverlayActive = false }) {
   const defaultDate = initialEntry?.date ?? initialDate ?? todayKey()
   const [savedDraft] = useState(() => readFormDraft(draftKey))
   const savedValues = savedDraft?.values && typeof savedDraft.values === 'object' ? savedDraft.values : {}
@@ -176,6 +177,7 @@ function PlanForm({ plannerName, plannerType, initialEntry = null, initialDate, 
 
   // Quick -> full editor: what was typed becomes formatted text at the top of the editor, then the fields reset
   const openFullEditor = () => {
+    window.dispatchEvent(new CustomEvent(PLANNER_WALKTHROUGH_INTERACTION_EVENT, { detail: { step: 'full-editor' } }))
     if (modeRef.current === 'full') return // already there: re-seeding would reset the live editor
     const compiled = buildQuickPlanHtml(quickRef.current)
     const seed = `${compiled}${editorDraftRef.current}`
@@ -193,6 +195,7 @@ function PlanForm({ plannerName, plannerType, initialEntry = null, initialDate, 
 
   // full editor -> Quick: only while the editor is empty, because free-form text can't be shown as fields
   const openQuickPlan = () => {
+    window.dispatchEvent(new CustomEvent(PLANNER_WALKTHROUGH_INTERACTION_EVENT, { detail: { step: 'quick-plan' } }))
     if (modeRef.current === 'quick') return
     if (htmlHasText(editorDraftRef.current)) return
     editorDraftRef.current = ''
@@ -353,6 +356,7 @@ function PlanForm({ plannerName, plannerType, initialEntry = null, initialDate, 
       canClose={!isBusy}
       canSubmit={!isBusy}
       onBeforeClose={guardClose}
+      guideOverlayActive={guideOverlayActive}
     >
       {deepMode && (
         <section className="deep-focus-intro mb-8 overflow-hidden rounded-2xl border border-stone-200/80 bg-white/55 px-5 pb-4 pt-3 shadow-[0_12px_45px_rgba(73,81,67,0.035)] dark:border-white/[0.08] dark:bg-white/[0.025] sm:px-8" aria-label="Deep focus atmosphere">
@@ -393,8 +397,8 @@ function PlanForm({ plannerName, plannerType, initialEntry = null, initialDate, 
         )}
         {!initialEntry && (
           <div role="group" aria-label="Writing mode" className="ml-auto inline-flex items-center rounded-lg border border-zinc-200 p-0.5 dark:border-white/[0.10]">
-            <button type="button" aria-pressed={isQuick} onClick={openQuickPlan} disabled={!isQuick && fullHasText} title={!isQuick && fullHasText ? 'Clear the editor to switch back to Quick plan' : undefined} className={modeButton(isQuick)}>Quick plan</button>
-            <button type="button" aria-pressed={!isQuick} onClick={openFullEditor} className={modeButton(!isQuick)}>Full editor</button>
+            <button type="button" data-tour="planner-quick-plan" aria-pressed={isQuick} onClick={openQuickPlan} disabled={!isQuick && fullHasText} title={!isQuick && fullHasText ? 'Clear the editor to switch back to Quick plan' : undefined} className={modeButton(isQuick)}>Quick plan</button>
+            <button type="button" data-tour="planner-full-editor" aria-pressed={!isQuick} onClick={openFullEditor} className={modeButton(!isQuick)}>Full editor</button>
           </div>
         )}
       </div>

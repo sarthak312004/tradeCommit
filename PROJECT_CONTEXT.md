@@ -99,7 +99,7 @@ These are the route mounts in `backend/src/app.js`. Route handlers and auth requ
 
 | Mount path | Route module | Purpose |
 |---|---|---|
-| `/api/v1/auth` | `routes/user.routes.js` | Google sign-in/signup, password login, email-code login, logout, logout, profile (`GET`/`PATCH /profile`), onboarding, preferences, password set/reset |
+| `/api/v1/auth` | `routes/user.routes.js` | Google sign-in/signup, password login, email-code login, logout, profile (`GET`/`PATCH /profile`), onboarding state, preferences, password set/reset |
 | `/api/v1/journals` | `routes/journal.routes.js` | Journal CRUD and journal export |
 | `/api/v1/journals/:journalId/trades` | `routes/trade.routes.js` | Trade CRUD and trade image upload |
 | `/api/v1/journals/:journalId/ai-review` | `routes/aiReview.routes.js` | Weekly AI mentor review and quota |
@@ -127,7 +127,7 @@ These are the route mounts in `backend/src/app.js`. Route handlers and auth requ
 ### Authentication flows
 
 - **Signup is Google-only and one click:** `POST /auth/google {credential}` verifies the Google ID token (`utils/googleAuth.js`), then logs into the matching account (lookup by `googleId`, then by email) or creates one on first use (201). New accounts get `fullname` from the Google display name (fallback: derived from the email prefix), a generated unique username built from that name (`sarthak_kumar_<6 hex>`), no password, `emailVerified: true`, `onboardingCompleted: false`. Unique `email` + sparse-unique `googleId` indexes make concurrent first sign-ins safe (loser reads the winner's user). An existing email account is linked to the Google id, never duplicated; an email already linked to a *different* Google id is rejected (409). The email-code signup endpoints (`/signup/send-otp`, `/signup/verify-otp`) were removed; `EmailVerification` model is now unused. Frontend: `SignupFlow.jsx` is just the Google button; `Home.jsx` still redirects `onboardingCompleted === false` to `/onboarding`.
-- **Profile (`PATCH /auth/profile {fullname?, username?}`, `verifyJWT`)** is where the name and username are added/edited (username `^[a-z0-9_]{3,20}$`, unique, lowercased; name <= 80 chars). Only `req.user._id` is updated. The profile card edits each field in place (pencil per row). The client keeps tour progress (localStorage, keyed by username) when the username changes.
+- **Profile (`PATCH /auth/profile {fullname?, username?}`, `verifyJWT`)** is where the name and username are added/edited (username `^[a-z0-9_]{3,20}$`, unique, lowercased; name <= 80 chars). Only `req.user._id` is updated. The profile card edits each field in place (pencil per row). Main guide modal position is mirrored between the account-owned onboarding subdocument and its username-keyed localStorage fallback; renames move the fallback.
 - **Password is optional:** `GET /auth/profile` returns `hasPassword`. Setting (passwordless) or resetting (existing) a password uses the same logged-in email-code flow: `/auth/password/send-otp` -> `/verify-otp` -> `/reset`. Email-code login (`/auth/login/send-otp`, `/verify-otp`) works for every account regardless of password. Password login of a passwordless account returns the generic 401.
 
 ### Other middleware / request controls
@@ -176,7 +176,7 @@ AI
 
 | Model | File | Main data |
 |---|---|---|
-| `User` | `user.models.js` | username (unique; auto-generated at signup), email, fullname (optional, default `""`), password hash (optional: passwordless accounts have none), Google ID, email/onboarding flags, OTP/reset subdocuments, passwordChangedAt, headerBackdrop, focusPreferences (`focusTheme` + one saved Deep Mode playlist: `musicProvider` `spotify`/`youtube`, `spotifyUrl`, `youtubeUrl`), refreshToken |
+| `User` | `user.models.js` | username (unique; auto-generated at signup), email, fullname (optional, default `""`), password hash (optional: passwordless accounts have none), Google ID, email/onboarding flags and separate onboarding subdocuments, OTP/reset subdocuments, passwordChangedAt, headerBackdrop, focusPreferences (`focusTheme` + one saved Deep Mode playlist: `musicProvider` `spotify`/`youtube`, `spotifyUrl`, `youtubeUrl`), refreshToken |
 | `Journal` | `journal.models.js` | journalName, description, mode (`live`/`backtest`), immutable currency, context strategy + custom attributes, owner |
 | `Trade` | `trade.models.js` | date, assetName, quantity, direction (`long`/`short`), entryPrice, optional exitPrice/stopLoss, sanitized analysis HTML, images, customFields, owner, journal |
 | `Planner` | `planner.models.js` | name, type, optional linkedJournal, owner |
@@ -291,19 +291,25 @@ Keep it concise and factual. Do not turn it into a changelog; feature-specific i
 
 ## Onboarding and guidance
 
-**Guided onboarding** (`frontend/src/components/onboardingGuide/`) replaced the legacy Product Tour. It is one continuous walkthrough of the product loop, PLAN → JOURNAL → AI FEEDBACK: a premium card connected by a thin glowing line to the real UI element (Planner header, Journals section, journal Context and Add-trade buttons, AI Mentor orb), with the rest of the interface dimmed. Full handoff notes (states, step ids, persistence, Part 2 hook-up) are in `components/onboardingGuide/README.md`.
+**Guided onboarding** (`frontend/src/components/onboardingGuide/`) uses the threaded guide surface for two independent experiences: the main PLAN → JOURNAL → FEEDBACK guide and the first-Planner feature walkthrough. The main header progress is derived from saved Plan, Journal, trade, and AI Mentor actions, not modal navigation. Full implementation and persistence details are in `components/onboardingGuide/README.md`.
 
 | Piece | File |
 |---|---|
-| State, persistence, completion rules (pure, tested) | `utils/onboardingGuide.js`, `onboardingGuide.test.js` |
+| Modal state and local resume fallback | `utils/onboardingGuide.js`, `onboardingGuide.test.js` |
+| Real workflow milestones and segmented header state | `utils/onboardingProgress.js`, `components/rightContainer/MainOnboardingProgress.jsx` |
+| First-Planner flow state and step order | `utils/plannerWalkthrough.js`, `components/onboardingGuide/PlannerWalkthrough.jsx` |
 | Card placement + connector path (pure, tested) | `utils/guideLayout.js`, `guideLayout.test.js` |
 | Controller (starts, resumes, advances, replays) | `components/onboardingGuide/OnboardingGuide.jsx`, mounted by `Home.jsx` |
 | Overlay: dim + hole + connector + card | `GuideSurface.jsx`, `onboardingGuide.css` |
 | Step copy, anchors, behaviour | `guideSteps.js` |
 | Follows the target element frame by frame | `useTargetRect.js` |
 
-Steps (ids): `planner` → `create-journal` → `journal-context` → `journal-execution` → `ai-mentor`. Status: `pending` | `in_progress` | `completed` | `skipped`. Persistence is client-only: `localStorage` key `tradecommit:onboarding-guide:v1:<username>`; **no backend, API or schema change**. Only an account that just finished `/onboarding` is queued (`queueOnboardingGuide`, called by `OnboardingPage`), so existing users are never pulled in. The profile menu's "Take guided tour" replays it (`requestGuideReplay`).
+Main guide step ids: `planner` → `create-journal` → `journal-context` → `journal-execution` → `ai-mentor`. The authenticated `User.onboardingGuide` stores modal status/step separately from action milestones. `POST /auth/onboarding/complete` initializes it only on the first successful completion; `PATCH /auth/onboarding/guide` persists modal navigation for that same user. The browser's username-keyed `localStorage` entry remains a resume fallback and is hydrated from `GET /auth/profile`. Existing accounts with no guide state are not queued; legacy local guides are restored only for accounts with a recorded onboarding trading style.
 
-`GuidanceProvider` (reducer in `utils/guidance.js`, tests in `guidance.test.js`) still arbitrates the screen: one guide at a time, hidden while a real form/dialog is open. Its only registered guide is `onboarding:guide`. Anchors the guide relies on: `data-tour="sidebar-planners"`, `data-tour-section="sidebar-journals"` (set by `SidebarSection` from its `tourId`), `data-tour="journal-context"`, `data-tour="add-trade"`, `data-tour="mentor-orb"`. Keep them when refactoring those components.
+The header indicator is independent of modal navigation and hides once `workflowCompletedAt` is set. Its PLAN/JOURNAL/FEEDBACK stages are recorded after a saved plan entry, saved journal + context + trade, and a saved AI Mentor review. These are marked in their authenticated domain controllers through idempotent `$addToSet` updates.
+
+The Planner feature walkthrough is stored separately in `User.plannerWalkthrough`, queued only when the authenticated user creates their first Planner. It resumes the `connection` → `deep-mode` → `quick-plan` → `full-editor` sequence on that Planner, and terminal `completed`/`skipped` state prevents repeats. Its actual UI anchors are `data-tour="planner-journal"`, `data-tour="planner-deep-mode"`, `data-tour="planner-quick-plan"`, and `data-tour="planner-full-editor"`.
+
+`GuidanceProvider` (reducer in `utils/guidance.js`, tests in `guidance.test.js`) arbitrates both guides so they never overlap. It normally suspends on forms; only the Planner walkthrough is allowed to remain visible above its own plan editor. Without an existing journal, a temporary non-interactive connection hint provides the Planner tour's real spotlight anchor. Main-guide anchors: `data-tour="sidebar-planners"`, `data-tour-section="sidebar-journals"` (set by `SidebarSection` from its `tourId`), `data-tour="journal-context"`, `data-tour="add-trade"`, `data-tour="mentor-orb"`. Keep them when refactoring those components.
 
 The legacy Product Tour, Trading Loop, Playbook and mission-tracker code (all unreachable) was removed. The Mentor's trade-unlock progress and feedback celebration are independent of onboarding guidance.

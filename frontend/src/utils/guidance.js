@@ -12,10 +12,12 @@
 
 export const GUIDES = Object.freeze({
   ONBOARDING: 'onboarding:guide',
+  PLANNER_WALKTHROUGH: 'planner:walkthrough',
 })
 
 export const GUIDE_PRIORITY = Object.freeze({
   [GUIDES.ONBOARDING]: 50,
+  [GUIDES.PLANNER_WALKTHROUGH]: 40,
 })
 
 export const initialGuidanceState = Object.freeze({

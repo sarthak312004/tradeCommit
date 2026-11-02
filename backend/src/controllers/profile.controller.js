@@ -1,3 +1,5 @@
+import mongoose from "mongoose";
+import { Planner } from "../models/planner.models.js";
 import { User } from "../models/user.models.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
@@ -6,6 +8,10 @@ import { sendOtpEmail } from "../utils/mailer.js";
 import { deleteImagesFromCloudinary, uploadOnCloudinary } from "../utils/cloudinary.js";
 import { HEADER_SCENE_IDS, headerBackdropFolder } from "../constants/headerBackdrop.js";
 import { resolveMusicChanges, toMusicPreferences } from "../utils/musicLinks.js";
+import {
+  PLANNER_WALKTHROUGH_STEPS,
+  restoreLegacyOnboardingGuide,
+} from "../utils/onboardingProgress.js";
 import {
   OTP_LENGTH,
   OTP_MAX_ATTEMPTS,
@@ -29,6 +35,9 @@ const MAX_FULLNAME_LENGTH = 80;
 
 const SESSION_EXPIRED = "Your verification expired. Please start again.";
 const FOCUS_THEMES = new Set(["sage", "ocean", "amber"]);
+const GUIDE_STATUSES = new Set(["pending", "in_progress", "completed", "skipped"]);
+const GUIDE_STEPS = new Set(["planner", "create-journal", "journal-context", "journal-execution", "ai-mentor"]);
+const PLANNER_GUIDE_STATUSES = new Set(["in_progress", "completed", "skipped"]);
 
 // What the client gets for the header picture: always a complete, valid object.
 const toHeaderBackdrop = (user) => {
@@ -42,6 +51,21 @@ const toFocusPreferences = (user) => ({
   ...toMusicPreferences(user?.focusPreferences),
   focusTheme: FOCUS_THEMES.has(user?.focusPreferences?.focusTheme) ? user.focusPreferences.focusTheme : "sage",
 });
+
+const toOnboardingGuide = (guide) => guide ? ({
+  status: guide.guideStatus,
+  step: guide.step,
+  actions: Array.isArray(guide.actions) ? guide.actions : [],
+  workflowCompletedAt: guide.workflowCompletedAt ? new Date(guide.workflowCompletedAt).toISOString() : null,
+  updatedAt: guide.updatedAt ? new Date(guide.updatedAt).toISOString() : null,
+}) : null;
+
+const toPlannerWalkthrough = (walkthrough) => walkthrough ? ({
+  status: walkthrough.status,
+  step: walkthrough.step,
+  plannerId: String(walkthrough.planner),
+  updatedAt: walkthrough.updatedAt ? new Date(walkthrough.updatedAt).toISOString() : null,
+}) : null;
 
 // the old picture is only removed after the new choice is saved, and a failed delete never fails the request
 const discardHeaderImage = (imageUrl, userId) => {
@@ -128,6 +152,8 @@ export const getProfile = asyncHandler(async (req, res) => {
         hasPassword: Boolean(user.password), // false for Google-only accounts: the dialog says "Set" instead of "Reset"
         onboardingCompleted: user.onboardingCompleted !== false,
         onboardingTradingStyle: user.onboardingTradingStyle ?? null,
+        onboardingGuide: toOnboardingGuide(user.onboardingGuide),
+        plannerWalkthrough: toPlannerWalkthrough(user.plannerWalkthrough),
         createdAt: user.createdAt,
         headerBackdrop: toHeaderBackdrop(user),
         focusPreferences: toFocusPreferences(user),
@@ -188,15 +214,105 @@ export const completeOnboarding = asyncHandler(async (req, res) => {
   const tradingStyle = typeof req.body?.tradingStyle === "string" ? req.body.tradingStyle : ""
   if (!allowedStyles.has(tradingStyle)) throw new ApiError(400, "Choose a valid trading style")
 
-  const user = await User.findByIdAndUpdate(
-    req.user._id,
-    { $set: { onboardingCompleted: true, onboardingTradingStyle: tradingStyle } },
+  let user = await User.findOneAndUpdate(
+    { _id: req.user._id, onboardingCompleted: false },
+    {
+      $set: {
+        onboardingCompleted: true,
+        onboardingTradingStyle: tradingStyle,
+        onboardingGuide: {
+          guideStatus: "pending",
+          step: "planner",
+          actions: [],
+          workflowCompletedAt: null,
+          updatedAt: new Date(),
+        },
+      },
+    },
     { new: true }
   )
+  if (!user) user = await User.findById(req.user._id).select("onboardingCompleted onboardingTradingStyle");
   if (!user) throw new ApiError(404, "User not found")
 
-  return res.status(200).json(new ApiResponse(200, { onboardingCompleted: true, tradingStyle }, "Onboarding completed"))
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      {
+        onboardingCompleted: true,
+        tradingStyle: user.onboardingTradingStyle ?? tradingStyle,
+        onboardingGuide: toOnboardingGuide(user.onboardingGuide),
+      },
+      "Onboarding completed"
+    )
+  )
 })
+
+export const updateOnboardingGuide = asyncHandler(async (req, res) => {
+  const { status, step } = req.body ?? {};
+  if (!GUIDE_STATUSES.has(status) || !GUIDE_STEPS.has(step)) {
+    throw new ApiError(400, "Choose a valid onboarding guide status and step");
+  }
+
+  const saveExistingGuide = () => User.findOneAndUpdate(
+    { _id: req.user._id, onboardingGuide: { $ne: null } },
+    {
+      $set: {
+        "onboardingGuide.guideStatus": status,
+        "onboardingGuide.step": step,
+        "onboardingGuide.updatedAt": new Date(),
+      },
+    },
+    { new: true, projection: "onboardingGuide" }
+  );
+  let user = await saveExistingGuide();
+  if (!user) user = await restoreLegacyOnboardingGuide(req.user._id, { status, step });
+  if (!user) user = await saveExistingGuide();
+  if (!user) throw new ApiError(409, "Onboarding guide is not available for this account");
+
+  return res.status(200).json(
+    new ApiResponse(200, { onboardingGuide: toOnboardingGuide(user.onboardingGuide) }, "Onboarding guide saved")
+  );
+});
+
+export const updatePlannerWalkthrough = asyncHandler(async (req, res) => {
+  const { plannerId, status, step } = req.body ?? {};
+  if (!mongoose.isValidObjectId(plannerId)) throw new ApiError(400, "A valid planner ID is required");
+  if (!PLANNER_GUIDE_STATUSES.has(status) || !PLANNER_WALKTHROUGH_STEPS.includes(step)) {
+    throw new ApiError(400, "Choose a valid Planner walkthrough status and step");
+  }
+
+  const planner = await Planner.findOne({ _id: plannerId, owner: req.user._id }).select("_id");
+  if (!planner) throw new ApiError(404, "Planner not found");
+
+  const filter = {
+    _id: req.user._id,
+    "plannerWalkthrough.planner": planner._id,
+    "plannerWalkthrough.status": { $nin: ["completed", "skipped"] },
+  };
+  let user = await User.findOneAndUpdate(
+    filter,
+    {
+      $set: {
+        "plannerWalkthrough.status": status,
+        "plannerWalkthrough.step": step,
+        "plannerWalkthrough.updatedAt": new Date(),
+      },
+    },
+    { new: true, projection: "plannerWalkthrough" }
+  );
+
+  if (!user) {
+    user = await User.findById(req.user._id).select("plannerWalkthrough");
+    if (!user) throw new ApiError(404, "User not found");
+    if (String(user?.plannerWalkthrough?.planner) !== String(planner._id)) {
+      throw new ApiError(409, "Planner walkthrough is not available for this planner");
+    }
+  }
+
+  return res.status(200).json(
+    new ApiResponse(200, { plannerWalkthrough: toPlannerWalkthrough(user.plannerWalkthrough) }, "Planner walkthrough saved")
+  );
+});
 
 // ---- Changing the password is three steps, all for the logged-in user, and the code only ever goes to their own email --------
 //   1. POST /auth/password/send-otp    {}                           -> emails a 6-digit code

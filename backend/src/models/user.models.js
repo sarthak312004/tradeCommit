@@ -26,6 +26,60 @@ const passwordResetSchema = new mongoose.Schema(
     },{ _id:false }
 )
 
+const onboardingGuideSchema = new mongoose.Schema(
+    {
+        guideStatus:{
+            type:String,
+            enum:["pending","in_progress","completed","skipped"],
+            required:true
+        },
+        step:{
+            type:String,
+            enum:["planner","create-journal","journal-context","journal-execution","ai-mentor"],
+            default:"planner"
+        },
+        actions:{
+            type:[String],
+            enum:["journal_created","journal_context_saved","plan_created","planner_connected","trade_logged","mentor_review_created"],
+            default:[]
+        },
+        workflowCompletedAt:{
+            type:Date,
+            default:null
+        },
+        updatedAt:{
+            type:Date,
+            default:Date.now
+        }
+    },
+    { _id:false }
+)
+
+const plannerWalkthroughSchema = new mongoose.Schema(
+    {
+        status:{
+            type:String,
+            enum:["pending","in_progress","completed","skipped"],
+            required:true
+        },
+        step:{
+            type:String,
+            enum:["connection","open-plan","deep-mode","quick-plan","full-editor"],
+            default:"connection"
+        },
+        planner:{
+            type:mongoose.Schema.Types.ObjectId,
+            ref:"Planner",
+            required:true
+        },
+        updatedAt:{
+            type:Date,
+            default:Date.now
+        }
+    },
+    { _id:false }
+)
+
 const userSchema = new mongoose.Schema(
     {
         username:{
@@ -85,6 +139,16 @@ const userSchema = new mongoose.Schema(
         onboardingTradingStyle:{
             type:String,
             enum:["intraday","swing","position","hybrid"],
+            default:null
+        },
+        // Created only when a new user completes onboarding; existing accounts remain unqueued.
+        onboardingGuide:{
+            type:onboardingGuideSchema,
+            default:null
+        },
+        // Created atomically only for a user's first Planner; independent of the main guide.
+        plannerWalkthrough:{
+            type:plannerWalkthroughSchema,
             default:null
         },
         passwordChangedAt:{

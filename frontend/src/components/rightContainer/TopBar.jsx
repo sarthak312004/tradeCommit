@@ -6,6 +6,7 @@ import { useHeaderBackdrop } from '../../hooks/useHeaderBackdrop'
 import { useIsDark } from '../../hooks/useIsDark'
 import { MenuIcon } from '../../utils/Icons.jsx'
 import { useDeepFocus } from '../../context/useDeepFocus'
+import MainOnboardingProgress from './MainOnboardingProgress'
 
 function TopBar({ label = 'Journal', title }) {
   const { backdrop, chooseScene, clear, uploadImage } = useHeaderBackdrop()
@@ -70,7 +71,8 @@ function TopBar({ label = 'Journal', title }) {
         </div>
       </div>
 
-      <div className={`relative flex items-center gap-1 ${hasImage ? 'text-white' : ''}`}>
+      <div className={`relative flex shrink-0 items-center gap-1.5 ${hasImage ? 'text-white' : ''}`}>
+        <MainOnboardingProgress contrast={hasImage} />
         <HeaderBackdropPicker backdrop={backdrop} onChooseScene={chooseScene} onClear={clear} onUploadImage={uploadImage} />
         <ProfileMenu />
       </div>

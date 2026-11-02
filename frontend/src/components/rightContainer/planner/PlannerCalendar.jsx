@@ -32,12 +32,14 @@ const moreButton =
   'h-5 cursor-pointer rounded px-2 text-[11px] font-medium text-zinc-700 hover:text-zinc-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-600 dark:text-zinc-400 dark:hover:text-zinc-100 dark:focus-visible:ring-sky-400'
 
 /** Phone-sized day: just the number and a few dots. The day's plans are listed under the grid. */
-function CompactDayCell({ day, entries, isToday, isSelected, isActive, onPick }) {
-  const surface = isSelected
-    ? 'bg-white shadow-card dark:bg-white/[0.08] dark:shadow-none'
-    : day.inMonth
-      ? 'active:bg-zinc-900/[0.08] dark:active:bg-white/[0.08]'
-      : 'bg-zinc-900/[0.03] dark:bg-white/[0.02]'
+function CompactDayCell({ day, entries, isToday, isSelected, isActive, isTourTarget, onPick }) {
+  const surface = isTourTarget
+      ? 'bg-sky-600/10 shadow-sm ring-2 ring-sky-600 dark:bg-sky-400/10 dark:ring-sky-400'
+      : isSelected
+      ? 'bg-white shadow-card dark:bg-white/[0.08] dark:shadow-none'
+      : day.inMonth
+        ? 'active:bg-zinc-900/[0.08] dark:active:bg-white/[0.08]'
+        : 'bg-zinc-900/[0.03] dark:bg-white/[0.02]'
   const count = entries.length
 
   return (
@@ -45,7 +47,7 @@ function CompactDayCell({ day, entries, isToday, isSelected, isActive, onPick })
       type="button"
       onClick={() => onPick(day.key)}
       data-selected={isSelected || undefined}
-      data-tour={isToday ? 'planner-today' : undefined}
+      data-tour={isTourTarget ? 'planner-open-plan' : isToday ? 'planner-today' : undefined}
       aria-label={`${day.key}${count ? `, ${count} ${count === 1 ? 'plan' : 'plans'}` : ''}`}
       aria-current={isToday ? 'date' : undefined}
       aria-pressed={count ? isActive : undefined}
@@ -68,7 +70,7 @@ function CompactDayCell({ day, entries, isToday, isSelected, isActive, onPick })
   )
 }
 
-function DayCell({ day, entries, isToday, isSelected, isExpanded, onToggleExpand, onCreate, onOpenEntry }) {
+function DayCell({ day, entries, isToday, isSelected, isExpanded, isTourTarget, onToggleExpand, onCreate, onOpenEntry }) {
   const visible = isExpanded ? entries : entries.slice(0, MAX_VISIBLE_CHIPS)
   const hiddenCount = entries.length - visible.length
 
@@ -76,17 +78,19 @@ function DayCell({ day, entries, isToday, isSelected, isExpanded, onToggleExpand
   //   selected      white tile, 2px sky ring, soft shadow
   //   today         number becomes a filled sky badge (so today and selected can be told apart, and can combine)
   //   other month   slightly tinted cell, same text colours (no opacity, so contrast is never reduced)
-  const surface = isSelected
-    ? 'bg-white shadow-card dark:bg-white/[0.08] dark:shadow-none'
-    : day.inMonth
-      ? 'hover:bg-zinc-900/[0.05] dark:hover:bg-white/[0.05]'
-      : 'bg-zinc-900/[0.03] hover:bg-zinc-900/[0.06] dark:bg-white/[0.02] dark:hover:bg-white/[0.05]'
+  const surface = isTourTarget
+    ? 'bg-sky-600/10 shadow-sm ring-2 ring-sky-600 dark:bg-sky-400/10 dark:ring-sky-400'
+    : isSelected
+      ? 'bg-white shadow-card dark:bg-white/[0.08] dark:shadow-none'
+      : day.inMonth
+        ? 'hover:bg-zinc-900/[0.05] dark:hover:bg-white/[0.05]'
+        : 'bg-zinc-900/[0.03] hover:bg-zinc-900/[0.06] dark:bg-white/[0.02] dark:hover:bg-white/[0.05]'
 
   return (
     <div
       onClick={() => onCreate(day.key)}
       data-selected={isSelected || undefined}
-      data-tour={isToday ? 'planner-today' : undefined}
+      data-tour={isTourTarget ? 'planner-open-plan' : isToday ? 'planner-today' : undefined}
       className={`group relative flex min-h-[84px] min-w-0 cursor-pointer flex-col rounded-xl p-1.5 transition-colors sm:min-h-[116px] sm:p-2 ${surface}`}
     >
       <div className="flex h-6 items-center justify-between">
@@ -155,7 +159,7 @@ function DayCell({ day, entries, isToday, isSelected, isExpanded, onToggleExpand
  * @param {Function} onCreateForDate (dateKey) => void
  * @param {Function} onOpenEntry     (entry) => void
  */
-function PlannerCalendar({ entries, selectedDate = null, onCreateForDate, onOpenEntry, headerHint }) {
+function PlannerCalendar({ entries, selectedDate = null, onCreateForDate, onOpenEntry, headerHint, isOpenPlanTourActive = false }) {
   const [month, setMonth] = useState(() => startOfMonth(new Date()))
   const [expandedDay, setExpandedDay] = useState(null)
   const isCompact = useIsCompact()
@@ -173,7 +177,6 @@ function PlannerCalendar({ entries, selectedDate = null, onCreateForDate, onOpen
     }
     return map
   }, [entries])
-
   const goToMonth = (next) => {
     setExpandedDay(null)
     setActiveDay(null)
@@ -182,6 +185,11 @@ function PlannerCalendar({ entries, selectedDate = null, onCreateForDate, onOpen
 
   // a day with plans opens its list; an empty day goes straight to the new-plan form, like on a bigger screen
   const handlePickDay = (key) => {
+    if (isOpenPlanTourActive && key === today) {
+      setActiveDay(null)
+      onCreateForDate(key)
+      return
+    }
     if ((entriesByDate.get(key) ?? []).length === 0) {
       setActiveDay(null)
       onCreateForDate(key)
@@ -235,6 +243,7 @@ function PlannerCalendar({ entries, selectedDate = null, onCreateForDate, onOpen
               isToday={day.key === today}
               isSelected={day.key === selectedDate}
               isActive={day.key === activeDay}
+              isTourTarget={isOpenPlanTourActive && day.key === today}
               onPick={handlePickDay}
             />
           ) : (
@@ -245,6 +254,7 @@ function PlannerCalendar({ entries, selectedDate = null, onCreateForDate, onOpen
               isToday={day.key === today}
               isSelected={day.key === selectedDate}
               isExpanded={expandedDay === day.key}
+              isTourTarget={isOpenPlanTourActive && day.key === today}
               onToggleExpand={(key) => setExpandedDay((current) => (current === key ? null : key))}
               onCreate={onCreateForDate}
               onOpenEntry={onOpenEntry}

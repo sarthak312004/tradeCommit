@@ -1,73 +1,65 @@
-# Guided onboarding (Part 1)
+# Guided onboarding
 
-One continuous walkthrough of the product loop, **PLAN → JOURNAL → AI FEEDBACK**. A minimal card is tied by a thin,
-softly glowing connector to the real component it explains; everything else is dimmed (theme-aware). Replaces the legacy
-Product Tour completely.
+The existing threaded `GuideSurface` renders two independent walkthroughs:
 
-## States and step IDs
+1. The main PLAN → JOURNAL → FEEDBACK guide explains the trading workflow.
+2. The Planner feature walkthrough explains Planner Connection, Deep Mode, Quick Plan, and Full Editor.
 
-Status (`GUIDE_STATUS`): `pending` (queued at the end of `/onboarding`) → `in_progress` → `completed` | `skipped`.
+Both use real `data-tour` anchors and the same dimmed spotlight/connector design. `GuidanceProvider` ensures they never
+overlap.
 
-| # | Step id | Loop stage | Anchor (real UI) | Main button | Completes when |
-|---|---|---|---|---|---|
-| 1 | `planner` | Plan | `[data-tour="sidebar-planners"]` Planner header (+ button) | Continue | user continues |
-| 2 | `create-journal` | Journal | `[data-tour-section="sidebar-journals"]` Journals section + create form | Create journal (opens the sidebar form) | **a saved journal exists** (automatic; then redirects to the journal) |
-| 3 | `journal-context` | Journal | `[data-tour="journal-context"]` Context button | Next | user continues |
-| 4 | `journal-execution` | Journal | `[data-tour="add-trade"]` Add trade button | Next | user continues |
-| 5 | `ai-mentor` | AI feedback | `[data-tour="mentor-orb"]` AI Mentor orb | Start journaling | user finishes → `completed` |
+## Main guide and workflow progress
 
-Step 2 is interactive (the highlighted area stays clickable); steps 3 and 4 keep their buttons clickable too (opening
-Context or the trade form hides the guide until that form closes, via `GuidanceProvider`); steps 1 and 5 are look-only.
+Main guide step IDs are `planner` → `create-journal` → `journal-context` → `journal-execution` → `ai-mentor`.
+`POST /auth/onboarding/complete` initializes main guide state only when `onboardingCompleted` changes from false to true.
+`GET /auth/profile` restores it across refresh and login; `PATCH /auth/onboarding/guide` saves modal status and step.
+The browser's `localStorage` key `tradecommit:onboarding-guide:v1:<username lowercased>` is retained as a fallback and
+for username-rename compatibility.
 
-## Completion, resume and safety rules (`utils/onboardingGuide.js`, all unit-tested)
+The header indicator is not driven by modal navigation. Authenticated domain controllers record these saved actions
+idempotently on the user's `onboardingGuide` subdocument:
 
-- **Never forces existing users.** Only `OnboardingPage` queues the guide (`queueOnboardingGuide`). Accounts with no saved
-  state never see it. A queued guide for an account that already has logged trades completes silently.
-- **Refresh / incomplete onboarding:** the step is saved on every change; after a reload the guide resumes at that step.
-- **Self-healing:** deleting the journal mid-guide sends it back to `create-journal`; a missing anchor shows the card
-  centred (no connector) instead of stranding the user.
-- **Skip** (`Skip guide`, `Esc`) is permanent; **replay** = profile menu → "Take guided tour" (`requestGuideReplay`),
-  always from step 1 (steps that no longer apply resolve themselves).
-- Escape/arrow keys act only when focus is on the card or the page, never inside a form field.
+- **PLAN:** save a new PlanEntry and connect a Planner to a journal.
+- **JOURNAL:** create a journal, save its context, and log a trade.
+- **FEEDBACK:** receive a saved weekly or date-range AI Mentor review.
 
-## Persistence
+The backend sets `workflowCompletedAt` once all actions are present. The header indicator is shown only when main
+onboarding state exists and is hidden permanently after workflow completion. Existing users with no main state are not
+queued. If an older client has a local guide but no server copy, the next authenticated profile load restores it only
+for an account with a recorded onboarding trading style and derives existing milestones from saved domain records.
+The compact, shadowed workflow badge and segmented bar sit beside the header options without changing header height.
+When the server-reported workflow changes from incomplete to complete, a small right-side confirmation appears once
+per account completion.
+Before completion, deleting the last saved Planner, Journal, context, trade, or Mentor review that supports a milestone
+reconciles the action list from remaining records, including whether any Planner remains connected to a journal. After
+`workflowCompletedAt` is set, later deletions do not roll it back. The header bar fills linearly by the count of its six
+saved-action milestones, independent of their order.
 
-`localStorage` key `tradecommit:onboarding-guide:v1:<username lowercased>` →
-`{ v: 1, status, step, updatedAt }`. In-memory fallback when storage is blocked. Renaming the username moves the state
-(`moveGuideState`, called by `services/profileApi.js`). Changes fire `window` event `tradecommit:onboarding-guide-change`
-(`GUIDE_CHANGE_EVENT`, `detail: { username, state }`).
+Main-guide anchors: `data-tour="sidebar-planners"`, `data-tour-section="sidebar-journals"`,
+`data-tour="journal-context"`, `data-tour="add-trade"`, and `data-tour="mentor-orb"`.
 
-## Modified components and routes
+## First Planner feature walkthrough
 
-- New: `components/onboardingGuide/*`, `utils/onboardingGuide.js`, `utils/guideLayout.js` (+ tests).
-- `Home.jsx`: mounts `<OnboardingGuide>` (replaces `<ProductTour>`); inside `GuidanceProvider`.
-- `pages/OnboardingPage.jsx`: queues the guide. `components/profile/ProfileMenu.jsx`: replay entry + `CompassIcon` (moved to `utils/Icons.jsx`).
-- `components/sidebar/SidebarSection.jsx`: `data-tour-section` anchor. `services/profileApi.js`: rename carry-over.
-- `components/rightContainer/journal/TradeJournal.jsx`: import hint now keys off `isGuideFinished`.
-- `utils/guidance.js` (+ test): registry reduced to `onboarding:guide`.
-- **Routes: none added, removed or changed.** The guide navigates to `/` (journal view) for the journal steps.
+`User.plannerWalkthrough` is separate from main guide state. The backend queues it only after the authenticated user
+creates their first Planner; opening a Planner created before this feature does not trigger it. It is tied to that
+Planner's owned ID, resumes after refresh, and is never restarted after `completed` or `skipped`.
 
-## Backend assumptions and integration points
+The steps and real anchors are:
 
-- **No backend change.** Uses existing `onboardingCompleted` (`/auth/onboarding/complete`) only as the moment of queueing.
-- State is per browser. A new device for a user who is mid-guide will not resume it (acceptable for Part 1).
-- Optional server sync for Part 2: add `onboardingGuide: { status, step, updatedAt }` to `User`, return it from
-  `GET /auth/profile`, add `PATCH /auth/onboarding/guide` (owner from `req.user`), and mirror writes from `saveGuideState`.
+| Step | Anchor | Explanation |
+|---|---|---|
+| `connection` | `data-tour="planner-journal"` | Link a journal so the mentor can compare plans with executed trades. |
+| `open-plan` | `data-tour="planner-open-plan"` | Click an available calendar date to open the plan editor. |
+| `deep-mode` | `data-tour="planner-deep-mode"` | Optional focus workspace and its timer/music controls. |
+| `quick-plan` | `data-tour="planner-quick-plan"` | Optional templates, bias and concise planning fields. |
+| `full-editor` | `data-tour="planner-full-editor"` | Rich-text editing for longer notes and screenshots. |
 
-## Part 2: connecting the header progress indicator
+When no journal exists, a temporary, non-interactive connection hint provides the real spotlight anchor and explains
+that a journal is needed before linking. After Connection, the walkthrough waits at the calendar until the user opens a
+plan; it does not open the editor on the user's behalf. The Deep Mode, Quick Plan, and Full Editor steps then appear
+inside that opened form. Only this walkthrough is allowed to display above that drawer; the main guide keeps its
+normal form-suspension behavior.
 
-`utils/onboardingGuide.js` already exposes everything the indicator needs; no changes to the guide are required.
-
-```js
-import { GUIDE_CHANGE_EVENT, getGuideState, getGuideProgress, isGuideRunnable } from '../utils/onboardingGuide'
-
-// subscribe: re-read on GUIDE_CHANGE_EVENT (same tab) and 'storage' (other tabs)
-const state = getGuideState(profile.username)   // null for accounts that were never queued: render nothing
-const { completed, total, fraction, step } = getGuideProgress(state)  // 0..5
-```
-
-- Show the indicator while `isGuideRunnable(state)` (or until completed, per design); `state === null` → hidden.
-- Clicking it can call `requestGuideReplay()` to bring the guide back (it restarts from step 1), or add a
-  `resumeOnboardingGuide()` that calls `setGuideStep(username, state.step)` and dispatches `GUIDE_REPLAY_EVENT` handling
-  that resumes instead of restarting.
-- Step ids / order: `GUIDE_STEP`, `GUIDE_STEP_ORDER`, stage mapping `GUIDE_STAGE`.
+`PATCH /auth/onboarding/planner-walkthrough` persists each step/status for the authenticated user and verifies the
+Planner belongs to that user. Both onboarding routes derive ownership from `req.user._id`; existing user documents
+keep null subdocuments unless a legacy local guide is explicitly restored, and need no migration.

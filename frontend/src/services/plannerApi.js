@@ -1,5 +1,6 @@
 import { readJson, requestJson } from '../utils/http'
 import { DEFAULT_PLANNER_TYPE } from '../utils/plannerTypes'
+import { refreshProfile } from './profileApi'
 
 const API_BASE = '/api/v1/planners'
 const entriesCache = new Map()
@@ -38,15 +39,20 @@ export const plannerApi = {
 
   async create({ name, type, linkedJournalId }) {
     const body = linkedJournalId ? { name, type, linkedJournalId } : { name, type }
-    return normalizePlanner(await requestJson(API_BASE, { method: 'POST', body }))
+    const planner = normalizePlanner(await requestJson(API_BASE, { method: 'POST', body }))
+    refreshProfile()
+    return planner
   },
 
   async update(plannerId, changes) {
-    return normalizePlanner(await requestJson(`${API_BASE}/${plannerId}`, { method: 'PATCH', body: changes }))
+    const planner = normalizePlanner(await requestJson(`${API_BASE}/${plannerId}`, { method: 'PATCH', body: changes }))
+    refreshProfile()
+    return planner
   },
 
   async remove(plannerId) {
     await requestJson(`${API_BASE}/${plannerId}`, { method: 'DELETE' })
+    refreshProfile()
   },
 
   async listEntries(plannerId) {
@@ -67,6 +73,7 @@ export const plannerApi = {
   async createEntry(plannerId, entry) {
     const created = normalizeEntry(await requestJson(`${API_BASE}/${plannerId}/entries`, { method: 'POST', body: entry }))
     updateCachedEntries(plannerId, (entries) => [...entries, created])
+    refreshProfile()
     return created
   },
 
@@ -79,6 +86,7 @@ export const plannerApi = {
   async removeEntry(plannerId, entryId) {
     await requestJson(`${API_BASE}/${plannerId}/entries/${entryId}`, { method: 'DELETE' })
     updateCachedEntries(plannerId, (entries) => entries.filter((item) => item.id !== entryId))
+    refreshProfile()
   },
 
   async uploadImage(plannerId, file) {

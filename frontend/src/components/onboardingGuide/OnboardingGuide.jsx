@@ -1,9 +1,11 @@
-import { useContext, useEffect, useEffectEvent, useMemo, useReducer } from 'react'
+import { useCallback, useContext, useEffect, useEffectEvent, useMemo, useReducer } from 'react'
 import { useLocation, useNavigate } from 'react-router'
 import { journalContext, plannerContext } from '../../context/Context'
 import { useProfile } from '../../hooks/useProfile'
 import { useGuidance } from '../../hooks/useGuidance'
 import { GUIDES } from '../../utils/guidance'
+import { getOnboardingWorkflowProgress } from '../../utils/onboardingProgress'
+import { saveOnboardingGuideState } from '../../services/profileApi'
 import {
   GUIDE_CHANGE_EVENT,
   GUIDE_REPLAY_EVENT,
@@ -49,6 +51,10 @@ export default function OnboardingGuide({ isNavOpen, setNavOpen, autoCloseNav = 
 
   const username = profile?.username
   const active = activeId === GUIDES.ONBOARDING
+  const workflowProgress = useMemo(
+    () => getOnboardingWorkflowProgress(profile?.onboardingGuide),
+    [profile?.onboardingGuide]
+  )
 
   // re-read the saved state whenever it changes (this tab, or another one)
   useEffect(() => {
@@ -80,12 +86,22 @@ export default function OnboardingGuide({ isNavOpen, setNavOpen, autoCloseNav = 
   const stepId = runnable ? resolved.step : null
   const step = stepId ? GUIDE_STEPS[stepId] : null
 
+  const persistState = useCallback((state) => {
+    if (!state || !username) return
+    saveOnboardingGuideState(state).catch((error) => {
+      console.error('Could not save onboarding guide progress:', error)
+    })
+  }, [username])
+
   // keep the saved state in line with what the user did (journal created, journal deleted, guide no longer needed)
   useEffect(() => {
     if (!resolved || !saved) return
-    if (resolved.status === GUIDE_STATUS.COMPLETED && saved.status !== GUIDE_STATUS.COMPLETED) completeOnboardingGuide(username)
-    else if (isGuideRunnable(resolved) && (resolved.step !== saved.step || (active && saved.status === GUIDE_STATUS.PENDING))) setGuideStep(username, resolved.step)
-  }, [resolved, saved, username, active])
+    if (resolved.status === GUIDE_STATUS.COMPLETED && saved.status !== GUIDE_STATUS.COMPLETED) {
+      persistState(completeOnboardingGuide(username))
+    } else if (isGuideRunnable(resolved) && (resolved.step !== saved.step || (active && saved.status === GUIDE_STATUS.PENDING))) {
+      persistState(setGuideStep(username, resolved.step))
+    }
+  }, [resolved, saved, username, active, persistState])
 
   // ask to start: only a queued (or replayed) guide. The controller decides: one guide at a time, nothing while a form is open.
   useEffect(() => {
@@ -103,12 +119,12 @@ export default function OnboardingGuide({ isNavOpen, setNavOpen, autoCloseNav = 
   useEffect(() => {
     const replay = () => {
       if (!username || activeId) return // a guide is already on screen: never interrupt it
-      restartOnboardingGuide(username)
+      persistState(restartOnboardingGuide(username))
       request(GUIDES.ONBOARDING, { trigger: 'user' })
     }
     window.addEventListener(GUIDE_REPLAY_EVENT, replay)
     return () => window.removeEventListener(GUIDE_REPLAY_EVENT, replay)
-  }, [username, activeId, request])
+  }, [username, activeId, persistState, request])
 
   // the journal steps live on the journal page: creating the journal (or a refresh) brings the user there
   useEffect(() => {
@@ -125,20 +141,20 @@ export default function OnboardingGuide({ isNavOpen, setNavOpen, autoCloseNav = 
   const { rect, status: targetStatus } = useTargetRect(active && step ? step.target : null, stepId ?? 'none')
 
   const skip = () => {
-    if (username) skipOnboardingGuide(username)
+    if (username) persistState(skipOnboardingGuide(username))
   }
   const goNext = () => {
     const next = nextGuideStep(stepId)
-    if (next) setGuideStep(username, next)
-    else completeOnboardingGuide(username)
+    if (next) persistState(setGuideStep(username, next))
+    else persistState(completeOnboardingGuide(username))
   }
   const goBack = () => {
     const previous = previousGuideStep(stepId)
-    if (previous) setGuideStep(username, previous)
+    if (previous) persistState(setGuideStep(username, previous))
   }
   const onPrimary = () => {
     if (step.primary === 'create-journal') openCreateForm?.('journals')
-    else if (step.primary === 'finish') completeOnboardingGuide(username)
+    else if (step.primary === 'finish') persistState(completeOnboardingGuide(username))
     else goNext()
   }
 
@@ -175,6 +191,8 @@ export default function OnboardingGuide({ isNavOpen, setNavOpen, autoCloseNav = 
       onPrimary={onPrimary}
       onBack={goBack}
       onSkip={skip}
+      stageOverride={workflowProgress.currentStage ?? 'feedback'}
+      stageProgress={workflowProgress.stages}
     />
   )
 }
