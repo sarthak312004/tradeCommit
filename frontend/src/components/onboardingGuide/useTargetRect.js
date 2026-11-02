@@ -84,5 +84,5 @@ export function useTargetRect(selector, key) {
   }, [selector, key])
 
   if (!selector) return { rect: null, status: 'none' }
-  return state.key === key ? state : { rect: null, status: 'searching' }
+  return state.key === key ? state : { rect: state.rect, status: 'searching' }
 }

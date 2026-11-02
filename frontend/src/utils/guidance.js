@@ -1,6 +1,6 @@
 // The rules of the ONE guidance controller (pure: no React, no storage, no DOM, so it is unit-tested with `node --test`).
 //
-// The spotlight tours and mission-completion dialog share one controller so they never overlap each other or a form.
+// Guided surfaces (today: the guided onboarding) share one controller so they never overlap each other or a form.
 //
 // Rules this reducer enforces:
 //   1. Exactly one guide is `active`. A request made while one is active is ignored (never interrupts, never queues).
@@ -11,19 +11,12 @@
 //      (hidden, state kept) and returns when the form closes.
 
 export const GUIDES = Object.freeze({
-  TOUR_MAIN: 'tour:main',
-  TOUR_JOURNAL: 'tour:journal',
-  TOUR_PLANNER: 'tour:planner',
+  ONBOARDING: 'onboarding:guide',
 })
 
 export const GUIDE_PRIORITY = Object.freeze({
-  [GUIDES.TOUR_MAIN]: 50,
-  [GUIDES.TOUR_JOURNAL]: 30,
-  [GUIDES.TOUR_PLANNER]: 20,
+  [GUIDES.ONBOARDING]: 50,
 })
-
-export const tourGuideId = (tourId) => `tour:${tourId}`
-export const tourIdOf = (guideId) => (typeof guideId === 'string' && guideId.startsWith('tour:') ? guideId.slice(5) : null)
 
 export const initialGuidanceState = Object.freeze({
   active: null, // { id, trigger: 'auto' | 'user', meta, seq, route }

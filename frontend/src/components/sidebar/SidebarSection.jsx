@@ -10,7 +10,7 @@ import { EASE, FADE_BASE, fade, focusRing, ghostBtn } from "./sidebarStyles"
  *
  * @param {string}    title
  * @param {string}    addLabel         tooltip / aria label of the "+" button
- * @param {string}    [tourId]         lets the first-run tour point at this section's header
+ * @param {string}    [tourId]         lets the guided onboarding point at this section (and its header)
  * @param {boolean}   isSidebarOpen
  * @param {Function}  setIsSidebarOpen
  * @param {Function}  renderForm       ({ open, close, reopen }) => ReactNode, the create form
@@ -50,7 +50,7 @@ function SidebarSection({
   }
 
   return (
-    <section aria-label={title} className={`flex min-w-0 shrink flex-col ${isSidebarOpen ? "min-h-[88px]" : "min-h-0"}`}>
+    <section aria-label={title} data-tour-section={tourId} className={`flex min-w-0 shrink flex-col ${isSidebarOpen ? "min-h-[88px]" : "min-h-0"}`}>
       {/* Header: label + add */}
       <div data-tour={tourId} className="relative h-9 shrink-0">
         <div

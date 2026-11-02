@@ -286,3 +286,10 @@ export const MenuIcon = (props) => (
 		<path d="M4 6h16M4 12h16M4 18h16" />
 	</Icon>
 )
+
+export const CompassIcon = (props) => (
+	<Icon {...props}>
+		<circle cx="12" cy="12" r="9" />
+		<path d="m15.5 8.5-2 5-5 2 2-5 5-2Z" />
+	</Icon>
+)

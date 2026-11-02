@@ -1,5 +1,5 @@
 import { readJson, requestJson } from '../utils/http'
-import { moveTourState } from '../utils/productTour'
+import { moveGuideState } from '../utils/onboardingGuide'
 
 const BASE = '/api/v1/auth'
 const post = (path, body = {}) => requestJson(`${BASE}${path}`, { method: 'POST', body })
@@ -25,7 +25,7 @@ export const PROFILE_UPDATED_EVENT = 'profile-updated'
 export const updateProfile = async (changes) => {
   const previous = cachedProfile ? await Promise.resolve(cachedProfile).catch(() => null) : null
   const saved = await requestJson(`${BASE}/profile`, { method: 'PATCH', body: changes })
-  if (previous?.username) moveTourState(previous.username, saved.username)
+  if (previous?.username) moveGuideState(previous.username, saved.username)
   cachedProfile = Promise.resolve({ ...(previous ?? {}), ...saved })
   window.dispatchEvent(new Event(PROFILE_UPDATED_EVENT)) // every mounted profile hook re-reads the cache
   return saved

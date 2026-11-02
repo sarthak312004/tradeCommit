@@ -12,7 +12,7 @@ const isVisibleForeignModal = (element) => (
 )
 
 /**
- * Mounted once by Home. A Product Tour spotlight requests the screen, renders while `activeId === id`, and releases it
+ * Mounted once by Home. The guided onboarding requests the screen, renders while `activeId === id`, and releases it
  * when finished.
  */
 export default function GuidanceProvider({ children }) {

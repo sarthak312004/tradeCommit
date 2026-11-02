@@ -291,4 +291,19 @@ Keep it concise and factual. Do not turn it into a changelog; feature-specific i
 
 ## Onboarding and guidance
 
-The Product Tour spotlight guides are queued after onboarding and can be replayed from the profile menu. `GuidanceProvider` arbitrates those tours so they do not overlap each other or an application form; rules and reducer tests are in `frontend/src/utils/guidance.js` and `guidance.test.js`. The former Trading Loop, Trading Playbook, mission progress tracker, and `/trading-loop` preview are removed. Mentor unlock progress remains part of the journal's AI mentor experience.
+**Guided onboarding** (`frontend/src/components/onboardingGuide/`) replaced the legacy Product Tour. It is one continuous walkthrough of the product loop, PLAN → JOURNAL → AI FEEDBACK: a premium card connected by a thin glowing line to the real UI element (Planner header, Journals section, journal Context and Add-trade buttons, AI Mentor orb), with the rest of the interface dimmed. Full handoff notes (states, step ids, persistence, Part 2 hook-up) are in `components/onboardingGuide/README.md`.
+
+| Piece | File |
+|---|---|
+| State, persistence, completion rules (pure, tested) | `utils/onboardingGuide.js`, `onboardingGuide.test.js` |
+| Card placement + connector path (pure, tested) | `utils/guideLayout.js`, `guideLayout.test.js` |
+| Controller (starts, resumes, advances, replays) | `components/onboardingGuide/OnboardingGuide.jsx`, mounted by `Home.jsx` |
+| Overlay: dim + hole + connector + card | `GuideSurface.jsx`, `onboardingGuide.css` |
+| Step copy, anchors, behaviour | `guideSteps.js` |
+| Follows the target element frame by frame | `useTargetRect.js` |
+
+Steps (ids): `planner` → `create-journal` → `journal-context` → `journal-execution` → `ai-mentor`. Status: `pending` | `in_progress` | `completed` | `skipped`. Persistence is client-only: `localStorage` key `tradecommit:onboarding-guide:v1:<username>`; **no backend, API or schema change**. Only an account that just finished `/onboarding` is queued (`queueOnboardingGuide`, called by `OnboardingPage`), so existing users are never pulled in. The profile menu's "Take guided tour" replays it (`requestGuideReplay`).
+
+`GuidanceProvider` (reducer in `utils/guidance.js`, tests in `guidance.test.js`) still arbitrates the screen: one guide at a time, hidden while a real form/dialog is open. Its only registered guide is `onboarding:guide`. Anchors the guide relies on: `data-tour="sidebar-planners"`, `data-tour-section="sidebar-journals"` (set by `SidebarSection` from its `tourId`), `data-tour="journal-context"`, `data-tour="add-trade"`, `data-tour="mentor-orb"`. Keep them when refactoring those components.
+
+The legacy Product Tour, Trading Loop, Playbook and mission-tracker code (all unreachable) was removed. The Mentor's trade-unlock progress and feedback celebration are independent of onboarding guidance.

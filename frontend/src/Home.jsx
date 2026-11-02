@@ -1,10 +1,9 @@
-import { useCallback, useContext, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import Sidebar from './components/sidebar/Sidebar'
 import { Navigate, Outlet } from 'react-router'
 import { fetchPrefetched } from './utils/prefetch'
 import { SessionError, SessionLoading } from './components/common/SessionScreen'
-import ProductTour from './components/tour/ProductTour'
-import { journalContext } from './context/Context'
+import OnboardingGuide from './components/onboardingGuide/OnboardingGuide'
 import { DeepFocusProvider } from './context/DeepFocusProvider'
 import GuidanceProvider from './context/GuidanceProvider'
 import DeepFocusDock from './components/rightContainer/planner/DeepFocusDock'
@@ -31,7 +30,6 @@ function Home() {
   // which sidebar create form is open ('journals' | 'planners' | null); lifted here so the big "create" buttons
   // on the empty pages can open the same forms the sidebar's + buttons do
   const [openFormSection, setOpenFormSection] = useState(null)
-  const { journals } = useContext(journalContext)
   const [isCheckingAuth, setIsCheckingAuth] = useState(true)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [needsOnboarding, setNeedsOnboarding] = useState(false)
@@ -93,11 +91,6 @@ function Home() {
     return () => media.removeEventListener('change', closeOnDesktop)
   }, [])
 
-  // a new user who just finished (or skipped) the tour lands straight in the "new journal" form instead of an empty page
-  const handleTourEnd = () => {
-    if (journals.length === 0) openCreateForm('journals')
-  }
-
   const retryAuthCheck = () => {
     setAuthError(false)
     setIsCheckingAuth(true)
@@ -151,7 +144,7 @@ function Home() {
       </div>
 
       <DeepFocusDock />
-      <ProductTour isSidebarOpen={navOpen} setIsSidebarOpen={setNavOpen} autoCloseSidebar={isMobile} onTourEnd={handleTourEnd} />
+      <OnboardingGuide isNavOpen={navOpen} setNavOpen={setNavOpen} autoCloseNav={isMobile} openCreateForm={openCreateForm} />
     </>
     </GuidanceProvider>
     </DeepFocusProvider>
