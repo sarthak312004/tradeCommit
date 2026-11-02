@@ -21,8 +21,11 @@ const EXPANDED_WIDTH = 1400 // clamped by max-w-full on small screens
  *
  * Esc closes the drawer and Ctrl/Cmd + Enter submits it. Pass `canClose={false}` / `canSubmit={false}`
  * to switch those off while a request is running.
+ *
+ * `onBeforeClose` is optional: it runs before every close (Esc, the X button, Cancel). Return `false` to keep the drawer open,
+ * e.g. to ask whether to discard unsaved text. Forms that don't pass it close exactly as before.
  */
-function FormDrawer({ ref, ariaTitle, breadcrumb, onSubmit, onClose, footer, children, canClose = true, canSubmit = true, deepMode = false, deepTheme = 'sage', headerExtra = null, sidePanel = null }) {
+function FormDrawer({ ref, ariaTitle, breadcrumb, onSubmit, onClose, footer, children, canClose = true, canSubmit = true, deepMode = false, deepTheme = 'sage', headerExtra = null, sidePanel = null, onBeforeClose = null }) {
   const [drawerWidth, setDrawerWidth] = useState(DEFAULT_WIDTH)
   const [expanded, setExpanded] = useState(false)
   const isFullScreen = deepMode || expanded
@@ -69,6 +72,7 @@ function FormDrawer({ ref, ariaTitle, breadcrumb, onSubmit, onClose, footer, chi
   // slide-out, then let the parent unmount the drawer
   const requestClose = () => {
     if (closeTimerRef.current) return
+    if (onBeforeClose && onBeforeClose() === false) return
     slideOut()
     closeTimerRef.current = setTimeout(() => {
       closeTimerRef.current = null

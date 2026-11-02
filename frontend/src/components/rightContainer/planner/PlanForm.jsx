@@ -1,17 +1,35 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import FormDrawer from '../../common/FormDrawer'
 import PropertyRow from '../../common/PropertyRow'
 import ShortcutHint from '../../common/ShortcutHint'
 import DeferredEditor from '../../common/DeferredEditor'
+import QuickPlanFields from './QuickPlanFields'
 import { dateInputClass, ghostFooterButton, primaryFooterButton } from '../../common/formStyles'
 import { CalendarIcon } from '../../../utils/Icons.jsx'
-import { formatLongDate, todayKey } from '../../../utils/calendar'
+import { formatLongDate, fromDateKey, todayKey } from '../../../utils/calendar'
 import { MOD_LABEL } from '../../../hooks/useFormShortcuts'
 import { useDeepFocus } from '../../../context/useDeepFocus'
 import { clearFormDraft, readFormDraft, writeFormDraft } from '../../../utils/formDraftStorage'
+import { EMPTY_QUICK, MAX_TITLE, buildQuickPlanHtml, deriveTitle, hasQuickContent, htmlHasText, sanitizeQuick } from '../../../utils/quickPlan'
+import { BLANK_TEMPLATE_ID, getTemplate } from '../../../utils/quickPlanTemplates'
 
-const MAX_TITLE = 120
+// Which writing mode a NEW plan opens in. Remembered per browser; editing an existing plan always uses the full editor.
+const MODE_PREF_KEY = 'tradecommit:plan-form-mode'
+const isMode = (value) => value === 'quick' || value === 'full'
+const readModePreference = () => {
+  const saved = readFormDraft(MODE_PREF_KEY)
+  return isMode(saved?.mode) ? saved.mode : 'quick'
+}
+const shortDateLabel = (key) => {
+  try {
+    return fromDateKey(key).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })
+  } catch {
+    return ''
+  }
+}
+
+const modeButton = (active) => `inline-flex h-7 items-center rounded-md px-2.5 text-xs font-medium transition-colors duration-150 focus:outline-none focus-visible:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50 dark:focus-visible:bg-white/[0.08] ${active ? 'bg-zinc-100 text-cyan-800 dark:bg-white/[0.08] dark:text-cyan-300' : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`
 
 const deepModeStyles = `
 .deep-mode-scroll { background: radial-gradient(ellipse at 50% 0%, rgba(195, 204, 185, .12), transparent 58%); }
@@ -43,6 +61,10 @@ const deepModeStyles = `
  * Drawer form to write (or review) the plan for one calendar day.
  * Same layout as TradeForm: big title header, property rows, rich text body with screenshots.
  *
+ * A NEW plan opens in Quick Plan mode (a few optional guided fields) and can expand into the full editor at any time.
+ * Quick fields are written into the plan's rich-text `content`, so the stored shape is the same in both modes.
+ * Editing an existing plan always uses the full editor, exactly as before.
+ *
  * @param {string}   plannerName
  * @param {string}   plannerType
  * @param {object}   [initialEntry]  existing plan when editing
@@ -58,6 +80,8 @@ function PlanForm({ plannerName, plannerType, initialEntry = null, initialDate, 
   const [savedDraft] = useState(() => readFormDraft(draftKey))
   const savedValues = savedDraft?.values && typeof savedDraft.values === 'object' ? savedDraft.values : {}
   const initialContent = typeof savedDraft?.content === 'string' ? savedDraft.content : initialEntry?.content ?? ''
+  // Existing plans, and drafts saved before Quick Plan existed (no `mode`), keep the full editor so nothing is hidden.
+  const [initialMode] = useState(() => (initialEntry ? 'full' : savedDraft ? (isMode(savedDraft.mode) ? savedDraft.mode : 'full') : readModePreference()))
   const { register, handleSubmit, watch, subscribe, formState: { errors } } = useForm({
     defaultValues: {
       title: typeof savedValues.title === 'string' ? savedValues.title : initialEntry?.title ?? '',
@@ -72,10 +96,41 @@ function PlanForm({ plannerName, plannerType, initialEntry = null, initialDate, 
     date: typeof savedValues.date === 'string' ? savedValues.date : defaultDate
   })
   const draftClosedRef = useRef(false)
+  const [initialQuick] = useState(() => sanitizeQuick(savedDraft?.quick))
+  const [initialTemplate] = useState(() => (typeof savedDraft?.template === 'string' ? getTemplate(savedDraft.template).id : BLANK_TEMPLATE_ID))
+  const modeRef = useRef(initialMode)
+  const quickRef = useRef(initialQuick)
+  const templateRef = useRef(initialTemplate)
+  const contentTouchedRef = useRef(Boolean(savedDraft)) // true once there is editor text the user wrote (or restored)
+  const discardConfirmedRef = useRef(false)
+  const confirmDiscardRef = useRef(false)
+  const [mode, setMode] = useState(initialMode)
+  const [quick, setQuick] = useState(initialQuick)
+  const [templateId, setTemplateId] = useState(initialTemplate)
+  const [seedHtml, setSeedHtml] = useState(initialContent) // what the full editor starts with when it (re)mounts
+  const [fullHasText, setFullHasText] = useState(() => htmlHasText(initialContent))
   const [isSaving, setIsSaving] = useState(false)
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false)
+  const [isConfirmingDiscard, setIsConfirmingDiscard] = useState(false)
+  const [showRestored, setShowRestored] = useState(Boolean(savedDraft))
   const [submitError, setSubmitError] = useState('')
   const { isEnabled: deepMode, preferences, setPlannerHeaderHost } = useDeepFocus()
+  const isQuick = mode === 'quick' && !initialEntry
+
+  // one place that writes the draft, so Quick fields, editor text, title and date are always saved together
+  const persistDraft = useCallback((values = latestFormValuesRef.current) => {
+    if (draftClosedRef.current) return
+    writeFormDraft(draftKey, {
+      values: {
+        title: typeof values.title === 'string' ? values.title : '',
+        date: typeof values.date === 'string' ? values.date : defaultDate
+      },
+      content: editorDraftRef.current,
+      mode: modeRef.current,
+      quick: quickRef.current,
+      template: templateRef.current
+    })
+  }, [defaultDate, draftKey])
 
   useEffect(() => {
     const warnBeforeUnload = (event) => {
@@ -88,32 +143,98 @@ function PlanForm({ plannerName, plannerType, initialEntry = null, initialDate, 
 
   useEffect(() => {
     let saveTimer
-    const saveDraft = (values) => {
-      if (draftClosedRef.current) return
-      writeFormDraft(draftKey, {
-        values: {
-          title: typeof values.title === 'string' ? values.title : '',
-          date: typeof values.date === 'string' ? values.date : defaultDate
-        },
-        content: editorDraftRef.current
-      })
-    }
     const unsubscribe = subscribe({
       formState: { values: true },
       callback: ({ values }) => {
         latestFormValuesRef.current = values
         clearTimeout(saveTimer)
-        saveTimer = setTimeout(() => saveDraft(values), 200)
+        saveTimer = setTimeout(() => persistDraft(values), 200)
       }
     })
-    const flushDraft = () => saveDraft(latestFormValuesRef.current)
+    const flushDraft = () => persistDraft(latestFormValuesRef.current)
     window.addEventListener('pagehide', flushDraft)
     return () => {
       clearTimeout(saveTimer)
       unsubscribe()
       window.removeEventListener('pagehide', flushDraft)
     }
-  }, [defaultDate, draftKey, subscribe])
+  }, [persistDraft, subscribe])
+
+  const handleQuickChange = (next) => {
+    quickRef.current = next
+    setQuick(next)
+    persistDraft()
+  }
+
+  const handleTemplateChange = (id) => {
+    templateRef.current = id
+    setTemplateId(id)
+    persistDraft()
+  }
+
+  const rememberMode = (next) => writeFormDraft(MODE_PREF_KEY, { mode: next })
+
+  // Quick -> full editor: what was typed becomes formatted text at the top of the editor, then the fields reset
+  const openFullEditor = () => {
+    if (modeRef.current === 'full') return // already there: re-seeding would reset the live editor
+    const compiled = buildQuickPlanHtml(quickRef.current)
+    const seed = `${compiled}${editorDraftRef.current}`
+    editorDraftRef.current = seed
+    if (compiled) contentTouchedRef.current = true
+    quickRef.current = EMPTY_QUICK
+    modeRef.current = 'full'
+    setQuick(EMPTY_QUICK)
+    setSeedHtml(seed)
+    setFullHasText(htmlHasText(seed))
+    setMode('full')
+    rememberMode('full')
+    persistDraft()
+  }
+
+  // full editor -> Quick: only while the editor is empty, because free-form text can't be shown as fields
+  const openQuickPlan = () => {
+    if (modeRef.current === 'quick') return
+    if (htmlHasText(editorDraftRef.current)) return
+    editorDraftRef.current = ''
+    modeRef.current = 'quick'
+    setSeedHtml('')
+    setMode('quick')
+    rememberMode('quick')
+    persistDraft()
+  }
+
+  // Esc, the X button and Cancel all come through here: ask before throwing away unsaved text
+  const isDirty = () => {
+    const values = latestFormValuesRef.current
+    return (values.title ?? '') !== (initialEntry?.title ?? '') ||
+      (values.date ?? defaultDate) !== defaultDate ||
+      contentTouchedRef.current ||
+      hasQuickContent(quickRef.current)
+  }
+
+  const guardClose = () => {
+    if (discardConfirmedRef.current || draftClosedRef.current) return true
+    if (confirmDiscardRef.current) { // asked already: Esc / X again means "keep editing"
+      confirmDiscardRef.current = false
+      setIsConfirmingDiscard(false)
+      return false
+    }
+    if (!isDirty()) return true
+    confirmDiscardRef.current = true
+    setIsConfirmingDelete(false)
+    setIsConfirmingDiscard(true)
+    return false
+  }
+
+  const keepEditing = () => {
+    confirmDiscardRef.current = false
+    setIsConfirmingDiscard(false)
+  }
+
+  const discardAndClose = () => {
+    discardConfirmedRef.current = true
+    drawerRef.current?.close()
+  }
 
   const handleClose = () => {
     draftClosedRef.current = true
@@ -123,18 +244,31 @@ function PlanForm({ plannerName, plannerType, initialEntry = null, initialDate, 
 
   const date = watch('date')
   const isBusy = isSaving
+  const autoTitle = deriveTitle({ setup: isQuick ? quick.setup : '', bias: isQuick ? quick.bias : '', dateLabel: shortDateLabel(date || defaultDate) })
 
   const handleFormSubmit = async (values) => {
     setSubmitError('')
     setIsSaving(true)
     try {
-      const draft = await editorRef.current.getDraft()
-      await onSubmit(
-        { title: values.title.trim(), date: values.date || todayKey(), content: draft.html, images: draft.images, removedImages: draft.removedImages },
-        draft.prepare
-      )
+      const typedTitle = values.title.trim()
+      const dateKey = values.date || todayKey()
+      let payload
+      let prepare
+      if (isQuick) {
+        // no editor is mounted in Quick mode: the fields are the content, and there are no screenshots to upload
+        const content = buildQuickPlanHtml(quickRef.current)
+        if (!typedTitle && !content) throw new Error('Add a title or fill in at least one field to save this plan.')
+        payload = { title: typedTitle || deriveTitle({ setup: quickRef.current.setup, bias: quickRef.current.bias, dateLabel: shortDateLabel(dateKey) }), date: dateKey, content, images: [], removedImages: [] }
+      } else {
+        const draft = await editorRef.current.getDraft()
+        // a new plan needs a title or some text; with only text, the title is filled in so the backend's required title is met
+        if (!initialEntry && !typedTitle && !htmlHasText(draft.html)) throw new Error('Add a title or write a few notes to save this plan.')
+        payload = { title: typedTitle || deriveTitle({ dateLabel: shortDateLabel(dateKey) }), date: dateKey, content: draft.html, images: draft.images, removedImages: draft.removedImages }
+        prepare = draft.prepare
+      }
+      await onSubmit(payload, prepare)
       draftClosedRef.current = true
-      editorRef.current.markSubmitted()
+      editorRef.current?.markSubmitted()
       clearFormDraft(draftKey)
       drawerRef.current?.close()
     } catch (error) {
@@ -166,7 +300,14 @@ function PlanForm({ plannerName, plannerType, initialEntry = null, initialDate, 
   const footer = (
     <>
       <div className="flex items-center gap-2">
-        {onDelete && !isConfirmingDelete && (
+        {isConfirmingDiscard && (
+          <>
+            <span role="alert" className="text-[13px] text-zinc-600 dark:text-zinc-300">Discard this unsaved plan?</span>
+            <button type="button" onClick={keepEditing} className={ghostFooterButton}>Keep editing</button>
+            <button type="button" onClick={discardAndClose} className="inline-flex h-9 shrink-0 items-center justify-center whitespace-nowrap rounded-md px-3 text-[13px] font-medium text-rose-700 transition-colors hover:bg-rose-500/10 dark:text-rose-300">Discard</button>
+          </>
+        )}
+        {onDelete && !isConfirmingDelete && !isConfirmingDiscard && (
           <button type="button" onClick={() => setIsConfirmingDelete(true)} disabled={isBusy} className="h-9 rounded-lg px-3 text-[13px] font-medium text-rose-700 transition-colors hover:bg-rose-500/10 disabled:opacity-50 dark:text-rose-300">
             Delete
           </button>
@@ -183,7 +324,7 @@ function PlanForm({ plannerName, plannerType, initialEntry = null, initialDate, 
             </button>
           </>
         )}
-        {submitError && <p role="alert" className="text-xs font-medium text-rose-700 dark:text-rose-300">{submitError}</p>}
+        {submitError && !isConfirmingDiscard && <p role="alert" className="text-xs font-medium text-rose-700 dark:text-rose-300">{submitError}</p>}
       </div>
 
       <div className="flex items-center gap-2">
@@ -211,6 +352,7 @@ function PlanForm({ plannerName, plannerType, initialEntry = null, initialDate, 
       footer={footer}
       canClose={!isBusy}
       canSubmit={!isBusy}
+      onBeforeClose={guardClose}
     >
       {deepMode && (
         <section className="deep-focus-intro mb-8 overflow-hidden rounded-2xl border border-stone-200/80 bg-white/55 px-5 pb-4 pt-3 shadow-[0_12px_45px_rgba(73,81,67,0.035)] dark:border-white/[0.08] dark:bg-white/[0.025] sm:px-8" aria-label="Deep focus atmosphere">
@@ -231,11 +373,11 @@ function PlanForm({ plannerName, plannerType, initialEntry = null, initialDate, 
 
       {/* header = plan title */}
       <input
-        {...register('title', { validate: (value) => value.trim() !== '' || 'Give this plan a title' })}
+        {...register('title', { validate: (value) => !!initialEntry && value.trim() === '' ? 'Give this plan a title' : true })}
         aria-label="Plan title"
         autoComplete="off"
         maxLength={MAX_TITLE}
-        placeholder="e.g. Nifty breakout plan"
+        placeholder={initialEntry ? 'e.g. Nifty breakout plan' : isQuick ? `Title (optional) \u00b7 ${autoTitle}` : 'e.g. Nifty breakout plan'}
         className="w-full bg-transparent text-3xl font-bold tracking-tight text-zinc-900 outline-none placeholder:font-bold placeholder:text-zinc-300 sm:text-4xl sm:leading-tight dark:text-zinc-50 dark:placeholder:text-zinc-700"
       /> 
       {errors.title && <p className="mt-1 text-xs text-rose-500">{errors.title.message}</p>}
@@ -249,7 +391,19 @@ function PlanForm({ plannerName, plannerType, initialEntry = null, initialDate, 
             {formatLongDate(date)}
           </span>
         )}
+        {!initialEntry && (
+          <div role="group" aria-label="Writing mode" className="ml-auto inline-flex items-center rounded-lg border border-zinc-200 p-0.5 dark:border-white/[0.10]">
+            <button type="button" aria-pressed={isQuick} onClick={openQuickPlan} disabled={!isQuick && fullHasText} title={!isQuick && fullHasText ? 'Clear the editor to switch back to Quick plan' : undefined} className={modeButton(isQuick)}>Quick plan</button>
+            <button type="button" aria-pressed={!isQuick} onClick={openFullEditor} className={modeButton(!isQuick)}>Full editor</button>
+          </div>
+        )}
       </div>
+      {showRestored && (
+        <p role="status" className="mt-3 flex flex-wrap items-center gap-x-2 text-xs text-zinc-500 dark:text-zinc-400">
+          Restored your unsaved draft.
+          <button type="button" onClick={() => setShowRestored(false)} className="font-medium text-zinc-600 hover:text-zinc-900 hover:underline focus:outline-none focus-visible:underline dark:text-zinc-300 dark:hover:text-zinc-100">Dismiss</button>
+        </p>
+      )}
 
       <div className="mt-6">
         <PropertyRow Icon={CalendarIcon} label="Date" htmlFor="plan-date" error={errors.date?.message}>
@@ -268,22 +422,32 @@ function PlanForm({ plannerName, plannerType, initialEntry = null, initialDate, 
         </aside>
       )}
 
-      <DeferredEditor
-        ref={editorRef}
-        id="plan-content"
-        label="Trade plan"
-        initialHtml={initialContent}
-        placeholder="Levels, setups, entry & exit rules, risk, what would invalidate the idea…"
-        onUploadImage={onUploadImage}
-        onChange={(html) => {
-          if (draftClosedRef.current) return
-          editorDraftRef.current = html
-          writeFormDraft(draftKey, {
-            values: latestFormValuesRef.current,
-            content: html
-          })
-        }}
-      />
+      {isQuick ? (
+        <QuickPlanFields
+          values={quick}
+          onChange={handleQuickChange}
+          templateId={templateId}
+          onTemplateChange={handleTemplateChange}
+          autoFocus={!savedDraft}
+          onOpenFullEditor={openFullEditor}
+        />
+      ) : (
+        <DeferredEditor
+          ref={editorRef}
+          id="plan-content"
+          label="Trade plan"
+          initialHtml={seedHtml}
+          placeholder="Levels, setups, entry & exit rules, risk, what would invalidate the idea…"
+          onUploadImage={onUploadImage}
+          onChange={(html) => {
+            if (draftClosedRef.current) return
+            editorDraftRef.current = html
+            contentTouchedRef.current = true
+            setFullHasText(htmlHasText(html))
+            persistDraft()
+          }}
+        />
+      )}
     </FormDrawer>
     </>
   )
