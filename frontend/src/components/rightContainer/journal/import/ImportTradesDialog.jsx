@@ -8,6 +8,8 @@ import ImportReview from './ImportReview'
 import ImportColumnMapping from './ImportColumnMapping'
 import { KIND_ORDER, primaryButton } from './importStyles'
 import { UploadIcon } from './importIcons.jsx'
+import { usePlan } from '../../../../hooks/usePlan'
+import { openUpgrade } from '../../../../utils/upgrade'
 
 const networkText = "Can't reach the server. Check your connection and try again."
 const messageOf = (error, fallback) => (error instanceof TypeError ? networkText : error?.message || fallback)
@@ -42,6 +44,9 @@ function ImportTradesDialog({ journals, currentJournalId, onImport, onOpenJourna
   const [filter, setFilter] = useState('all')
   const [defaultJournal, setDefaultJournal] = useState(() => (journals.some((journal) => journal.id === currentJournalId) ? currentJournalId : journals[0]?.id ?? ''))
   const [result, setResult] = useState(null)
+  // the most trades one import may save on this plan (null = no limit); the server enforces it too
+  const { entitlements } = usePlan()
+  const maxPerImport = Number.isInteger(entitlements?.importMaxPerCommit) ? entitlements.importMaxPerCommit : null
 
   const dialogRef = useRef(null)
   const isBusy = isReading || isImporting
@@ -195,8 +200,10 @@ function ImportTradesDialog({ journals, currentJournalId, onImport, onOpenJourna
 
   /* ---------------------------------------------------------------- step 3 */
 
+  const overImportLimit = maxPerImport !== null && selectedTrades.length > maxPerImport
+
   const handleImport = async () => {
-    if (selectedTrades.length === 0 || isImporting) return
+    if (selectedTrades.length === 0 || isImporting || overImportLimit) return
     setIsImporting(true)
     setError('')
 
@@ -318,10 +325,16 @@ function ImportTradesDialog({ journals, currentJournalId, onImport, onOpenJourna
               error ? (
                 <p role="alert" className="text-rose-600 dark:text-rose-400">{error}</p>
               ) : (
-                <p aria-live="polite" className="truncate">
+                <p aria-live="polite" className="min-w-0">
                   <span className="font-medium text-zinc-800 dark:text-zinc-100">{selectedTrades.length} of {trades.length} selected</span>
                   {selectedTrades.length > 0 && (
                     <span> · All will go to {journalName(defaultJournal)}</span>
+                  )}
+                  {maxPerImport !== null && (
+                    <span className={overImportLimit ? 'block font-medium text-rose-600 dark:text-rose-400' : 'block'}>
+                      {overImportLimit ? `Your plan imports up to ${maxPerImport} trades at a time: deselect ${selectedTrades.length - maxPerImport}. ` : `Max ${maxPerImport} trades per import on your plan. `}
+                      <button type="button" onClick={() => openUpgrade('import')} className="cursor-pointer font-medium underline underline-offset-2">Upgrade</button>
+                    </span>
                   )}
                 </p>
               )
@@ -343,7 +356,7 @@ function ImportTradesDialog({ journals, currentJournalId, onImport, onOpenJourna
                   </>
                 )}
                 {step === 'review' && (
-                  <button type="button" onClick={handleImport} disabled={selectedTrades.length === 0 || isImporting} className={primaryButton}>
+                  <button type="button" onClick={handleImport} disabled={selectedTrades.length === 0 || isImporting || overImportLimit} className={primaryButton}>
                     {isImporting ? (
                       <span aria-hidden="true" className="h-3.5 w-3.5 animate-spin rounded-full border border-current/40 border-t-current" />
                     ) : (

@@ -19,7 +19,7 @@ const pageBody = 'subtle-scrollbar min-h-0 flex-1 overflow-y-auto p-3 sm:p-6 md:
 const PlanForm = lazy(loadPlanForm)
 
 function PlannerWorkspace({ planner }) {
-  const { profile } = useProfile()
+  const { profile, entitlements } = useProfile()
   const { entries, isLoading, error, addEntry, updateEntry, removeEntry, uploadImage } = usePlanEntries(planner.id)
   // null = drawer closed, { entry: null, date } = new plan, { entry } = editing
   const formStateKey = `tradecommit:open-plan-form:${planner.id}`
@@ -163,7 +163,7 @@ function PlannerWorkspace({ planner }) {
             onDelete={currentEntry ? () => removeEntry(currentEntry.id) : undefined}
             onClose={closeForm}
             onUploadImage={uploadImage}
-            carryForward={linkedJournalId ? carryForward : null}
+            carryForward={linkedJournalId && entitlements?.aiCarryForward ? carryForward : null}
             guideOverlayActive={plannerGuideActive}
           />
         </Suspense>

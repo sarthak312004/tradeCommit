@@ -6,7 +6,9 @@ import { focusRing } from '../../common/controlStyles'
 import SparklesIcon from './SparklesIcon'
 import RangeReviewPanel from './RangeReviewPanel'
 import ReviewHistoryPanel from './ReviewHistoryPanel'
-import { allowanceText } from './reviewParts'
+import { allowanceText, usageLine } from './reviewParts'
+import { usePlan } from '../../../hooks/usePlan'
+import { openUpgrade } from '../../../utils/upgrade'
 
 const MODES = [
   { id: 'review', label: 'Review' },
@@ -18,7 +20,7 @@ const MODES = [
  * included). There is one way to ask: pick a period (This week, Last week, This month, Last 30 days, All trades, or custom
  * dates). Opening it (or browsing) only loads what is saved and never spends AI quota. A new review is written only when
  * the trader presses the button, and the server unlocks that button when the period holds at least 5 trades and the trader
- * is within the allowance (1 a day, 3 a week), so the shared free-tier quota stretches across many traders.
+ * is within the allowance the plan gives (see entitlements), so the shared free-tier quota stretches across many traders.
  * The Review tab stays mounted once opened, so a review being written is never lost when you look at the history.
  * Rendered in a portal because the page header uses backdrop-blur, which would trap `fixed` children.
  */
@@ -29,6 +31,9 @@ function AiMentorDialog({ journalId, journalName, currency, isOpen, onClose, onO
   const [rangeKey, setRangeKey] = useState(0)
   const [quota, setQuota] = useState(null)
   const dialogRef = useRef(null)
+  const { entitlements } = usePlan()
+  // the History tab needs the plan's history feature; a locked tab opens the upgrade prompt instead of switching
+  const historyLocked = entitlements !== null && entitlements.aiHistory !== true
 
   // every response carries the allowance as the server sees it right now; the newest one wins
   const reportAccess = useCallback((access) => {
@@ -64,6 +69,10 @@ function AiMentorDialog({ journalId, journalName, currency, isOpen, onClose, onO
   }, [journalId])
 
   const selectMode = (next) => {
+    if (next === 'history' && historyLocked) {
+      openUpgrade('aiHistory')
+      return
+    }
     // the Review tab stays mounted while hidden, so stop any read-aloud explicitly when leaving a tab
     if (next !== mode) window.speechSynthesis?.cancel()
     setMode(next)
@@ -127,6 +136,11 @@ function AiMentorDialog({ journalId, journalName, currency, isOpen, onClose, onO
                 }`}
               >
                 {item.label}
+                {item.id === 'history' && historyLocked && (
+                  <svg viewBox="0 0 24 24" className="ml-1.5 h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-label="Locked">
+                    <rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" />
+                  </svg>
+                )}
               </button>
             )
           })}
@@ -159,7 +173,7 @@ function AiMentorDialog({ journalId, journalName, currency, isOpen, onClose, onO
         <footer className="flex shrink-0 items-center justify-between gap-4 border-t border-zinc-200 px-8 py-3.5 text-[11px] text-zinc-500 dark:border-white/[0.08] dark:text-zinc-400">
           <span className="min-w-0 truncate">AI feedback from your own logs, not financial advice.</span>
           {mode === 'review' && allowance && (
-            <span className="shrink-0 tabular-nums" title="You can write 1 review a day and 3 a week. Looking at saved reviews is free.">
+            <span className="shrink-0 tabular-nums" title={`${usageLine(quota?.usage)}. Looking at saved reviews is free.`}>
               {allowance}
             </span>
           )}

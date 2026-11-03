@@ -2,6 +2,7 @@ import { Suspense, lazy, useContext, useEffect, useMemo, useRef, useState } from
 import { createPortal } from 'react-dom'
 import { journalContext, plannerContext } from '../../../context/Context'
 import { usePlanEntries } from '../../../hooks/usePlanEntries'
+import { usePlan } from '../../../hooks/usePlan'
 import { getCarryForward } from '../../../services/aiRangeReviewApi'
 import { todayKey, formatLongDate } from '../../../utils/calendar'
 import { loadPlanForm } from '../../../utils/formLoaders'
@@ -294,6 +295,7 @@ function ConnectedPlanToday({ planner, journal, onClose, onRetry }) {
   // null = not decided yet; { kind: 'new' } | { kind: 'edit', entry } | { kind: 'choose' }
   const [selection, setSelection] = useState(null)
   const [carryForward, setCarryForward] = useState(null)
+  const { entitlements } = usePlan()
 
   // the change the journal's latest mentor review asked for, shown inside the form (same as the planner page)
   useEffect(() => {
@@ -372,7 +374,7 @@ function ConnectedPlanToday({ planner, journal, onClose, onRetry }) {
         onDelete={currentEntry ? () => removeEntry(currentEntry.id) : undefined}
         onClose={onClose}
         onUploadImage={uploadImage}
-        carryForward={carryForward}
+        carryForward={entitlements?.aiCarryForward ? carryForward : null}
       />
     </Suspense>
   )

@@ -4,7 +4,9 @@ import { CloseIcon, DownloadIcon } from '../../../utils/Icons.jsx'
 import { iconButtonClass, ghostFooterButton } from '../../common/formStyles'
 import { EXPORT_RANGES, resolveExportRange } from '../../../utils/exportRange'
 import { EXPORT_FORMATS, downloadJournalExport } from '../../../services/exportApi'
-import { filterTradesByDate } from '../../../utils/tradeAnalytics'
+import { dateKeyFromDate, filterTradesByDate } from '../../../utils/tradeAnalytics'
+import { usePlan } from '../../../hooks/usePlan'
+import { openUpgrade } from '../../../utils/upgrade'
 
 const FORMAT_KEY = 'tradecommit:export-format'
 const readFormat = () => {
@@ -39,6 +41,9 @@ function ExportJournalDialog({ journal, onClose }) {
   const [error, setError] = useState('')
   const dialogRef = useRef(null)
   const closeRef = useRef(onClose)
+  // when the plan limits how far back an export may go, the range is fixed to that many days (the server enforces it too)
+  const { entitlements } = usePlan()
+  const exportDays = Number.isInteger(entitlements?.exportDays) ? entitlements.exportDays : null
 
   useEffect(() => {
     closeRef.current = isExporting ? () => {} : onClose
@@ -51,8 +56,14 @@ function ExportJournalDialog({ journal, onClose }) {
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [])
 
-  const range = useMemo(() => resolveExportRange(preset, custom), [preset, custom])
-  const isCustomIncomplete = preset === 'custom' && !range.from && !range.to
+  const range = useMemo(() => {
+    if (exportDays === null) return resolveExportRange(preset, custom)
+    const now = new Date()
+    const start = new Date(now)
+    start.setDate(start.getDate() - Math.max(exportDays - 1, 0))
+    return { from: dateKeyFromDate(start), to: dateKeyFromDate(now) }
+  }, [preset, custom, exportDays])
+  const isCustomIncomplete = exportDays === null && preset === 'custom' && !range.from && !range.to
   const isCustomReversed = Boolean(range.from && range.to && range.from > range.to)
 
   // trades that are still saving (or failed) are not on the server yet, so they are not counted
@@ -75,7 +86,7 @@ function ExportJournalDialog({ journal, onClose }) {
     setIsExporting(true)
     setError('')
     try {
-      await downloadJournalExport(journal.id, { format, preset, from: range.from, to: range.to })
+      await downloadJournalExport(journal.id, { format, preset: exportDays === null ? preset : 'custom', from: range.from, to: range.to })
       try {
         window.localStorage.setItem(FORMAT_KEY, format)
       } catch {
@@ -148,7 +159,13 @@ function ExportJournalDialog({ journal, onClose }) {
 
           <fieldset>
             <legend className="text-[13px] font-medium text-zinc-700 dark:text-zinc-200">Date range</legend>
-            <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {exportDays !== null && (
+              <p className="mt-2 rounded-lg border border-zinc-300 bg-zinc-50 px-3 py-2 text-xs leading-5 text-zinc-700 dark:border-white/[0.14] dark:bg-white/[0.04] dark:text-zinc-300">
+                Your plan exports the last {exportDays} {exportDays === 1 ? 'day' : 'days'} of trades.{' '}
+                <button type="button" onClick={() => openUpgrade('exportDays')} className="cursor-pointer font-medium underline underline-offset-2">Upgrade for the full history</button>
+              </p>
+            )}
+            <div className={`mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4 ${exportDays !== null ? 'hidden' : ''}`}>
               {EXPORT_RANGES.map((option) => (
                 <label key={option.id} className={`flex items-center justify-center px-2 py-2 text-center text-xs font-medium ${optionClass(preset === option.id)} ${preset === option.id ? 'text-zinc-900 dark:text-zinc-50' : 'text-zinc-700 dark:text-zinc-300'}`}>
                   <input type="radio" name="export-range" value={option.id} checked={preset === option.id} onChange={() => setPreset(option.id)} className="sr-only" />
@@ -157,7 +174,7 @@ function ExportJournalDialog({ journal, onClose }) {
               ))}
             </div>
 
-            {preset === 'custom' && (
+            {exportDays === null && preset === 'custom' && (
               <div className="mt-3 grid grid-cols-2 gap-3">
                 <label className="min-w-0">
                   <span className="mb-1 block text-xs text-zinc-600 dark:text-zinc-400">From</span>
