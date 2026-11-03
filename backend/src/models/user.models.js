@@ -213,6 +213,12 @@ const userSchema = new mongoose.Schema(
             type:Date,
             default:null
         },
+        // When the newest billing webhook we applied happened: an older, late-arriving event never overwrites a newer one
+        billingLastEventAt:{
+            type:Date,
+            default:null,
+            select:false
+        },
         // Per-user entitlement overrides, merged on top of the plan (never serialized, never client-writable)
         entitlementOverrides:{
             type:mongoose.Schema.Types.Mixed,
@@ -226,6 +232,7 @@ const userSchema = new mongoose.Schema(
             transform(doc, ret){
                 delete ret.billingCustomerId
                 delete ret.billingSubscriptionId
+                delete ret.billingLastEventAt
                 delete ret.entitlementOverrides
                 return ret
             }
