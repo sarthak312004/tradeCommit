@@ -174,9 +174,63 @@ const userSchema = new mongoose.Schema(
         },
         refreshToken:{
             type: String
+        },
+
+        // ---- Plan / billing state. Defaults mean "free"; see utils/entitlements.js for how it is read. ----
+        // Only server code (payment webhooks) may write these; no client-facing endpoint accepts them.
+        planStatus:{
+            type:String,
+            enum:["none","active","cancelling","past_due","expired"],
+            default:"none"
+        },
+        // Pro access runs until this moment (+ grace days); webhooks move it, nothing else grants Pro
+        planAccessUntil:{
+            type:Date,
+            default:null
+        },
+        planInterval:{
+            type:String,
+            enum:["monthly","yearly"],
+            default:null
+        },
+        // Payment-provider ids: never selected by default and never serialized (see toJSON below)
+        billingCustomerId:{
+            type:String,
+            default:null,
+            select:false
+        },
+        billingSubscriptionId:{
+            type:String,
+            default:null,
+            select:false
+        },
+        cancelAtPeriodEnd:{
+            type:Boolean,
+            default:false
+        },
+        // Pro granted outside billing (e.g. early users) until this moment
+        legacyProUntil:{
+            type:Date,
+            default:null
+        },
+        // Per-user entitlement overrides, merged on top of the plan (never serialized, never client-writable)
+        entitlementOverrides:{
+            type:mongoose.Schema.Types.Mixed,
+            default:() => ({})
         }
 
-    },{ timestamps: true }
+    },{
+        timestamps: true,
+        toJSON:{
+            // Anything that sends a user document to a client (e.g. the login response) leaves these out
+            transform(doc, ret){
+                delete ret.billingCustomerId
+                delete ret.billingSubscriptionId
+                delete ret.entitlementOverrides
+                return ret
+            }
+        }
+    }
 )
 //Middleware to hash password just before save to db
 userSchema.pre("save", async function () {

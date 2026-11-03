@@ -45,7 +45,7 @@ router.post("/forgot-password/send-otp", sendForgotPasswordOtp)
 router.post("/forgot-password/verify-otp", verifyForgotPasswordOtp)
 router.post("/forgot-password/reset", resetForgottenPassword)
 
-// profile + password change (logged-in users only)
+// profile + password change (logged-in users only). GET /profile also returns plan, planState and entitlements.
 router.get("/profile", verifyJWT, getProfile)
 // add / edit the display name and username (sign-up no longer asks for them)
 router.patch("/profile", verifyJWT, updateProfile)
