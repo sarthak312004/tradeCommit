@@ -46,3 +46,23 @@ export const createWithinPlanLimit = async ({ user, limitKey, noun, countOwned, 
   }
   return created;
 };
+
+/** 403 { code: "PLAN_LIMIT", feature: "import", limit, total }: a file or request holds more trades than one import may save. */
+export const importLimitError = (limit, total) =>
+  new ApiError(
+    403,
+    `Your plan imports up to ${limit} trade${limit === 1 ? "" : "s"} at a time and this file has ${total}. Upgrade to import more.`,
+    [],
+    "",
+    { code: PLAN_LIMIT_CODE, feature: "import", limit, total }
+  );
+
+/**
+ * Throws importLimitError when `total` trades are more than entitlements.importMaxPerCommit (null = unlimited).
+ * Used by both import preview and commit, so the two can never disagree.
+ */
+export const assertWithinImportLimit = (entitlements, total) => {
+  const limit = entitlements?.importMaxPerCommit;
+  if (limit === null || limit === undefined) return;
+  if (total > limit) throw importLimitError(limit, total);
+};

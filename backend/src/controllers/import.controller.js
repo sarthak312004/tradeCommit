@@ -5,6 +5,8 @@ import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { applyContextToFields } from "../utils/customFields.js";
+import { getEntitlements } from "../utils/entitlements.js";
+import { assertWithinImportLimit } from "../utils/planLimits.js";
 import { getMentorProgress, recordNewTrade, tradeFingerprint } from "../utils/mentorProgress.js";
 import {
   MAX_IMPORT_TRADES,
@@ -71,6 +73,9 @@ export const previewImport = asyncHandler(async (req, res) => {
     throw error;
   }
 
+  // plan limit: the 403 carries { limit, total } so the app can say "50 of 230 allowed"
+  assertWithinImportLimit(getEntitlements(req.user), preview.trades.length);
+
   return res
     .status(200)
     .json(new ApiResponse(200, { fileName: req.file.originalname, ...preview, mappingInfo }, "File read successfully"));
@@ -98,6 +103,7 @@ export const commitImport = asyncHandler(async (req, res) => {
 
   const total = [...byJournal.values()].reduce((sum, trades) => sum + trades.length, 0);
   if (total === 0) throw new ApiError(400, "Select at least one trade to import");
+  assertWithinImportLimit(getEntitlements(req.user), total); // 403 PLAN_LIMIT (feature "import")
   if (total > MAX_IMPORT_TRADES) throw new ApiError(400, `You can import up to ${MAX_IMPORT_TRADES} trades at a time`);
 
   const journals = await Journal.find({ _id: { $in: [...byJournal.keys()] }, owner: req.user._id });

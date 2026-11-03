@@ -79,3 +79,41 @@ export const rangeToDateFilter = ({ from, to }) => {
   if (to) condition.$lte = new Date(`${to}T23:59:59.999Z`);
   return condition;
 };
+
+// The web app resolves dates in the user's own time zone while the server counts days in UTC, so the start of a
+// capped window is allowed to sit this many days earlier. This is time-zone slack, not a plan limit.
+const EXPORT_WINDOW_SLACK_DAYS = 1;
+
+/**
+ * Applies the plan's export window (entitlements.exportDays, null = unlimited) to a resolved range.
+ * The client's range is only ever narrowed: a wider or open-ended one is cut to the last `exportDays` days
+ * (counting today), a range wholly older than the window is replaced by the window, and `to` is left alone
+ * (future dates hold no trades). Never throws for ordinary input.
+ *
+ * @returns {{ preset: string, label: string, from: string|null, to: string|null, clamped: boolean }}
+ *          `clamped` is true when the dates actually applied differ from the ones asked for.
+ */
+export const clampExportRange = (range, exportDays, now = Date.now()) => {
+  if (exportDays === null || exportDays === undefined) return { ...range, clamped: false };
+  if (!Number.isInteger(exportDays) || exportDays <= 0) {
+    throw new ApiError(403, "Your plan does not include exporting trades.", [], "", { code: "PLAN_LIMIT", feature: "exportDays" });
+  }
+
+  const today = new Date(now);
+  today.setUTCHours(0, 0, 0, 0);
+  const windowStart = toKey(new Date(today.getTime() - (exportDays - 1 + EXPORT_WINDOW_SLACK_DAYS) * 86_400_000));
+
+  // wholly older than the window: nothing asked for is allowed, so the window itself is what gets exported
+  const outside = Boolean(range.to) && range.to < windowStart;
+  const from = outside || !range.from || range.from < windowStart ? windowStart : range.from;
+  const to = outside ? null : range.to;
+  if (from === range.from && to === range.to) return { ...range, clamped: false };
+
+  return {
+    preset: "custom",
+    label: to ? `${from} to ${to}` : `From ${from}`,
+    from,
+    to,
+    clamped: true,
+  };
+};

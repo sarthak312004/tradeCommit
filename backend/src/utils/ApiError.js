@@ -16,6 +16,9 @@ class ApiError extends Error{
         // Ordinary errors do not get them, so existing errors look exactly as before.
         if(meta?.code !== undefined) this.code = meta.code
         if(meta?.feature !== undefined) this.feature = meta.feature
+        // Optional counts for limit errors, e.g. an import of `total` trades against a plan `limit`.
+        if(Number.isInteger(meta?.limit)) this.limit = meta.limit
+        if(Number.isInteger(meta?.total)) this.total = meta.total
 
         if(stack){
             this.stack = stack
@@ -32,6 +35,8 @@ const publicErrorFields = (error) => {
     const fields = {}
     if(typeof error.code === "string") fields.code = error.code
     if(typeof error.feature === "string") fields.feature = error.feature
+    if(Number.isInteger(error.limit) && error.limit >= 0) fields.limit = error.limit
+    if(Number.isInteger(error.total) && error.total >= 0) fields.total = error.total
     return fields
 }
 
