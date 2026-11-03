@@ -5,6 +5,7 @@ import PropertyRow from '../../common/PropertyRow'
 import ShortcutHint from '../../common/ShortcutHint'
 import DeferredEditor from '../../common/DeferredEditor'
 import QuickPlanFields from './QuickPlanFields'
+import WeeklyPlanForm from './WeeklyPlanForm'
 import { dateInputClass, ghostFooterButton, primaryFooterButton } from '../../common/formStyles'
 import { CalendarIcon } from '../../../utils/Icons.jsx'
 import { formatLongDate, fromDateKey, todayKey } from '../../../utils/calendar'
@@ -50,8 +51,6 @@ const deepModeStyles = `
 .deep-mode-scroll[data-focus-theme="amber"] .deep-focus-waves path { stroke: #b98752; }
 .dark .deep-mode-scroll[data-focus-theme="amber"] .deep-focus-waves path { stroke: #d3a66e; }
 .deep-focus-breathe { animation: deep-breathe 4s ease-in-out infinite; }
-.deep-mode-footer { border-top: 0; background: #f7f6f2; }
-.dark .deep-mode-footer { border-top: 0; background: #111311; }
 @keyframes deep-wave-drift { from { transform: translateY(-3px) scaleY(.88); } to { transform: translateY(4px) scaleY(1.08); } }
 @keyframes deep-breathe { 0%,100% { opacity: .55; box-shadow: 0 0 0 0 rgba(16,185,129,0); } 50% { opacity: 1; box-shadow: 0 0 0 4px rgba(16,185,129,.08); } }
 @media (prefers-reduced-motion: reduce) { .deep-focus-waves path, .deep-focus-breathe { animation: none !important; } }
@@ -76,7 +75,7 @@ const deepModeStyles = `
  * @param {Function} onUploadImage   (file) => Promise<url>
  * @param {object}   [carryForward]  { rule, planLine, checkpoint } the linked journal's latest mentor review asked the trader to apply
  */
-function PlanForm({ plannerName, plannerType, initialEntry = null, initialDate, draftKey, onSubmit, onDelete, onClose, onUploadImage, carryForward = null, guideOverlayActive = false }) {
+function DailyPlanForm({ plannerName, plannerType, initialEntry = null, initialDate, draftKey, onSubmit, onDelete, onClose, onUploadImage, carryForward = null, guideOverlayActive = false }) {
   const defaultDate = initialEntry?.date ?? initialDate ?? todayKey()
   const [savedDraft] = useState(() => readFormDraft(draftKey))
   const savedValues = savedDraft?.values && typeof savedDraft.values === 'object' ? savedDraft.values : {}
@@ -455,6 +454,15 @@ function PlanForm({ plannerName, plannerType, initialEntry = null, initialDate, 
     </FormDrawer>
     </>
   )
+}
+
+/**
+ * Entry point used by the planner. A weekly plan (an existing entry with scope "week", or a new one opened with
+ * `scope="week"`) renders the weekly variant in the same drawer. Everything else is the daily form, unchanged.
+ */
+function PlanForm(props) {
+  const isWeekly = props.scope === 'week' || props.initialEntry?.scope === 'week'
+  return isWeekly ? <WeeklyPlanForm {...props} /> : <DailyPlanForm {...props} />
 }
 
 export default PlanForm

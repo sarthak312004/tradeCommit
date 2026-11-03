@@ -59,19 +59,35 @@ function PlannerWorkspace({ planner }) {
       clearFormDraft(formStateKey)
       return
     }
-    writeFormDraft(formStateKey, { open: true, entryId: currentEntry?.id ?? formState.entryId ?? null, date: formState.date ?? currentEntry?.date ?? null })
+    writeFormDraft(formStateKey, {
+      open: true,
+      entryId: currentEntry?.id ?? formState.entryId ?? null,
+      date: formState.date ?? currentEntry?.date ?? null,
+      // only present for a NEW weekly plan, so a reload reopens the weekly form (daily state keeps its exact old shape)
+      ...(formState.scope === 'week' ? { scope: 'week', sections: formState.sections ?? [] } : {}),
+      ...(formState.quickSection ? { quickSection: formState.quickSection } : {})
+    })
   }, [formStateKey, formState, currentEntry])
 
   const handleSubmit = (values, prepare) =>
     currentEntry ? updateEntry(currentEntry.id, values, prepare) : addEntry(values, prepare)
 
-  const openNewPlan = useCallback((date) => {
+  // `options` is only sent by the weekly band: { scope: 'week', sections }, with `date` = the week's first day
+  const openNewPlan = useCallback((date, options) => {
+    if (options?.scope === 'week') {
+      const sections = Array.isArray(options.sections) ? options.sections : []
+      writeFormDraft(formStateKey, { open: true, entryId: null, date, scope: 'week', sections })
+      setFormState({ entry: null, date, scope: 'week', sections })
+      return
+    }
     writeFormDraft(formStateKey, { open: true, entryId: null, date })
     setFormState({ entry: null, date })
   }, [formStateKey])
 
-  const openPlanFromCalendar = useCallback((date) => {
-    openNewPlan(date)
+  const openPlanFromCalendar = useCallback((date, options) => {
+    openNewPlan(date, options)
+    // the product tour step is about the daily plan: a weekly plan does not complete it
+    if (options?.scope === 'week') return
     window.dispatchEvent(new CustomEvent(PLANNER_WALKTHROUGH_INTERACTION_EVENT, { detail: { step: 'open-plan' } }))
   }, [openNewPlan])
 
@@ -84,9 +100,10 @@ function PlannerWorkspace({ planner }) {
     setPlannerGuideStep(step)
   }, [])
 
-  const openPlan = (entry) => {
-    writeFormDraft(formStateKey, { open: true, entryId: entry.id, date: entry.date })
-    setFormState({ entry })
+  const openPlan = (entry, options) => {
+    const quickSection = options?.quickSection
+    writeFormDraft(formStateKey, { open: true, entryId: entry.id, date: entry.date, ...(quickSection ? { quickSection } : {}) })
+    setFormState({ entry, ...(quickSection ? { quickSection } : {}) })
   }
 
   const closeForm = () => {
@@ -106,7 +123,8 @@ function PlannerWorkspace({ planner }) {
         {isLoading && <p role="status" className="mb-2 text-xs text-zinc-500 dark:text-zinc-400">Loading plans…</p>}
         <PlannerCalendar
           entries={entries}
-          selectedDate={currentEntry?.date ?? formState?.date ?? null}
+          selectedDate={currentEntry?.scope === 'week' || formState?.scope === 'week' ? null : currentEntry?.date ?? formState?.date ?? null}
+          isPlansLoading={isLoading}
           isOpenPlanTourActive={plannerGuideActive && plannerGuideStep === 'open-plan'}
           onCreateForDate={openPlanFromCalendar}
           onOpenEntry={openPlan}
@@ -131,13 +149,16 @@ function PlannerWorkspace({ planner }) {
       {formState && !isLoading && (!formState.entryId || currentEntry) && (
         <Suspense fallback={null}>
           <PlanForm
-            key={currentEntry?.id ?? `new-${formState.date}`}
+            key={currentEntry?.id ?? `new-${formState.scope === 'week' ? 'week-' : ''}${formState.date}`}
             plannerId={planner.id}
             plannerName={planner.name}
             plannerType={planner.type}
             draftKey={planDraftKey}
             initialEntry={currentEntry}
             initialDate={formState.date}
+            scope={currentEntry ? undefined : formState.scope}
+            initialSections={currentEntry ? undefined : formState.sections}
+            quickSection={currentEntry?.scope === 'week' ? formState.quickSection : undefined}
             onSubmit={handleSubmit}
             onDelete={currentEntry ? () => removeEntry(currentEntry.id) : undefined}
             onClose={closeForm}

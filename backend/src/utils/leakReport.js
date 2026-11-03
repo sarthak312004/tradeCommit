@@ -1,4 +1,5 @@
 import { dateKey, sampleStrength, tradePnl, tradeR, tradeRisk } from "./tradeStats.js";
+import { planCoversDate } from "./planScope.js";
 
 // "Where you are losing money and time": the part of the review that is computed by CODE, not written by the AI.
 //
@@ -291,9 +292,8 @@ export const computeLeakReport = (trades, { labelOf = () => null, planEntries = 
 
   /* ---------- 10. days with no written plan (only when a planner is connected) ---------- */
   if (planEntries) {
-    const plannedDays = new Set(planEntries.map((entry) => entry.date));
-    const planned = groupOf(items.filter((item) => plannedDays.has(item.day)));
-    const unplannedItems = items.filter((item) => !plannedDays.has(item.day));
+    const planned = groupOf(items.filter((item) => planEntries.some((entry) => planCoversDate(entry, item.day))));
+    const unplannedItems = items.filter((item) => !planEntries.some((entry) => planCoversDate(entry, item.day)));
     const unplanned = groupOf(unplannedItems);
     if (planned.closed >= 3 && unplanned.closed >= 3 && unplanned.net < 0 && planned.net > unplanned.net && notBetterThan(unplanned, planned)) {
       add({

@@ -91,6 +91,11 @@ function FormDrawer({ ref, ariaTitle, breadcrumb, onSubmit, onClose, footer, chi
 
   const grow = `width ${DURATION}ms ${EASE}`
   return (
+    <>
+    <style>{`
+      .deep-mode-footer { border-top: 0; background: #f7f6f2; }
+      .dark .deep-mode-footer { border-top: 0; background: #111311; }
+    `}</style>
     <div
       ref={overlayRef}
       className={`fixed inset-0 z-50 flex justify-end overflow-hidden transition-colors duration-700 ${deepMode ? 'bg-[#f5f4f0]/95 p-0 backdrop-blur-xl dark:bg-[#111311]/95' : 'bg-black/30 p-2 backdrop-blur-[2px] md:p-3'}`}
@@ -163,6 +168,7 @@ function FormDrawer({ ref, ariaTitle, breadcrumb, onSubmit, onClose, footer, chi
       {/* optional floating panel beside the form (outside it, so it can never submit the form) */}
       {sidePanel}
     </div>
+    </>
   )
 }
 

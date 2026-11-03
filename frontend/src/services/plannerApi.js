@@ -1,5 +1,6 @@
 import { readJson, requestJson } from '../utils/http'
 import { DEFAULT_PLANNER_TYPE } from '../utils/plannerTypes'
+import { normalizeEntry } from '../utils/plannerEntry'
 import { refreshProfile } from './profileApi'
 
 const API_BASE = '/api/v1/planners'
@@ -19,17 +20,6 @@ export const normalizePlanner = (planner) => ({
   linkedJournalId: planner.linkedJournalId ?? null,
   createdAt: planner.createdAt,
   updatedAt: planner.updatedAt
-})
-
-export const normalizeEntry = (entry) => ({
-  id: entry.id ?? entry._id,
-  plannerId: entry.plannerId,
-  date: entry.date ?? '',
-  title: entry.title ?? '',
-  content: entry.content ?? '',
-  images: Array.isArray(entry.images) ? entry.images : [],
-  createdAt: entry.createdAt,
-  updatedAt: entry.updatedAt
 })
 
 export const plannerApi = {

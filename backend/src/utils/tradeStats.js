@@ -1,6 +1,7 @@
 // Server-side twin of frontend/src/utils/tradeAnalytics.js, so the AI mentor reads exactly the same numbers the
 // Analysis tab shows (win rate, profit factor, expectancy, avg R, drawdown, streaks, long vs short).
 // Works on lean Mongo trade documents. Pure functions, no I/O.
+import { planCoversDate } from "./planScope.js";
 
 const num = (value) => {
   if (value === "" || value === null || value === undefined) return null;
@@ -295,7 +296,7 @@ const sameAsset = (a, b) => String(a.assetName ?? "").trim().toLowerCase() === S
  * is connected) results on days that had a plan versus days that did not.
  * `labelOf(trade)` returns the T-number the prompt uses for a trade, or null for trades listed without one.
  */
-export const computeLeakEvidence = (trades, { planEntries = null, labelOf = () => null } = {}) => {
+export const computeLeakEvidence = (trades, { planEntries = null, labelOf = () => null, periodStart, periodEnd } = {}) => {
   const ordered = [...trades].sort((a, b) => {
     const byDay = dateKey(a.date).localeCompare(dateKey(b.date));
     return byDay || new Date(a.createdAt ?? 0) - new Date(b.createdAt ?? 0);
@@ -349,11 +350,24 @@ export const computeLeakEvidence = (trades, { planEntries = null, labelOf = () =
 
   let planSplit = null;
   if (planEntries) {
-    const plannedDays = new Set(planEntries.map((entry) => entry.date));
+    const reviewedDays = new Set(items.map((item) => item.day));
+    if (periodStart && periodEnd) {
+      const dayCount = Math.round((new Date(`${periodEnd}T00:00:00Z`) - new Date(`${periodStart}T00:00:00Z`)) / 86_400_000) + 1;
+      for (let offset = 0; offset < dayCount; offset += 1) reviewedDays.add(addDays(periodStart, offset));
+    } else {
+      planEntries.forEach((entry) => {
+        if (entry.scope === "week") {
+          for (let offset = 0; offset < 7; offset += 1) reviewedDays.add(addDays(entry.date, offset));
+        } else {
+          reviewedDays.add(entry.date);
+        }
+      });
+    }
+    const plannedDays = new Set([...reviewedDays].filter((day) => planEntries.some((entry) => planCoversDate(entry, day))));
     planSplit = {
       plannedDays: plannedDays.size,
-      onPlannedDays: groupStats(items.filter((item) => plannedDays.has(item.day))),
-      onUnplannedDays: groupStats(items.filter((item) => !plannedDays.has(item.day))),
+      onPlannedDays: groupStats(items.filter((item) => planEntries.some((entry) => planCoversDate(entry, item.day)))),
+      onUnplannedDays: groupStats(items.filter((item) => !planEntries.some((entry) => planCoversDate(entry, item.day)))),
     };
   }
 

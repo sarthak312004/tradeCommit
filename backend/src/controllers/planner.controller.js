@@ -5,6 +5,7 @@ import { PlanEntry } from "../models/planEntry.models.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
+import { isValidPlanDateKey, isWeeklyPlanStart, parsePlanScope } from "../utils/planScope.js";
 import { deleteImagesFromCloudinary, uploadOnCloudinary } from "../utils/cloudinary.js";
 import {
   ONBOARDING_ACTION,
@@ -13,7 +14,6 @@ import {
   recordOnboardingActionSafely,
 } from "../utils/onboardingProgress.js";
 
-const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const DEFAULT_TYPE = "Intraday";
 const imageUrlsFromHtml = (html = "") =>
   [...html.matchAll(/<img[^>]+src=["']([^"']+)["']/gi)].map((match) => match[1].trim()).filter(Boolean);
@@ -41,6 +41,7 @@ const serializeEntry = (entry) => ({
   id: String(entry._id),
   plannerId: String(entry.planner),
   date: entry.date,
+  scope: entry.scope || "day",
   title: entry.title,
   content: entry.content ?? "",
   images: Array.isArray(entry.images) ? entry.images : [],
@@ -89,21 +90,41 @@ const parseLinkedJournal = async (body, ownerId) => {
   return journal._id;
 };
 
-const parseEntryPayload = (body) => {
+// `currentScope`: the scope an update keeps when the request does not send one
+const parseEntryPayload = (body, currentScope = "day") => {
   const title = typeof body?.title === "string" ? body.title.trim() : "";
   const date = typeof body?.date === "string" ? body.date.trim() : "";
   const content = typeof body?.content === "string" ? body.content : "";
+  const scope = parsePlanScope(body?.scope, currentScope);
 
   if (!title) throw new ApiError(400, "Plan title is required");
   if (title.length > 120) throw new ApiError(400, "Plan title can be at most 120 characters");
-  if (!DATE_PATTERN.test(date) || Number.isNaN(Date.parse(date))) {
+  if (!isValidPlanDateKey(date)) {
     throw new ApiError(400, "A valid plan date is required");
+  }
+  if (scope === "week" && !isWeeklyPlanStart(date)) {
+    throw new ApiError(400, "A weekly plan must start on a Monday");
   }
 
   // images are derived from the content so the two can never drift apart
   const images = [...new Set(imageUrlsFromHtml(content))];
 
-  return { title, date, content: content.trim(), images };
+  return { title, date, scope, content: content.trim(), images };
+};
+
+// One weekly plan per planner and week (its first-day date). Daily plans are never limited.
+const assertNoWeeklyDuplicate = async ({ parsed, ownerId, plannerId, excludeId }) => {
+  if (parsed.scope !== "week") return;
+  const query = { planner: plannerId, owner: ownerId, scope: "week", date: parsed.date };
+  if (excludeId) query._id = { $ne: excludeId };
+  if (await PlanEntry.exists(query)) throw new ApiError(409, "A weekly plan already exists for this week");
+};
+
+const throwWeeklyDuplicateError = (error) => {
+  if (error?.code === 11000 && error.keyPattern?.planner === 1 && error.keyPattern?.date === 1) {
+    throw new ApiError(409, "A weekly plan already exists for this week");
+  }
+  throw error;
 };
 
 /* --------------------------------- planners -------------------------------- */
@@ -183,8 +204,14 @@ export const getPlanEntries = asyncHandler(async (req, res) => {
 export const createPlanEntry = asyncHandler(async (req, res) => {
   const planner = await findOwnedPlanner(req);
   const parsed = parseEntryPayload(req.body);
+  await assertNoWeeklyDuplicate({ parsed, ownerId: req.user._id, plannerId: planner._id });
 
-  const entry = await PlanEntry.create({ ...parsed, owner: req.user._id, planner: planner._id });
+  let entry;
+  try {
+    entry = await PlanEntry.create({ ...parsed, owner: req.user._id, planner: planner._id });
+  } catch (error) {
+    throwWeeklyDuplicateError(error);
+  }
   await recordOnboardingActionSafely(req.user._id, ONBOARDING_ACTION.PLAN_CREATED, "plan creation");
 
   const retainedImages = new Set(parsed.images);
@@ -204,10 +231,15 @@ export const updatePlanEntry = asyncHandler(async (req, res) => {
   if (!entry) throw new ApiError(404, "Plan not found");
 
   const previousImages = getEntryImages(entry);
-  const parsed = parseEntryPayload(req.body);
+  const parsed = parseEntryPayload(req.body, entry.scope || "day");
+  await assertNoWeeklyDuplicate({ parsed, ownerId: req.user._id, plannerId: planner._id, excludeId: entry._id });
   const retainedImages = new Set(parsed.images);
   Object.assign(entry, parsed);
-  await entry.save();
+  try {
+    await entry.save();
+  } catch (error) {
+    throwWeeklyDuplicateError(error);
+  }
 
   void deleteImagesFromCloudinary(
     [

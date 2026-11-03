@@ -3,8 +3,119 @@ import { ChevronLeftIcon, ChevronRightIcon, PlusIcon } from '../../../utils/Icon
 import { addMonths, buildMonthGrid, formatMonthTitle, fromDateKey, getWeekdayLabels, startOfMonth, todayKey } from '../../../utils/calendar'
 import { useIsCompact } from '../../../hooks/useMediaQuery'
 import { focusRing, segmentedGroup } from '../../common/controlStyles'
+import { addDaysToKey } from '../../../utils/quickPlan'
 
 const MAX_VISIBLE_CHIPS = 3
+
+/* ---- weekly plans: a band for the current week, and one summary line above each week's row ---- */
+
+const ALL_WEEKLY_SECTIONS = ['levels', 'events', 'risk', 'goals', 'rules']
+
+// `heading` is the heading the weekly compiler writes for that part; a plan "has" a part when its content contains that heading.
+const WEEK_CHIPS = [
+  { id: 'bias', label: 'Bias', heading: 'Bias', section: null }, // bias pills are always on the form, so there is no card to add
+  { id: 'levels', label: 'Levels', heading: 'Key levels', section: 'levels' },
+  { id: 'events', label: 'Events', heading: 'Events to watch', section: 'events' },
+  { id: 'risk', label: 'Risk', heading: 'Risk budget', section: 'risk' },
+  { id: 'goals', label: 'Goals', heading: 'Goals', section: 'goals' },
+  { id: 'rules', label: 'Rules', heading: 'Rules', section: 'rules' }
+]
+
+const hasHeading = (html, heading) => new RegExp(`<h[1-6][^>]*>\\s*${heading}\\s*</h[1-6]>`, 'i').test(String(html ?? ''))
+
+/** "2 – 8 Nov", or "30 Nov – 6 Dec" when the week crosses a month. */
+const weekRangeText = (startKey) => {
+  const start = fromDateKey(startKey)
+  const end = fromDateKey(addDaysToKey(startKey, 6))
+  const month = (date) => date.toLocaleDateString(undefined, { month: 'short' })
+  return month(start) === month(end)
+    ? `${start.getDate()} \u2013 ${end.getDate()} ${month(end)}`
+    : `${start.getDate()} ${month(start)} \u2013 ${end.getDate()} ${month(end)}`
+}
+
+const chipBase = `inline-flex h-7 shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border px-3 text-xs font-medium transition-colors motion-reduce:transition-none disabled:cursor-wait disabled:opacity-60 ${focusRing}`
+const chipGhost = 'border-zinc-300 text-zinc-600 hover:border-zinc-400 hover:bg-zinc-900/[0.05] hover:text-zinc-900 dark:border-white/[0.14] dark:text-zinc-400 dark:hover:border-white/[0.24] dark:hover:bg-white/[0.06] dark:hover:text-zinc-100'
+const chipFilled = 'border-emerald-700/30 bg-emerald-600/10 text-emerald-800 hover:bg-emerald-600/15 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-300 dark:hover:bg-emerald-400/15'
+
+/**
+ * "This week" band. Always about the CURRENT week (not the month being viewed). With no weekly plan yet the chips and
+ * the button start one (the chips add that section); once one exists they all just open it, so nothing is duplicated.
+ */
+function WeekBand({ weekStart, entry, isLoading, onPlan, onOpen }) {
+  const range = weekRangeText(weekStart)
+  const isSaving = entry?.syncState === 'saving'
+  const disabled = isLoading || isSaving
+  const start = (sections) => onPlan(weekStart, { scope: 'week', sections })
+
+  return (
+    <div
+      role="group"
+      aria-label={`This week, ${range}`}
+      data-week-band
+      className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl bg-zinc-100/80 px-3 py-2 sm:flex-nowrap dark:bg-white/[0.04]"
+    >
+      <p className="order-1 shrink-0 text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+        This week <span aria-hidden="true" className="mx-0.5 text-zinc-500">·</span> <span className="tabular-nums">{range}</span>
+      </p>
+      <button
+        type="button"
+        disabled={disabled}
+        aria-busy={disabled || undefined}
+        onClick={() => (entry ? onOpen(entry) : start(ALL_WEEKLY_SECTIONS))}
+        aria-label={entry ? `Open weekly plan for ${range}` : `Plan this week, ${range}`}
+        className={`order-2 ml-auto inline-flex h-7 shrink-0 cursor-pointer items-center rounded-lg bg-sky-700 px-3 text-xs font-semibold text-white transition-colors hover:bg-sky-800 motion-reduce:transition-none disabled:cursor-wait disabled:opacity-60 dark:bg-sky-400 dark:text-zinc-950 dark:hover:bg-sky-300 sm:order-3 sm:ml-0 ${focusRing}`}
+      >
+        {entry ? 'Open weekly plan' : 'Plan this week'}
+      </button>
+      <div
+        role="group"
+        aria-label="Weekly plan sections"
+        className="order-3 -mx-0.5 flex w-full min-w-0 items-center gap-1.5 overflow-x-auto px-0.5 py-1 [scrollbar-width:none] sm:order-2 sm:w-auto sm:flex-1 [&::-webkit-scrollbar]:hidden"
+      >
+        {WEEK_CHIPS.map((chip) => {
+          const filled = Boolean(entry) && hasHeading(entry.content, chip.heading)
+          return (
+            <button
+              key={chip.id}
+              type="button"
+              disabled={disabled}
+              onClick={() => {
+                if (!entry) {
+                  start(chip.section ? [chip.section] : [])
+                  return
+                }
+                onOpen(entry, filled ? undefined : { quickSection: chip.section ?? chip.id })
+              }}
+              aria-label={entry ? `${chip.label}${filled ? ' is in' : ' is not in'} this week's plan. Open weekly plan` : `Plan this week, add ${chip.label}`}
+              className={`${chipBase} ${filled ? chipFilled : chipGhost}`}
+            >
+              {filled ? <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-emerald-600 dark:bg-emerald-400" /> : <span aria-hidden="true">+</span>}
+              {chip.label}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+/** One line above a week's row for a weekly plan. Weekly plans never appear inside the day cells. */
+function WeekSummaryLine({ entry, onOpen, large = false }) {
+  return (
+    <button
+      type="button"
+      disabled={entry.syncState === 'saving'}
+      onClick={() => onOpen(entry)}
+      aria-label={`Open weekly plan: ${entry.title}`}
+      title={entry.syncState === 'saving' ? 'Saving plan…' : entry.title}
+      className={`flex w-full min-w-0 cursor-pointer items-center gap-2 overflow-hidden rounded-md px-2 text-left text-[11px] font-medium leading-none text-zinc-700 transition-colors hover:bg-zinc-900/[0.06] hover:text-zinc-900 motion-reduce:transition-none disabled:cursor-wait disabled:opacity-70 dark:text-zinc-300 dark:hover:bg-white/[0.08] dark:hover:text-zinc-50 ${large ? 'h-8' : 'h-6'} ${focusRing}`}
+    >
+      <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-600 dark:bg-emerald-400" />
+      <span className="shrink-0 text-zinc-600 dark:text-zinc-400">Weekly</span>
+      <span className="min-w-0 flex-1 truncate">{entry.title}</span>
+    </button>
+  )
+}
 
 // "< Today >" is one joined h-8 group (same shape as the Trades | Analysis tabs), not three loose buttons
 const navItem = `inline-flex h-full cursor-pointer items-center justify-center text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100 hover:text-zinc-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-600 dark:text-zinc-300 dark:hover:bg-white/[0.07] dark:hover:text-zinc-50 dark:focus-visible:ring-sky-400`
@@ -156,10 +267,11 @@ function DayCell({ day, entries, isToday, isSelected, isExpanded, isTourTarget, 
  *
  * @param {Array}    entries         plans of the current planner
  * @param {string}   [selectedDate]  "YYYY-MM-DD" of the day whose plan is open, highlighted in the grid
- * @param {Function} onCreateForDate (dateKey) => void
+ * @param {Function} onCreateForDate (dateKey, options?) => void. `options` is only sent for a weekly plan:
+ *                                   { scope: 'week', sections: [...] } with dateKey = the current week's first day
  * @param {Function} onOpenEntry     (entry) => void
  */
-function PlannerCalendar({ entries, selectedDate = null, onCreateForDate, onOpenEntry, headerHint, isOpenPlanTourActive = false }) {
+function PlannerCalendar({ entries, selectedDate = null, onCreateForDate, onOpenEntry, headerHint, isOpenPlanTourActive = false, isPlansLoading = false }) {
   const [month, setMonth] = useState(() => startOfMonth(new Date()))
   const [expandedDay, setExpandedDay] = useState(null)
   const isCompact = useIsCompact()
@@ -169,14 +281,27 @@ function PlannerCalendar({ entries, selectedDate = null, onCreateForDate, onOpen
   const weekdays = useMemo(() => getWeekdayLabels(), [])
   const today = todayKey()
 
+  // daily cells only hold daily plans (entries saved before `scope` existed have none, and are daily); weekly plans get their own line
+  const weeklyEntries = useMemo(() => entries.filter((entry) => entry.scope === 'week'), [entries])
   const entriesByDate = useMemo(() => {
     const map = new Map()
     for (const entry of entries) {
+      if (entry.scope === 'week') continue
       if (!map.has(entry.date)) map.set(entry.date, [])
       map.get(entry.date).push(entry)
     }
     return map
   }, [entries])
+
+  // rows of the grid; the calendar's own first weekday is whatever weekday its first column is
+  const weeks = useMemo(() => {
+    const rows = []
+    for (let index = 0; index < days.length; index += 7) rows.push(days.slice(index, index + 7))
+    return rows
+  }, [days])
+  const firstWeekday = fromDateKey(days[0].key).getDay()
+  const currentWeekStart = addDaysToKey(today, -((fromDateKey(today).getDay() - firstWeekday + 7) % 7))
+  const currentWeekly = weeklyEntries.find((entry) => entry.date === currentWeekStart) ?? null
   const goToMonth = (next) => {
     setExpandedDay(null)
     setActiveDay(null)
@@ -227,6 +352,8 @@ function PlannerCalendar({ entries, selectedDate = null, onCreateForDate, onOpen
         </div>
       </div>
 
+      <WeekBand weekStart={currentWeekStart} entry={currentWeekly} isLoading={isPlansLoading} onPlan={onCreateForDate} onOpen={onOpenEntry} />
+
       <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
         {weekdays.map((label) => (
           // zinc-600 on the card = 7:1, zinc-400 on dark = 6.9:1 (the old zinc-400 / zinc-500 were 2.3:1 and 3.6:1)
@@ -234,33 +361,48 @@ function PlannerCalendar({ entries, selectedDate = null, onCreateForDate, onOpen
             {isCompact ? label.charAt(0) : label}
           </div>
         ))}
-        {days.map((day) =>
-          isCompact ? (
-            <CompactDayCell
-              key={day.key}
-              day={day}
-              entries={entriesByDate.get(day.key) ?? []}
-              isToday={day.key === today}
-              isSelected={day.key === selectedDate}
-              isActive={day.key === activeDay}
-              isTourTarget={isOpenPlanTourActive && day.key === today}
-              onPick={handlePickDay}
-            />
-          ) : (
-            <DayCell
-              key={day.key}
-              day={day}
-              entries={entriesByDate.get(day.key) ?? []}
-              isToday={day.key === today}
-              isSelected={day.key === selectedDate}
-              isExpanded={expandedDay === day.key}
-              isTourTarget={isOpenPlanTourActive && day.key === today}
-              onToggleExpand={(key) => setExpandedDay((current) => (current === key ? null : key))}
-              onCreate={onCreateForDate}
-              onOpenEntry={onOpenEntry}
-            />
+        {weeks.map((week) => {
+          const rowWeekly = weeklyEntries.filter((entry) => week.some((day) => day.key === entry.date))
+          const isCurrentWeek = week[0].key === currentWeekStart
+          return (
+            <div key={week[0].key} data-current-week={isCurrentWeek || undefined} className={`col-span-7 rounded-xl ${isCurrentWeek ? 'bg-sky-600/[0.05] dark:bg-sky-400/[0.06]' : ''}`}>
+              {rowWeekly.length > 0 && (
+                <div className="space-y-1 px-1 pb-1 pt-1">
+                  {rowWeekly.map((entry) => <WeekSummaryLine key={entry.id} entry={entry} onOpen={onOpenEntry} large={isCompact} />)}
+                </div>
+              )}
+              <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
+                {week.map((day) =>
+                  isCompact ? (
+                    <CompactDayCell
+                      key={day.key}
+                      day={day}
+                      entries={entriesByDate.get(day.key) ?? []}
+                      isToday={day.key === today}
+                      isSelected={day.key === selectedDate}
+                      isActive={day.key === activeDay}
+                      isTourTarget={isOpenPlanTourActive && day.key === today}
+                      onPick={handlePickDay}
+                    />
+                  ) : (
+                    <DayCell
+                      key={day.key}
+                      day={day}
+                      entries={entriesByDate.get(day.key) ?? []}
+                      isToday={day.key === today}
+                      isSelected={day.key === selectedDate}
+                      isExpanded={expandedDay === day.key}
+                      isTourTarget={isOpenPlanTourActive && day.key === today}
+                      onToggleExpand={(key) => setExpandedDay((current) => (current === key ? null : key))}
+                      onCreate={onCreateForDate}
+                      onOpenEntry={onOpenEntry}
+                    />
+                  )
+                )}
+              </div>
+            </div>
           )
-        )}
+        })}
       </div>
 
       {activeEntries.length > 0 && (

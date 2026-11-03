@@ -3,6 +3,7 @@ import { buildPlanSection, checkboxLine, commitmentBlock, leakLines, money, pct,
 import { computeLeakReport, leakReportLines } from "./leakReport.js";
 import { htmlToPlainText } from "./richText.js";
 import { inspectMentorData, MODE_SPECIFIC_MENTOR_INSTRUCTIONS } from "./mentorDataQuality.js";
+import { planCoversRange } from "./planScope.js";
 
 // Same JSON schema and sanitiser as the weekly review (the UI renders both with the same component). Only the
 // instructions and the prompt change: the trader picks any stretch of dates, so a swing trader's whole campaign
@@ -80,7 +81,7 @@ export const buildRangePrompt = ({ journal, rangeStart, rangeEnd, rangeTrades, p
   const overall = computeAnalytics(allTradesToDate);
   const evidence = computeWeekEvidence(rangeTrades);
   const labelOf = (trade) => labelByTrade.get(String(trade._id)) ?? null;
-  const leak = computeLeakEvidence(rangeTrades, { planEntries: planners.length ? planEntries : null, labelOf });
+  const leak = computeLeakEvidence(rangeTrades, { planEntries: planners.length ? planEntries : null, labelOf, periodStart: rangeStart, periodEnd: rangeEnd });
   const leakReport = withReadableTrades(computeLeakReport(rangeTrades, { labelOf, planEntries: planners.length ? planEntries : null, lookedBackfilled: leak.lookedBackfilled, currency }), tradeLabels);
   const history = weeklyHistory(allTradesToDate, mondayOf(rangeStart));
   const defaults = (context.attributes ?? []).map((attribute) => `${attribute.label} (${attribute.type})`);
@@ -109,7 +110,9 @@ export const buildRangePrompt = ({ journal, rangeStart, rangeEnd, rangeTrades, p
   // when the earliest trades of a very long range are left out entirely, plans before the first listed trade are left
   // out too, so a day is never reported as "no trade logged" just because its trades were not listed
   const firstListed = skipped > 0 ? dateKey((condensed[0] ?? detailed[0]).date) : rangeStart;
-  const comparablePlans = planEntries.filter((entry) => entry.date >= firstListed);
+  const comparablePlans = planEntries.filter((entry) =>
+    entry.scope === "week" ? planCoversRange(entry, rangeStart, rangeEnd) : entry.date >= firstListed
+  );
   const planSection = buildPlanSection({ planners, planEntries: comparablePlans, shown: detailed, extraTrades: condensed, weekStart: rangeStart, weekEnd: rangeEnd, currency });
 
   const prompt = [

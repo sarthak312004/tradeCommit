@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { computeLeakReport, leakReportLines } from "./leakReport.js";
-import { buildMentorPrompt, sanitizeReview, REVIEW_SCHEMA, SYSTEM_PROMPT } from "./aiMentorPrompt.js";
+import { buildMentorPrompt, buildPlanSection, sanitizeReview, REVIEW_SCHEMA, SYSTEM_PROMPT } from "./aiMentorPrompt.js";
+import { computeLeakEvidence } from "./tradeStats.js";
 
 let n = 0;
 const trade = (date, asset, entry, exit, { stop, qty = 10, direction = "long", analysis = "note", customFields = [] } = {}) => ({
@@ -21,6 +22,30 @@ const labels = (trades) => {
   const map = new Map(trades.map((t, i) => [String(t._id), `T${i + 1}`]));
   return (t) => map.get(String(t._id)) ?? null;
 };
+
+test("weekly planner context applies to each covered trading day without calling it unplanned", () => {
+  const weeklyPlan = { date: "2026-10-19", scope: "week", planner: "planner-1", title: "Weekly levels", content: "<p>Wait for confirmation.</p>" };
+  const trades = [trade("2026-10-20", "AAA", 100, 101, { stop: 99 })];
+  const planSection = buildPlanSection({
+    planners: [{ _id: "planner-1", name: "Main", type: "Hybrid" }],
+    planEntries: [weeklyPlan],
+    shown: trades,
+    weekStart: "2026-10-19",
+    weekEnd: "2026-10-25",
+    currency: "USD",
+  });
+  assert.match(planSection, /WEEKLY PLAN "Weekly levels".*covers 2026-10-19 through 2026-10-25/);
+  assert.match(planSection, /2026-10-20 \(Tue\)[\s\S]*PLAN: covered by the weekly plan above/);
+  assert.match(planSection, /days with trades but NO plan written \(unplanned trades\): none/);
+
+  const split = computeLeakEvidence(
+    [...trades, trade("2026-10-26", "BBB", 100, 99, { stop: 101 })],
+    { planEntries: [weeklyPlan], periodStart: "2026-10-19", periodEnd: "2026-10-26" }
+  ).planSplit;
+  assert.equal(split.plannedDays, 7);
+  assert.equal(split.onPlannedDays.count, 1);
+  assert.equal(split.onUnplannedDays.count, 1);
+});
 
 test("too few closed trades reports nothing", () => {
   const trades = [trade("2026-10-19", "AAA", 100, 99, { stop: 99 })];

@@ -78,7 +78,14 @@ const loadRange = async ({ ownerId, journalId, start, end }) => {
   let plansTruncated = false;
   if (planners.length) {
     // newest plans first so a long range keeps the most recent ones; flipped back to chronological afterwards
-    const found = await PlanEntry.find({ planner: { $in: planners.map((planner) => planner._id) }, owner: ownerId, date: { $gte: start, $lte: end } })
+    const found = await PlanEntry.find({
+      planner: { $in: planners.map((planner) => planner._id) },
+      owner: ownerId,
+      $or: [
+        { date: { $gte: start, $lte: end } },
+        { scope: "week", date: { $gte: addDays(start, -6), $lt: start } },
+      ],
+    })
       .sort({ date: -1, createdAt: -1 })
       .limit(MAX_PLANS + 1)
       .lean();

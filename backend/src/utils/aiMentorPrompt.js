@@ -2,6 +2,7 @@ import { addDays, computeAnalytics, computeLeakEvidence, computeWeekEvidence, da
 import { htmlToPlainText } from "./richText.js";
 import { inspectMentorData, MODE_SPECIFIC_MENTOR_INSTRUCTIONS } from "./mentorDataQuality.js";
 import { computeLeakReport, leakReportLines } from "./leakReport.js";
+import { planCoversDate, planCoversRange } from "./planScope.js";
 
 const MAX_WEEK_TRADES = 40; // trades sent in full detail
 const MAX_HISTORY_TRADES = 40; // earlier trades sent as one short line each
@@ -276,7 +277,7 @@ export const leakLines = (leak, currency, { hasPlanner = false } = {}) => {
   }
 
   if (hasPlanner && leak.planSplit) {
-    lines.push(`plans by date only (a plan on a day does not prove a trade matched it): ${leak.planSplit.plannedDays} day(s) with a plan`);
+    lines.push(`plans by date only (a plan on a day does not prove a trade matched it): ${leak.planSplit.plannedDays} day(s) covered by a plan`);
     lines.push(`  ${groupLine("trades on days with a plan", leak.planSplit.onPlannedDays, currency)}`);
     lines.push(`  ${groupLine("trades on days without a plan", leak.planSplit.onUnplannedDays, currency)}`);
   }
@@ -327,16 +328,28 @@ export const buildPlanSection = ({ planners, planEntries, shown, extraTrades = [
   const plannedAndTraded = [];
   const plannedNotTraded = [];
   const tradedNotPlanned = [];
+  const weeklyPlans = planEntries.filter((entry) => entry.scope === "week" && planCoversRange(entry, weekStart, weekEnd));
+  const dailyPlans = planEntries.filter((entry) => entry.scope !== "week");
+
+  weeklyPlans.forEach((entry) => {
+    const planEnd = addDays(entry.date, 6);
+    lines.push(`WEEKLY PLAN "${entry.title}" [planner: ${plannerNames.get(String(entry.planner)) ?? "unknown"}; covers ${entry.date} through ${planEnd}]: ${planText(entry)}`);
+    for (let offset = 0; offset < 7; offset += 1) {
+      const day = addDays(entry.date, offset);
+      if (day >= weekStart && day <= weekEnd) planDays.add(day);
+    }
+  });
 
   const dayCount = Math.round((new Date(`${weekEnd}T00:00:00Z`) - new Date(`${weekStart}T00:00:00Z`)) / 86_400_000) + 1;
   for (let offset = 0; offset < dayCount; offset += 1) {
     const day = addDays(weekStart, offset);
-    const plans = planEntries.filter((entry) => entry.date === day);
+    const plans = dailyPlans.filter((entry) => entry.date === day);
+    const weeklyPlanApplies = weeklyPlans.some((entry) => planCoversDate(entry, day));
     const trades = shown.map((trade, index) => ({ trade, index })).filter(({ trade }) => dateKey(trade.date) === day);
     // trades of a long date range that are listed without a T-number: they still count as executed that day
     const unnumbered = extraTrades.filter((trade) => dateKey(trade.date) === day);
     const executedCount = trades.length + unnumbered.length;
-    if (!plans.length && !executedCount) continue;
+    if (!plans.length && !weeklyPlanApplies && !executedCount) continue;
 
     lines.push(`${day} (${weekday(day)})`);
     if (plans.length) {
@@ -344,6 +357,8 @@ export const buildPlanSection = ({ planners, planEntries, shown, extraTrades = [
       plans.forEach((entry) => {
         lines.push(`  PLAN "${entry.title}" [planner: ${plannerNames.get(String(entry.planner)) ?? "unknown"}]: ${planText(entry)}`);
       });
+    } else if (weeklyPlanApplies) {
+      lines.push("  PLAN: covered by the weekly plan above; no day-specific plan");
     } else {
       lines.push("  PLAN: nothing written for this day");
     }
@@ -354,15 +369,15 @@ export const buildPlanSection = ({ planners, planEntries, shown, extraTrades = [
       lines.push("  EXECUTED: no trades logged this day");
     }
 
-    if (plans.length && executedCount) plannedAndTraded.push(day);
+    if ((plans.length || weeklyPlanApplies) && executedCount) plannedAndTraded.push(day);
     else if (plans.length) plannedNotTraded.push(day);
-    else tradedNotPlanned.push(day);
+    else if (!weeklyPlanApplies) tradedNotPlanned.push(day);
   }
 
   const dayList = (days) => (days.length ? days.join(", ") : "none");
   const out = [
     `Connected planner(s): ${planners.map((planner) => `"${planner.name}" (${planner.type})`).join(", ")}`,
-    `plans written for days of this week: ${planEntries.length} plan(s) on ${planDays.size} day(s)`,
+    `plans written for this period: ${planEntries.length} plan(s), covering ${planDays.size} day(s)`,
     `days with a plan AND trades logged: ${dayList(plannedAndTraded)}`,
     `days with a plan but NO trade logged (entry not triggered, or skipped by choice; the reason is unknown unless the notes say): ${dayList(plannedNotTraded)}`,
     `days with trades but NO plan written (unplanned trades): ${dayList(tradedNotPlanned)}`,
@@ -393,7 +408,7 @@ export const buildMentorPrompt = ({ journal, weekStart, weekEnd, weekTrades, pri
 
   const weekStats = computeAnalytics(weekTrades);
   const labelOf = (trade) => labelByTrade.get(String(trade._id)) ?? null;
-  const leak = computeLeakEvidence(weekTrades, { planEntries: planners.length ? planEntries : null, labelOf });
+  const leak = computeLeakEvidence(weekTrades, { planEntries: planners.length ? planEntries : null, labelOf, periodStart: weekStart, periodEnd: weekEnd });
   const leakReport = withReadableTrades(computeLeakReport(weekTrades, { labelOf, planEntries: planners.length ? planEntries : null, lookedBackfilled: leak.lookedBackfilled, currency }), tradeLabels);
   const overall = computeAnalytics(allTradesToDate);
   const evidence = computeWeekEvidence(weekTrades);
