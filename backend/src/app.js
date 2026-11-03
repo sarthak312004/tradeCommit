@@ -7,6 +7,7 @@ import cors from 'cors'
 import cookieParser from 'cookie-parser'
 import mongoose from 'mongoose'
 import { rateLimit } from './middlewares/rateLimit.middleware.js'
+import { publicErrorFields } from './utils/ApiError.js'
 
 const app = express()
 
@@ -124,6 +125,7 @@ app.use((error, req, res, next) => {
         success: false,
         message: hideMessage ? "Internal server error" : (error.message || "Internal server error"),
         errors: error.errors ?? [],
+        ...publicErrorFields(error),
     })
 })
 

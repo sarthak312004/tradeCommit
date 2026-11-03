@@ -6,6 +6,7 @@ import { AiRangeReview } from "../models/aiRangeReview.models.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
+import { createWithinPlanLimit } from "../utils/planLimits.js";
 import { deleteImagesFromCloudinary } from "../utils/cloudinary.js";
 import { DEFAULT_CURRENCY, isValidCurrency, normalizeCurrency } from "../constants/currency.js";
 import { applyContextToFields, parseCustomFields } from "../utils/customFields.js";
@@ -128,12 +129,21 @@ export const createJournal = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Journal description must be a string");
   }
 
-  const journal = await Journal.create({
-    journalName: trimmedName,
-    description: description?.trim(),
-    currency: normalizedCurrency,
-    mode: normalizedMode,
-    owner: req.user._id,
+  // blocked with 403 PLAN_LIMIT when the user already has entitlements.maxJournals journals
+  const journal = await createWithinPlanLimit({
+    user: req.user,
+    limitKey: "maxJournals",
+    noun: "journal",
+    countOwned: () => Journal.countDocuments({ owner: req.user._id }),
+    create: () =>
+      Journal.create({
+        journalName: trimmedName,
+        description: description?.trim(),
+        currency: normalizedCurrency,
+        mode: normalizedMode,
+        owner: req.user._id,
+      }),
+    remove: (created) => Journal.deleteOne({ _id: created._id, owner: req.user._id }),
   });
   await recordOnboardingActionSafely(req.user._id, ONBOARDING_ACTION.JOURNAL_CREATED, "journal creation");
 

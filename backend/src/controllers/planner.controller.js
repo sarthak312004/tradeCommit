@@ -5,6 +5,7 @@ import { PlanEntry } from "../models/planEntry.models.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
+import { createWithinPlanLimit } from "../utils/planLimits.js";
 import { isValidPlanDateKey, isWeeklyPlanStart, parsePlanScope } from "../utils/planScope.js";
 import { deleteImagesFromCloudinary, uploadOnCloudinary } from "../utils/cloudinary.js";
 import {
@@ -141,11 +142,20 @@ export const createPlanner = asyncHandler(async (req, res) => {
   const { name, type } = parsePlannerPayload(req.body);
   const linkedJournal = await parseLinkedJournal(req.body, req.user._id);
 
-  const planner = await Planner.create({
-    name,
-    type: type || DEFAULT_TYPE,
-    linkedJournal: linkedJournal ?? null,
-    owner: req.user._id,
+  // blocked with 403 PLAN_LIMIT when the user already has entitlements.maxPlanners planners
+  const planner = await createWithinPlanLimit({
+    user: req.user,
+    limitKey: "maxPlanners",
+    noun: "planner",
+    countOwned: () => Planner.countDocuments({ owner: req.user._id }),
+    create: () =>
+      Planner.create({
+        name,
+        type: type || DEFAULT_TYPE,
+        linkedJournal: linkedJournal ?? null,
+        owner: req.user._id,
+      }),
+    remove: (created) => Planner.deleteOne({ _id: created._id, owner: req.user._id }),
   });
   await queueFirstPlannerWalkthroughSafely(req.user._id, planner._id);
   if (linkedJournal) {
