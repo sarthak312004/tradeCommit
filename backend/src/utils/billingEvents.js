@@ -2,7 +2,7 @@
 // Webhooks only ever move planStatus / planAccessUntil and the billing ids; entitlements.js turns those into access.
 //
 //   subscription.active | renewed | plan_changed  -> 'active' (or 'cancelling'), planAccessUntil = next_billing_date
-//   subscription.on_hold | payment.failed          -> 'past_due' (access continues through the grace window)
+//   subscription.on_hold | past_due | payment.failed -> 'past_due' (access continues through the grace window)
 //   subscription.cancelled (end of period)         -> 'cancelling', access unchanged
 //   subscription.cancelled (immediately)           -> 'expired', access ends now
 //   subscription.expired | refund.succeeded | dispute.lost -> 'expired', access ends now
@@ -90,6 +90,7 @@ export const planUpdateFor = (event, user, { at, productIntervals } = {}) => {
     }
 
     case "subscription.on_hold":
+    case "subscription.past_due":
     case "payment.failed":
       // only a subscriber can fall behind; a failed first payment of a free user changes nothing
       return isLiveStatus(user?.planStatus) ? { planStatus: "past_due" } : null;
@@ -111,5 +112,45 @@ export const planUpdateFor = (event, user, { at, productIntervals } = {}) => {
 
     default:
       return null; // subscription.failed, payment.succeeded, dispute.opened ... are recorded but change nothing
+  }
+};
+
+/**
+ * Same idea as planUpdateFor, but from a subscription fetched from Dodo (POST /billing/sync) instead of an event.
+ * Returns the fields to $set, or null when there is nothing to change. Throws BillingEventError when an active
+ * subscription has no usable next billing date.
+ * Statuses used: active, on_hold, cancelled, expired. Anything else (pending, failed ...) changes nothing.
+ */
+export const planUpdateForSubscription = (subscription, user, { at, productIntervals } = {}) => {
+  const data = subscription ?? {};
+  const status = String(data.status ?? "").toLowerCase();
+  const nextBilling = toDate(data.next_billing_date);
+  const scheduledToEnd = data.cancel_at_next_billing_date === true;
+
+  switch (status) {
+    case "active": {
+      if (!nextBilling) throw new BillingEventError("Subscription has no usable next billing date");
+      const update = {
+        planStatus: scheduledToEnd ? "cancelling" : "active",
+        planAccessUntil: nextBilling,
+        cancelAtPeriodEnd: scheduledToEnd,
+      };
+      const interval = intervalOf(data, productIntervals);
+      if (interval) update.planInterval = interval;
+      return update;
+    }
+    case "on_hold":
+      return isLiveStatus(user?.planStatus) ? { planStatus: "past_due" } : null;
+    case "cancelled": {
+      // cancelled at period end but the paid period has not run out yet: still 'cancelling'
+      if (scheduledToEnd && nextBilling && nextBilling.getTime() > at.getTime()) {
+        return { planStatus: "cancelling", cancelAtPeriodEnd: true, planAccessUntil: nextBilling };
+      }
+      return isLiveStatus(user?.planStatus) || toDate(user?.planAccessUntil) ? endAccessNow(user, at) : null;
+    }
+    case "expired":
+      return isLiveStatus(user?.planStatus) || toDate(user?.planAccessUntil) ? endAccessNow(user, at) : null;
+    default:
+      return null;
   }
 };

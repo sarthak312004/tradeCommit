@@ -62,6 +62,15 @@ export const createCheckoutHandler = ({ getClient }) =>
 const OBJECT_ID = /^[a-f0-9]{24}$/i;
 const USER_FIELDS = "+billingSubscriptionId +billingLastEventAt";
 
+// Which email (if any) a change of state deserves
+const transitionEmail = (from, to) => {
+  if (to === from) return null;
+  if (to === "past_due") return "payment-failed";
+  if (to === "cancelling") return "cancellation-scheduled"; // e.g. cancelled from the payment portal; the in-app cancel sets it first, so no second email
+  if (to === "expired") return "downgrade-complete";
+  return null;
+};
+
 const resolveUser = async ({ User: Users, BillingEvent: Events }, subject) => {
   if (subject.userId && OBJECT_ID.test(subject.userId)) {
     const user = await Users.findById(subject.userId).select(USER_FIELDS).lean();
@@ -92,11 +101,13 @@ export const processBillingEvent = async (deps, event, eventId) => {
   const user = await resolveUser(deps, subject);
 
   let outcome = "ignored";
+  let transition = null;
+  let update = null;
   if (!user) {
     console.warn(`Billing webhook: no matching user for ${event?.type}`); // event type only, no ids or payload
     outcome = "no_user";
   } else {
-    const update = planUpdateFor(event, user, { at, productIntervals: deps.productIntervals ?? productIntervals() });
+    update = planUpdateFor(event, user, { at, productIntervals: deps.productIntervals ?? productIntervals() });
     if (update) {
       const result = await Users.updateOne(
         {
@@ -107,6 +118,7 @@ export const processBillingEvent = async (deps, event, eventId) => {
         { $set: { ...update, billingLastEventAt: at } }
       );
       outcome = (result?.matchedCount ?? result?.n ?? 0) > 0 ? "applied" : "stale";
+      if (outcome === "applied") transition = transitionEmail(user.planStatus, update.planStatus);
     }
   }
 
@@ -114,6 +126,15 @@ export const processBillingEvent = async (deps, event, eventId) => {
     await Events.create({ eventId, type: String(event?.type ?? "unknown"), userId: user?._id ?? null, paymentId: subject.paymentId });
   } catch (error) {
     if (error?.code !== 11000) throw error; // a concurrent retry already recorded it: fine
+  }
+
+  // Notify only on a real change of state, and after the event is recorded, so a retry cannot send it twice. Best effort.
+  if (transition && deps.notify) {
+    try {
+      await deps.notify(transition, user, update);
+    } catch (error) {
+      console.error("Billing notification failed:", error?.name);
+    }
   }
   return outcome;
 };
