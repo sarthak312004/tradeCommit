@@ -1,7 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { computeAnalytics, getTradePnl, getTradeR, sampleLevel } from './tradeMetrics.js'
-import { canViewMetric, METRIC_ACCESS } from '../config/analyticsAccess.js'
 
 let day = 0
 const trade = (over) => {
@@ -163,12 +162,4 @@ test('sample size bands match the backend (30 / 100)', () => {
   assert.equal(sampleLevel(30), 'building')
   assert.equal(sampleLevel(100), 'solid')
   assert.equal(computeAnalytics(closedSet([1])).sample.reliable, false)
-})
-
-test('every metric is free and visible while enforcement is off', () => {
-  for (const id of Object.keys(METRIC_ACCESS)) {
-    assert.equal(METRIC_ACCESS[id], 'free', id)
-    assert.equal(canViewMetric(id, 'free'), true, id)
-  }
-  assert.equal(canViewMetric('someFutureMetric'), true)
 })

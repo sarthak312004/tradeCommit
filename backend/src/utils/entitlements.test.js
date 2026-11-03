@@ -294,9 +294,9 @@ test("METRIC_TIERS lists every metric id the frontend defines", (t) => {
   const file = fileURLToPath(new URL("../../../frontend/src/config/analyticsAccess.js", import.meta.url));
   if (!existsSync(file)) return t.skip("frontend sources are not next to the backend");
   const source = readFileSync(file, "utf8");
-  const block = /export const METRIC_ACCESS = \{([\s\S]*?)\n\}/.exec(source);
-  assert.ok(block, "could not find METRIC_ACCESS in analyticsAccess.js");
-  const frontendIds = [...block[1].matchAll(/^\s*(\w+):\s*['"]\w+['"]/gm)].map((match) => match[1]);
+  const block = /export const METRIC_LABELS = \{([\s\S]*?)\r?\n\}/.exec(source);
+  assert.ok(block, "could not find METRIC_LABELS in analyticsAccess.js");
+  const frontendIds = [...block[1].matchAll(/^\s*(\w+):\s*['"][^'"]+['"]/gm)].map((match) => match[1]);
   assert.ok(frontendIds.length > 0);
   assert.deepEqual(frontendIds.filter((id) => !(id in METRIC_TIERS)), [], "metric ids missing from METRIC_TIERS");
   assert.deepEqual(Object.keys(METRIC_TIERS).filter((id) => !frontendIds.includes(id)), [], "METRIC_TIERS has ids the frontend does not know");

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { PROFILE_UPDATED_EVENT, clearProfileCache, getProfile } from '../services/profileApi'
 
-/** Loads the signed-in user's profile (fullname, username, email, hasPassword). */
+/** Loads the signed-in user's profile (fullname, username, email, hasPassword, plan, entitlements). */
 export function useProfile() {
   const [profile, setProfile] = useState(null)
   const [error, setError] = useState('')
@@ -55,5 +55,8 @@ export function useProfile() {
     setReloadKey((key) => key + 1)
   }, [])
 
-  return { profile, error, retry }
+  // what the server says this user may do (limits and metric access); null until the profile has loaded
+  const entitlements = profile?.entitlements ?? null
+
+  return { profile, error, retry, entitlements }
 }

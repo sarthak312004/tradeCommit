@@ -1,15 +1,17 @@
-import { lazy, Suspense, useMemo, useState } from 'react'
+import { lazy, Suspense, useCallback, useMemo, useState } from 'react'
 import EquityCurve from './EquityCurve'
 import MonthlyPnl from './MonthlyPnl'
 import AnalyticsBoundary from './analytics/AnalyticsBoundary'
 import AnalyticsFilters from './analytics/AnalyticsFilters'
-import MetricGate from './analytics/MetricGate'
+import MetricGate, { LockedBlock, PlanCheckNotice } from './analytics/MetricGate'
+import { AnalyticsAccessContext } from './analytics/accessContext'
 import { DrawdownChart } from './analytics/charts'
 import { EmptyNote, TabLoading } from './analytics/parts'
 import { computeAnalytics, formatMoney, formatPercent, formatR, formatRatio, toneOf } from '../../../utils/tradeAnalytics'
 import { MIN_RELIABLE_SAMPLE } from '../../../utils/tradeMetrics'
 import { applyTradeFilters, detectFieldRoles, discoverFields, filterOptions, UNTAGGED } from '../../../utils/tradeBreakdowns'
-import { canViewMetric } from '../../../config/analyticsAccess'
+import { accessStatus, canViewMetric, isTabLocked, lockedMetricIds, TAB_METRICS } from '../../../config/analyticsAccess'
+import { useProfile } from '../../../hooks/useProfile'
 
 // the heavier views load only when their tab is opened
 const BreakdownTab = lazy(() => import('./analytics/BreakdownTab'))
@@ -48,8 +50,8 @@ function Stat({ label, value, hint, tone = 'neutral' }) {
   )
 }
 
-function MetricList({ title, rows }) {
-  if (!rows.length) return null
+function MetricList({ title, rows, locked = [] }) {
+  if (!rows.length && !locked.length) return null
   return (
     <div>
       <h3 className="mb-1 text-xs font-medium text-zinc-600 dark:text-zinc-300">{title}</h3>
@@ -64,18 +66,27 @@ function MetricList({ title, rows }) {
           </div>
         ))}
       </dl>
+      {locked.length > 0 && <LockedBlock ids={locked} compact className="mt-2" />}
     </div>
   )
 }
-
-// each entry carries the metric id the access config knows it by, so restricting one later is a config change
-const visible = (entries) => entries.filter((entry) => canViewMetric(entry.metric))
 
 function TradeAnalysis({ trades, allTrades, range, currency, rangeLabel, mode }) {
   const money = (value, options) => formatMoney(value, { currency, ...options })
   const [tab, setTab] = useState('overview')
   const [filters, setFilters] = useState(NO_FILTERS)
   const [roleOverride, setRoleOverride] = useState({})
+
+  // What this user may see comes from the server (profile.entitlements.metricAccess). Until it arrives nothing is
+  // drawn as locked or unlocked: the panels show a skeleton.
+  const { profile, error: profileError, retry: retryProfile } = useProfile()
+  const entitlements = profile?.entitlements ?? null
+  const status = accessStatus({ profile, error: profileError })
+  const ready = status === 'ready'
+  const access = useMemo(() => ({ status, entitlements, retry: retryProfile }), [status, entitlements, retryProfile])
+  const can = useCallback((metricId) => canViewMetric(metricId, entitlements), [entitlements])
+  // filters only apply while the plan includes them (a plan change mid-session must not keep filtering silently)
+  const activeFilters = ready && can('analyticsFilters') ? filters : NO_FILTERS
 
   // a trade that failed to save (shown with Retry / Discard) isn't in the journal yet, so it stays out of the numbers
   const inRange = useMemo(() => saved(trades), [trades])
@@ -88,11 +99,11 @@ function TradeAnalysis({ trades, allTrades, range, currency, rangeLabel, mode })
   const options = useMemo(() => filterOptions(everything, roles), [everything, roles])
 
   // ONE filtered list feeds the overview, every breakdown and every chart, so they cannot disagree
-  const filtered = useMemo(() => applyTradeFilters(inRange, filters, roles), [inRange, filters, roles])
-  const comparable = useMemo(() => applyTradeFilters(everything, filters, roles), [everything, filters, roles])
+  const filtered = useMemo(() => applyTradeFilters(inRange, activeFilters, roles), [inRange, activeFilters, roles])
+  const comparable = useMemo(() => applyTradeFilters(everything, activeFilters, roles), [everything, activeFilters, roles])
   const stats = useMemo(() => computeAnalytics(filtered), [filtered])
-  const filtersActive = Boolean(filters.instrument || filters.strategy || filters.setup)
-  const filterLabel = [filters.instrument, filters.strategy === UNTAGGED ? 'no strategy' : filters.strategy, filters.setup === UNTAGGED ? 'no setup' : filters.setup].filter(Boolean).join(', ')
+  const filtersActive = Boolean(activeFilters.instrument || activeFilters.strategy || activeFilters.setup)
+  const filterLabel = [activeFilters.instrument, activeFilters.strategy === UNTAGGED ? 'no strategy' : activeFilters.strategy, activeFilters.setup === UNTAGGED ? 'no setup' : activeFilters.setup].filter(Boolean).join(', ')
   const hasClosed = stats.closedTrades > 0
   // reward-to-risk in R when stops are logged, otherwise the same idea by amount
   const rewardRisk = stats.rewardRisk ?? stats.payoffRatio
@@ -101,9 +112,15 @@ function TradeAnalysis({ trades, allTrades, range, currency, rangeLabel, mode })
   const modeLabel = mode === 'backtest' ? 'Backtest journal' : mode === 'live' ? 'Live journal' : null
   const rSampleHint = stats.rSample > 0 && stats.rSample < stats.closedTrades ? `from ${stats.rSample} of ${stats.closedTrades} trades with a stop loss` : null
 
+  // rows the server allows, plus the ids of the ones it locks (those become one upgrade prompt, not a gap)
+  const split = (entries) => ({
+    rows: entries.filter((entry) => can(entry.metric)),
+    locked: lockedMetricIds(entries.map((entry) => entry.metric), entitlements)
+  })
+
   const sideNote = (side) => (side.count ? `${plural(side.count, 'trade')}, ${formatPercent(side.winRate)} win` : 'no trades')
 
-  const performanceRows = visible([
+  const performanceGroup = split([
     { metric: 'avgWinLoss', label: 'Average win', value: money(stats.avgWin), tone: stats.avgWin ? 'positive' : 'neutral' },
     { metric: 'avgWinLoss', label: 'Average loss', value: money(stats.avgLoss === null ? null : -stats.avgLoss), tone: stats.avgLoss ? 'negative' : 'neutral' },
     { metric: 'avgRiskReward', label: 'Payoff ratio', value: formatRatio(stats.payoffRatio), note: 'avg win / avg loss, by amount' },
@@ -113,7 +130,7 @@ function TradeAnalysis({ trades, allTrades, range, currency, rangeLabel, mode })
     { metric: 'winsLosses', label: 'Winners / losers', value: hasClosed ? `${stats.wins} / ${stats.losses}` : '-', note: stats.breakevenTrades ? `${stats.breakevenTrades} breakeven` : null }
   ])
 
-  const riskRows = visible([
+  const riskGroup = split([
     { metric: 'maxDrawdown', label: 'Max drawdown', value: hasClosed ? money(-stats.maxDrawdown) : '-', note: 'peak to trough', tone: stats.maxDrawdown > 0 ? 'negative' : 'neutral' },
     {
       metric: 'recoveryFactor',
@@ -144,7 +161,7 @@ function TradeAnalysis({ trades, allTrades, range, currency, rangeLabel, mode })
     ...(risk.level ? [{ metric: 'riskConsistency', label: 'Stop loss coverage', value: formatPercent(risk.stopCoverage), note: `${risk.withStop} of ${risk.closedTrades} closed trades` }] : [])
   ])
 
-  const sideRows = visible([
+  const sideGroup = split([
     { metric: 'longShort', label: 'Long', value: money(stats.long.count ? stats.long.netPnl : null, { signed: true }), note: sideNote(stats.long), tone: stats.long.count ? toneOf(stats.long.netPnl) : 'neutral' },
     { metric: 'longShort', label: 'Short', value: money(stats.short.count ? stats.short.netPnl : null, { signed: true }), note: sideNote(stats.short), tone: stats.short.count ? toneOf(stats.short.netPnl) : 'neutral' }
   ])
@@ -193,23 +210,41 @@ function TradeAnalysis({ trades, allTrades, range, currency, rangeLabel, mode })
         />
       )
     }
-  ].filter((entry) => canViewMetric(entry.metric))
-
-  const showMonthly = canViewMetric('monthlyPnl') && stats.monthly.length > 0
-  const showCurve = canViewMetric('equityCurve')
+  ]
+  const keyGroup = split(keyStats)
+  const hasMonthly = stats.monthly.length > 0
   const excluded = [
     stats.openTrades ? `${plural(stats.openTrades, 'open trade')}` : null,
     stats.incompleteTrades ? `${plural(stats.incompleteTrades, 'trade')} with missing entry or quantity` : null
   ].filter(Boolean)
 
+  // whole panel: a skeleton while loading, one notice when the plan could not be read, one upgrade prompt when the
+  // server locks every metric of the tab (the tab itself stays visible)
+  const panelNotice = !ready ? (
+    status === 'error' ? (
+      <div className="p-5 sm:p-6"><PlanCheckNotice /></div>
+    ) : (
+      <TabLoading />
+    )
+  ) : isTabLocked(tab, entitlements) ? (
+    <div className="p-5 sm:p-6"><LockedBlock ids={TAB_METRICS[tab]} /></div>
+  ) : null
+
   return (
+    <AnalyticsAccessContext.Provider value={access}>
     <div className="tc-surface rounded-2xl border border-zinc-300 bg-white shadow-card dark:border-white/[0.12] dark:bg-panel dark:shadow-none">
       <div className="p-5 pb-3 sm:p-6 sm:pb-4">
         <div className="min-w-0">
           <p className="text-xs text-zinc-600 dark:text-zinc-300">Net P&amp;L</p>
-          <p className={`mt-1 text-3xl font-semibold tracking-tight tabular-nums ${toneClass[toneOf(stats.netPnl)]}`}>
-            {money(stats.netPnl, { signed: true })}
-          </p>
+          {!ready ? (
+            <div aria-hidden="true" className="mt-2 h-8 w-40 animate-pulse rounded bg-zinc-100 dark:bg-white/[0.05]" />
+          ) : can('netPnl') ? (
+            <p className={`mt-1 text-3xl font-semibold tracking-tight tabular-nums ${toneClass[toneOf(stats.netPnl)]}`}>
+              {money(stats.netPnl, { signed: true })}
+            </p>
+          ) : (
+            <LockedBlock ids={['netPnl']} compact className="mt-2" />
+          )}
           <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
             {plural(stats.closedTrades, 'closed trade')}
             {rangeLabel ? ` in ${rangeLabel}` : ''}
@@ -245,7 +280,7 @@ function TradeAnalysis({ trades, allTrades, range, currency, rangeLabel, mode })
             Small sample: ratios like profit factor and expectancy swing a lot below {MIN_RELIABLE_SAMPLE} closed trades. Treat them as early signals.
           </p>
         )}
-        <MetricGate id="analyticsFilters">
+        <MetricGate id="analyticsFilters" variant="inline" className="pb-4">
           <div className="pb-4">
             <AnalyticsFilters filters={filters} onChange={setFilters} options={options} hasStrategy={Boolean(roles.strategy)} hasSetup={Boolean(roles.setup)} />
             {tab === 'compare' && filtersActive && (
@@ -257,10 +292,12 @@ function TradeAnalysis({ trades, allTrades, range, currency, rangeLabel, mode })
 
       <div id="analysis-panel" role="tabpanel" aria-labelledby={`analysis-tab-${tab}`} className="border-t border-zinc-300 dark:border-white/[0.12]">
         <AnalyticsBoundary key={tab}>
+          {panelNotice ?? (
+          <>
           {tab === 'overview' && (
             <>
-            {showCurve && (
-              <div className="px-3 pb-4 pt-4 sm:px-4">
+            <div className="px-3 pb-4 pt-4 sm:px-4">
+                <MetricGate id="equityCurve">
                 {hasClosed ? (
                   <>
                     <EquityCurve points={stats.equity} currency={currency} />
@@ -278,24 +315,27 @@ function TradeAnalysis({ trades, allTrades, range, currency, rangeLabel, mode })
                     </div>
                   </div>
                 )}
-              </div>
-            )}
+                </MetricGate>
+            </div>
 
-            {keyStats.length > 0 && (
+            {(keyGroup.rows.length > 0 || keyGroup.locked.length > 0) && (
               <div className="grid grid-cols-2 gap-x-6 gap-y-6 border-t border-zinc-300 p-5 sm:p-6 md:grid-cols-5 dark:border-white/[0.12]">
-                {keyStats.map((entry) => entry.node)}
+                {keyGroup.rows.map((entry) => entry.node)}
+                {keyGroup.locked.length > 0 && <LockedBlock ids={keyGroup.locked} compact className="col-span-2 md:col-span-5" />}
               </div>
             )}
 
             <div className="grid gap-x-12 gap-y-6 border-t border-zinc-300 p-5 sm:p-6 md:grid-cols-2 dark:border-white/[0.12]">
-              <MetricList title="Performance" rows={performanceRows} />
-              <MetricList title="Risk and consistency" rows={riskRows} />
-              <MetricList title="Long vs short" rows={sideRows} />
+              <MetricList title="Performance" rows={performanceGroup.rows} locked={performanceGroup.locked} />
+              <MetricList title="Risk and consistency" rows={riskGroup.rows} locked={riskGroup.locked} />
+              <MetricList title="Long vs short" rows={sideGroup.rows} locked={sideGroup.locked} />
             </div>
 
-            {showMonthly && (
+            {hasMonthly && (
               <div className="border-t border-zinc-300 p-5 sm:p-6 dark:border-white/[0.12]">
-                <MonthlyPnl months={stats.monthly} currency={currency} />
+                <MetricGate id="monthlyPnl">
+                  <MonthlyPnl months={stats.monthly} currency={currency} />
+                </MetricGate>
               </div>
             )}
 
@@ -329,9 +369,12 @@ function TradeAnalysis({ trades, allTrades, range, currency, rangeLabel, mode })
               {tab === 'compare' && <CompareTab trades={comparable} range={range} currency={currency} />}
             </Suspense>
           )}
+          </>
+          )}
         </AnalyticsBoundary>
       </div>
     </div>
+    </AnalyticsAccessContext.Provider>
   )
 }
 
