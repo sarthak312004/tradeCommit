@@ -1,25 +1,19 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { CloseIcon } from '../../utils/Icons.jsx'
-import { PLAN_LIMIT_EVENT, requestJson } from '../../utils/http'
+import { PLAN_LIMIT_EVENT } from '../../utils/http'
 import { upgradeCopy } from '../../utils/upgrade'
+import { UPGRADE_REQUESTED_EVENT } from '../../utils/upgradePrompt'
+import PricingCard from '../billing/PricingCard'
 import { focusRing } from './controlStyles'
 
-const INTERVALS = [
-  { id: 'monthly', label: 'Monthly' },
-  { id: 'yearly', label: 'Yearly' }
-]
-const FALLBACK_URL = import.meta.env.VITE_UPGRADE_URL
-
 /**
- * The one upgrade prompt. Starts a checkout (POST /api/v1/billing/checkout) and sends the browser to the url the
- * server returns. The server picks the product and price; the client only says monthly or yearly.
- * Until billing exists (404) it falls back to VITE_UPGRADE_URL.
+ * The one upgrade prompt: why the person was stopped, then the shared pricing card (monthly / yearly, display
+ * prices, what Pro adds, Upgrade). The card starts the checkout and sends only the interval; the server picks the
+ * product and Dodo picks the amount.
  */
 export default function UpgradeModal({ feature, onClose }) {
-  const [interval, setInterval] = useState('monthly')
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
   const dialogRef = useRef(null)
   const { title, body } = upgradeCopy(feature)
 
@@ -29,24 +23,6 @@ export default function UpgradeModal({ feature, onClose }) {
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [onClose])
-
-  const upgrade = async () => {
-    if (busy) return
-    setBusy(true)
-    setError('')
-    try {
-      const data = await requestJson('/api/v1/billing/checkout', { method: 'POST', body: { interval } })
-      if (!data?.url) throw new Error('Could not start checkout.')
-      window.location.assign(data.url)
-    } catch (checkoutError) {
-      if (checkoutError.status === 404 && FALLBACK_URL) {
-        window.location.assign(FALLBACK_URL)
-        return
-      }
-      setError(checkoutError instanceof TypeError ? "Can't reach the server. Check your connection and try again." : checkoutError.message || 'Could not start checkout.')
-      setBusy(false)
-    }
-  }
 
   return createPortal(
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onMouseDown={(event) => event.target === event.currentTarget && !busy && onClose()}>
@@ -63,42 +39,28 @@ export default function UpgradeModal({ feature, onClose }) {
             <p className="text-[11px] font-semibold uppercase tracking-wider text-[#b95b3b] dark:text-[#e08a68]">TradeCommit Pro</p>
             <h2 id="upgrade-title" className="mt-1 text-base font-semibold tracking-[-0.02em] text-zinc-900 dark:text-zinc-50">{title}</h2>
           </div>
-          <button type="button" onClick={onClose} disabled={busy} aria-label="Close" className={`flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-100 dark:hover:bg-white/10 ${focusRing}`}>
+          <button type="button" onClick={onClose} disabled={busy} aria-label="Close" className={`flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-white/10 ${focusRing}`}>
             <CloseIcon className="h-4 w-4" />
           </button>
         </div>
-        <p className="mt-2 text-[13px] leading-6 text-zinc-600 dark:text-zinc-300">{body}</p>
+        <p className="mt-2 mb-4 text-[13px] leading-6 text-zinc-600 dark:text-zinc-300">{body}</p>
 
-        <div role="radiogroup" aria-label="Billing period" className="mt-4 grid grid-cols-2 gap-1 rounded-lg bg-zinc-100 p-1 dark:bg-white/[0.06]">
-          {INTERVALS.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              role="radio"
-              aria-checked={interval === item.id}
-              onClick={() => setInterval(item.id)}
-              className={`h-8 cursor-pointer rounded-md text-xs font-medium transition-colors ${focusRing} ${interval === item.id ? 'bg-white text-zinc-900 shadow-sm dark:bg-white/[0.14] dark:text-zinc-50' : 'text-zinc-600 dark:text-zinc-400'}`}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-
-        {error && <p role="alert" className="mt-3 text-xs text-rose-600 dark:text-rose-400">{error}</p>}
-
-        <div className="mt-5 flex justify-end gap-2">
-          <button type="button" onClick={onClose} disabled={busy} className={`h-9 cursor-pointer rounded-md px-3 text-xs font-medium text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-white/10 ${focusRing}`}>Not now</button>
-          <button type="button" onClick={upgrade} disabled={busy} className={`h-9 cursor-pointer rounded-md bg-zinc-900 px-4 text-xs font-medium text-white hover:bg-zinc-700 disabled:cursor-wait disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300 ${focusRing}`}>
-            {busy ? 'Opening checkout…' : 'Upgrade'}
-          </button>
-        </div>
+        <PricingCard
+          onBusyChange={setBusy}
+          secondaryAction={
+            <button type="button" onClick={onClose} disabled={busy} className={`h-9 cursor-pointer rounded-md px-3 text-xs font-medium text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-white/10 ${focusRing}`}>Not now</button>
+          }
+        />
       </div>
     </div>,
     document.body
   )
 }
 
-/** Mounted once: opens the modal whenever any request hits a plan limit or a component calls openUpgrade(). */
+/**
+ * Mounted once: opens the modal when a request hits a plan limit, when a component calls openUpgrade(), or when a
+ * locked analytics section asks for an upgrade (requestUpgrade).
+ */
 export function UpgradeHost() {
   const [feature, setFeature] = useState(null)
   const [open, setOpen] = useState(false)
@@ -107,8 +69,17 @@ export function UpgradeHost() {
       setFeature(event.detail?.feature ?? null)
       setOpen(true)
     }
+    // locked analytics sections announce the metric id they stand for: the modal explains analytics as a whole
+    const onRequested = () => {
+      setFeature('analytics')
+      setOpen(true)
+    }
     window.addEventListener(PLAN_LIMIT_EVENT, onLimit)
-    return () => window.removeEventListener(PLAN_LIMIT_EVENT, onLimit)
+    window.addEventListener(UPGRADE_REQUESTED_EVENT, onRequested)
+    return () => {
+      window.removeEventListener(PLAN_LIMIT_EVENT, onLimit)
+      window.removeEventListener(UPGRADE_REQUESTED_EVENT, onRequested)
+    }
   }, [])
   return open ? <UpgradeModal feature={feature} onClose={() => setOpen(false)} /> : null
 }
