@@ -14,6 +14,9 @@ import DeferredEditor from '../../common/DeferredEditor'
 import { useDrawerMotion } from '../../common/useDrawerMotion'
 import SymbolSuggestions from './SymbolSuggestions'
 import { clearFormDraft, readFormDraft, writeFormDraft } from '../../../utils/formDraftStorage'
+import { readQuickLog, shouldKeepFormOpen, writeQuickLog } from '../../../utils/quickLog'
+
+const QUICK_LOG_TIP = 'Keep the form open after saving a new trade.'
 
 // built when the form opens, in local time (UTC would show yesterday for Indian users before 5:30 am)
 const getDefaultValues = () => ({
@@ -155,6 +158,12 @@ function TradeForm({ journalId, journalName, currency = DEFAULT_CURRENCY, templa
   const draftKey = `tradecommit:trade-form-draft:${journalId}:${initialTrade?.id ?? 'new'}`
   const [savedDraft] = useState(() => readFormDraft(draftKey))
   const analysisDraftRef = useRef(savedDraft?.analysis ?? initialTrade?.analysis ?? '')
+  const [quickLog, setQuickLog] = useState(readQuickLog) // browser-only preference, off until switched on
+  // Quick Log starts the next trade with a brand-new editor: `editorKey` remounts it (so its screenshot bookkeeping
+  // belongs to one trade only) and `editorSeed` is the text it starts with (empty after a reset, never the old draft).
+  const [editorSeed, setEditorSeed] = useState(savedDraft?.analysis ?? initialTrade?.analysis ?? '')
+  const [editorKey, setEditorKey] = useState(0)
+  const [resetNonce, setResetNonce] = useState(0)
   const [draftReady, setDraftReady] = useState(false)
   const [drawerWidth, setDrawerWidth] = useState(DEFAULT_WIDTH)
   const [expanded, setExpanded] = useState(false)
@@ -185,6 +194,7 @@ function TradeForm({ journalId, journalName, currency = DEFAULT_CURRENCY, templa
   const stopManualRef = useRef(Boolean(initialTrade)) // true once the user typed the stop loss themselves
   const autoStopRef = useRef(null) // { price, distance } the automatic stop loss is based on
   const templateRef = useRef(templateFields) // fields of the latest trade, read once when the form opens
+  const latestTemplateRef = useRef(templateFields) // always the current one: the next Quick Log trade starts from it
   const { register, handleSubmit, setValue, getValues, reset, watch, control, formState: { errors } } = useForm({ defaultValues: getDefaultValues() })
   const { fields: customFields, append: appendCustomField, remove: removeCustomField } = useFieldArray({ control, name: 'customFields' })
 
@@ -237,6 +247,33 @@ function TradeForm({ journalId, journalName, currency = DEFAULT_CURRENCY, templa
     reset({ ...formValues, ...(savedDraft?.values ?? {}) })
     setDraftReady(true)
   }, [initialTrade, initialDate, reset, savedDraft])
+
+  useEffect(() => {
+    latestTemplateRef.current = templateFields
+  })
+
+  // Quick Log: the submitted trade has been captured and handed to the save pipeline, so start the next one.
+  // Runs after the render that followed the submit (the new card and its properties are known by then). The
+  // saving guard stays up until here, so a second Ctrl/Cmd+Enter cannot submit the old values again.
+  useEffect(() => {
+    if (resetNonce === 0) return
+    entryManualRef.current = false
+    filledForRef.current = null
+    stopManualRef.current = false
+    qtyManualRef.current = false
+    qtyFromMemoryRef.current = false
+    autoStopRef.current = null
+    reset({ ...getDefaultValues(), customFields: latestTemplateRef.current.map(toFormField) })
+    clearFormDraft(draftKey) // the saved trade must never come back as an unsaved draft
+    setPicked(null)
+    setSearchOpen(false)
+    setActiveSuggestion(-1)
+    setFlashed({})
+    setSubmitError('')
+    isSavingRef.current = false
+    setIsSaving(false)
+    symbolInputRef.current?.focus()
+  }, [resetNonce, reset, draftKey])
 
   useEffect(() => {
     if (!draftReady) return undefined
@@ -512,13 +549,29 @@ function TradeForm({ journalId, journalName, currency = DEFAULT_CURRENCY, templa
       if (normalizedSymbol && Number(normalizedQuantity) > 0) rememberQuantity(normalizedSymbol, normalizedQuantity)
 
       editorRef.current.markSubmitted() // the card may show a local preview until the hosted copy replaces it
-      Promise.resolve(onSubmit(payload, { prepare })).catch(() => {}) // failures are shown on the trade card
-      requestClose()
+      // Quick Log only applies to a NEW trade; saving an edit always closes the form as before.
+      const keepOpen = shouldKeepFormOpen({ quickLog, isEditing: Boolean(initialTrade) })
+      Promise.resolve(onSubmit(payload, keepOpen ? { prepare, quickLog: true } : { prepare })).catch(() => {}) // failures are shown on the trade card
+      if (keepOpen) {
+        // everything above is already captured in `payload` and `draft`, so the form can be reset now
+        analysisDraftRef.current = ''
+        setEditorSeed('')
+        setEditorKey((key) => key + 1)
+        setResetNonce((nonce) => nonce + 1)
+      } else {
+        requestClose()
+      }
     } catch (error) {
       setSubmitError(error.message || 'Could not save this trade. Please try again.')
       isSavingRef.current = false
       setIsSaving(false)
     }
+  }
+
+  const toggleQuickLog = () => {
+    const next = !quickLog
+    setQuickLog(next)
+    writeQuickLog(next)
   }
 
   const symbolField = register('symbol', {
@@ -587,9 +640,28 @@ function TradeForm({ journalId, journalName, currency = DEFAULT_CURRENCY, templa
               {initialTrade ? 'Trade review' : 'New trade'}
             </p>
           </div>
-          <button type="button" onClick={requestClose} disabled={isSaving} aria-label="Close trade form" title="Close" className={iconButtonClass}>
-            <Icon name="x" size={16} />
-          </button>
+          <div className="flex shrink-0 items-center gap-1">
+            <span title={initialTrade ? `${QUICK_LOG_TIP} Saving an edit always closes the form.` : QUICK_LOG_TIP} className="inline-flex">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={quickLog}
+                aria-describedby="quick-log-tip"
+                onClick={toggleQuickLog}
+                disabled={Boolean(initialTrade)}
+                className="group/ql inline-flex h-7 items-center gap-1.5 rounded-md px-1.5 text-[11px] font-medium text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900 focus:outline-none focus-visible:bg-zinc-100 focus-visible:text-zinc-900 disabled:pointer-events-none disabled:opacity-50 dark:text-zinc-400 dark:hover:bg-white/[0.06] dark:hover:text-zinc-100 dark:focus-visible:bg-white/[0.06] dark:focus-visible:text-zinc-100"
+              >
+                <span aria-hidden="true" className={`relative inline-flex h-3.5 w-6 shrink-0 items-center rounded-full transition-colors duration-150 ${quickLog ? 'bg-emerald-600 dark:bg-emerald-400' : 'bg-zinc-300 dark:bg-zinc-600'}`}>
+                  <span className={`absolute left-0.5 h-2.5 w-2.5 rounded-full shadow-sm transition-transform duration-150 ${quickLog ? 'translate-x-2.5 bg-white dark:bg-zinc-900' : 'translate-x-0 bg-white dark:bg-zinc-200'}`} />
+                </span>
+                <span className={quickLog ? 'text-zinc-900 dark:text-zinc-100' : ''}>Quick Log</span>
+              </button>
+              <span id="quick-log-tip" className="sr-only">{QUICK_LOG_TIP}</span>
+            </span>
+            <button type="button" onClick={requestClose} disabled={isSaving} aria-label="Close trade form" title="Close" className={iconButtonClass}>
+              <Icon name="x" size={16} />
+            </button>
+          </div>
         </div>
 
         {/* page body */}
@@ -868,10 +940,11 @@ function TradeForm({ journalId, journalName, currency = DEFAULT_CURRENCY, templa
 
             {/* analysis */}
             <DeferredEditor
+              key={editorKey}
               ref={editorRef}
               id="trade-analysis"
               label="Trade analysis"
-              initialHtml={savedDraft?.analysis ?? initialTrade?.analysis ?? ''}
+              initialHtml={editorSeed}
               placeholder="What did you see? What did you do? What would you change next time?"
               onUploadImage={onUploadImage}
               onChange={(html) => {

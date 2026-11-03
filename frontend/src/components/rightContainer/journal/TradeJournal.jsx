@@ -23,6 +23,8 @@ import { useTradeView } from '../../../hooks/useTradeView'
 import { CalendarIcon, SlidersIcon } from '../../../utils/Icons.jsx'
 import { loadTradeForm, preloadTradeForm, preloadPlanForm } from '../../../utils/formLoaders'
 import { clearFormDraft, readFormDraft, writeFormDraft } from '../../../utils/formDraftStorage'
+import { savedToastText } from '../../../utils/quickLog'
+import { showToast, updateToast } from '../../../utils/toastStore'
 import DialogSkeleton from '../../common/DialogSkeleton'
 
 // loaded on demand so the first paint ships less JavaScript
@@ -245,7 +247,33 @@ function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades,
   const handleSubmitTrade = (trade, options) => {
     if (editingTrade) return onUpdateTrade(journal.id, editingTrade.id, trade, options)
     dismissImportHint()
-    return onAddTrade(journal.id, trade, options)
+    // Quick Log keeps the form open, so the person needs to hear when the trade really reached the server:
+    // `onSaved` runs on confirmed persistence only (not on the optimistic card). With Quick Log off nothing changes.
+    const { quickLog, ...pipeline } = options ?? {}
+    if (!quickLog) return onAddTrade(journal.id, trade, options)
+    const symbol = savedToastText(trade.symbol).detail
+    const toastId = showToast({ message: 'Saving trade...', detail: symbol, tone: 'pending', duration: null })
+    const finishToast = (toast) => {
+      if (!updateToast(toastId, toast)) showToast(toast)
+    }
+    const saveOptions = {
+      ...pipeline,
+      onSaved: (saved) => finishToast(savedToastText(saved?.symbol || trade.symbol)),
+    }
+    const showFailure = () => finishToast({ message: "Couldn't save trade", detail: symbol, tone: 'error' })
+
+    try {
+      return Promise.resolve(onAddTrade(journal.id, trade, saveOptions)).then((saved) => {
+        if (!saved) showFailure()
+        return saved
+      }, (error) => {
+        showFailure()
+        throw error
+      })
+    } catch (error) {
+      showFailure()
+      throw error
+    }
   }
 
   if (!journal) {

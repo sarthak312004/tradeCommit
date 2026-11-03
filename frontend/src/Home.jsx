@@ -7,6 +7,7 @@ import OnboardingGuide from './components/onboardingGuide/OnboardingGuide'
 import { DeepFocusProvider } from './context/DeepFocusProvider'
 import GuidanceProvider from './context/GuidanceProvider'
 import DeepFocusDock from './components/rightContainer/planner/DeepFocusDock'
+import ToastHost from './components/common/ToastHost'
 import { MOBILE_MEDIA_QUERY, useIsMobile } from './hooks/useMediaQuery'
 
 const AUTH_CHECK_TIMEOUT_MS = 60_000
@@ -144,6 +145,7 @@ function Home() {
       </div>
 
       <DeepFocusDock />
+      <ToastHost />
       <OnboardingGuide isNavOpen={navOpen} setNavOpen={setNavOpen} autoCloseNav={isMobile} openCreateForm={openCreateForm} />
     </>
     </GuidanceProvider>

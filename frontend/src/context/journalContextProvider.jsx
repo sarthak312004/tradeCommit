@@ -300,7 +300,9 @@ function JournalContextProvider({children}){
     // Optimistic: the card appears at the top the moment the form closes, marked "Saving...". `prepare` (from the
     // form) finishes any screenshot uploads in the background, then the trade is sent. When the server answers,
     // the card is swapped for the saved trade in place. If anything fails the card stays, marked with Retry / Discard.
-    const addTrade = (journalId, trade, { prepare } = {}) => {
+    // `onSaved(created)` is optional and runs only once the server has confirmed the trade (also after a Retry),
+    // never for the optimistic card.
+    const addTrade = (journalId, trade, { prepare, onSaved } = {}) => {
         const tempId = `${TEMP_PREFIX}trade-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
         const placeholder = {
             ...normalizeTradeForFrontend({ ...trade, id: tempId, createdAt: new Date().toISOString() }),
@@ -325,6 +327,11 @@ function JournalContextProvider({children}){
                 tradeSyncRef.current.delete(tempId)
                 patchTrade(journalId, tempId, () => created)
                 refreshProfile()
+                try {
+                    onSaved?.(created)
+                } catch (callbackError) {
+                    console.error('Trade saved, but the saved-callback failed:', callbackError)
+                }
                 return created
             } catch (error) {
                 patchTrade(journalId, tempId, { syncState: "failed", syncError: saveErrorText(error, "Could not save this trade.") })
