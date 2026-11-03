@@ -249,11 +249,36 @@ test("portal without a customer answers 409; a non-https link is refused", async
 const makeWebhookDeps = (user) => {
   const events = [];
   const notified = [];
+  const BillingEvent = {
+    findOne: (filter) => query(events.find((entry) =>
+      filter.eventId ? entry.eventId === filter.eventId : entry.paymentId === filter.paymentId && entry.userId
+    ) ?? null),
+    create: async (doc) => {
+      if (events.some((entry) => entry.eventId === doc.eventId)) throw Object.assign(new Error("duplicate"), { code: 11000 });
+      events.push({ ...doc });
+    },
+    updateOne: async (filter, { $set, $unset }) => {
+      const event = events.find((entry) => entry.eventId === filter.eventId && entry.claimToken === filter.claimToken);
+      if (!event) return { matchedCount: 0 };
+      Object.assign(event, $set);
+      for (const key of Object.keys($unset ?? {})) delete event[key];
+      return { matchedCount: 1 };
+    },
+    deleteOne: async (filter) => {
+      const index = events.findIndex((entry) => entry.eventId === filter.eventId && entry.claimToken === filter.claimToken);
+      if (index >= 0) events.splice(index, 1);
+      return { deletedCount: index >= 0 ? 1 : 0 };
+    },
+  };
   return {
     notified,
     deps: {
-      User: { findById: () => query(user), findOne: () => query(null), updateOne: async (f, { $set }) => { Object.assign(user, $set); return { matchedCount: 1 }; } },
-      BillingEvent: { exists: async ({ eventId }) => (events.some((e) => e.eventId === eventId) ? {} : null), findOne: () => query(null), create: async (d) => { events.push(d); } },
+      User: {
+        findById: () => query(user),
+        findOne: ({ billingSubscriptionId }) => query(user.billingSubscriptionId === billingSubscriptionId ? user : null),
+        updateOne: async (f, { $set }) => { Object.assign(user, $set); return { matchedCount: 1 }; },
+      },
+      BillingEvent,
       notify: async (kind) => { notified.push(kind); },
       now: () => NOW,
       productIntervals: {},
@@ -263,7 +288,7 @@ const makeWebhookDeps = (user) => {
 const hook = (type, data = {}) => ({ type, timestamp: "2026-11-10T11:00:00Z", data: { metadata: { userId: UID }, subscription_id: "sub_1", next_billing_date: FUTURE, ...data } });
 
 test("webhook: payment failure and downgrade each send one email, repeats do not", async () => {
-  const user = { _id: UID, planStatus: "active", planAccessUntil: new Date(FUTURE) };
+  const user = { _id: UID, planStatus: "active", planAccessUntil: new Date(FUTURE), billingSubscriptionId: "sub_1" };
   const { deps, notified } = makeWebhookDeps(user);
   await processBillingEvent(deps, hook("subscription.on_hold"), "e1");
   await processBillingEvent(deps, hook("subscription.past_due"), "e2"); // already past_due: no second email
@@ -272,14 +297,14 @@ test("webhook: payment failure and downgrade each send one email, repeats do not
 });
 
 test("webhook: a failing mailer never fails the event", async () => {
-  const user = { _id: UID, planStatus: "active", planAccessUntil: new Date(FUTURE) };
+  const user = { _id: UID, planStatus: "active", planAccessUntil: new Date(FUTURE), billingSubscriptionId: "sub_1" };
   const { deps } = makeWebhookDeps(user);
   deps.notify = async () => { throw new Error("mail down"); };
   assert.equal(await processBillingEvent(deps, hook("subscription.on_hold"), "e1"), "applied");
 });
 
 test("webhook: cancelled in the portal sends the scheduled email once; the in-app cancel (already 'cancelling') sends none", async () => {
-  const user = { _id: UID, planStatus: "active", planAccessUntil: new Date(FUTURE) };
+  const user = { _id: UID, planStatus: "active", planAccessUntil: new Date(FUTURE), billingSubscriptionId: "sub_1" };
   const { deps, notified } = makeWebhookDeps(user);
   await processBillingEvent(deps, hook("subscription.cancelled", { cancel_at_next_billing_date: true }), "e1");
   assert.deepEqual(notified, ["cancellation-scheduled"]);

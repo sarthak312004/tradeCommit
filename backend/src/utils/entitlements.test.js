@@ -40,12 +40,11 @@ test("an active subscription is pro until planAccessUntil", () => {
   assert.deepEqual(limitsOf(getEntitlements(user, NOW)), proLimits());
 });
 
-test("a cancelling subscription keeps pro until planAccessUntil, then drops to free after the grace", () => {
+test("a cancelling subscription keeps pro only until the paid period ends", () => {
   const user = { planStatus: "cancelling", cancelAtPeriodEnd: true, planAccessUntil: at(5 * DAY) };
   assert.equal(getEffectivePlan(user, NOW), "pro");
   assert.equal(getEffectivePlan(user, NOW + 5 * DAY - 1), "pro");
-  assert.equal(getEffectivePlan(user, NOW + 5 * DAY + GRACE_MS - 1), "pro");
-  assert.equal(getEffectivePlan(user, NOW + 5 * DAY + GRACE_MS), "free");
+  assert.equal(getEffectivePlan(user, NOW + 5 * DAY), "free");
   assert.deepEqual(limitsOf(getEntitlements(user, NOW + 6 * DAY + GRACE_MS)), freeLimits());
 });
 
@@ -62,6 +61,7 @@ test("an expired subscription is free", () => {
   const user = { planStatus: "expired", planInterval: "yearly", planAccessUntil: at(-30 * DAY) };
   assert.equal(getEffectivePlan(user, NOW), "free");
   assert.deepEqual(limitsOf(getEntitlements(user, NOW)), freeLimits());
+  assert.equal(getEffectivePlan({ planStatus: "expired", planAccessUntil: at(30 * DAY) }, NOW), "free");
 });
 
 test("legacyProUntil grants pro without a subscription, and stops exactly when it lapses (no grace)", () => {

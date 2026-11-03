@@ -6,7 +6,7 @@ import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { createWithinPlanLimit } from "../utils/planLimits.js";
-import { assertOwnedResourceWritable } from "../utils/readOnlyResources.js";
+import { assertOwnedResourceWritable, getReadOnlyResourceIds } from "../utils/readOnlyResources.js";
 import { isValidPlanDateKey, isWeeklyPlanStart, parsePlanScope } from "../utils/planScope.js";
 import { deleteImagesFromCloudinary, uploadOnCloudinary } from "../utils/cloudinary.js";
 import {
@@ -30,13 +30,14 @@ const removedImageUrlsFromBody = (body) =>
 
 /* ------------------------------- serializers ------------------------------- */
 
-const serializePlanner = (planner) => ({
+const serializePlanner = (planner, readOnly = false) => ({
   id: String(planner._id),
   name: planner.name,
   type: planner.type || DEFAULT_TYPE,
   linkedJournalId: planner.linkedJournal ? String(planner.linkedJournal) : null,
   createdAt: new Date(planner.createdAt).toISOString(),
   updatedAt: new Date(planner.updatedAt).toISOString(),
+  readOnly,
 });
 
 const serializeEntry = (entry) => ({
@@ -133,10 +134,11 @@ const throwWeeklyDuplicateError = (error) => {
 
 export const getAllPlanners = asyncHandler(async (req, res) => {
   const planners = await Planner.find({ owner: req.user._id }).sort({ createdAt: 1 });
+  const readOnlyIds = await getReadOnlyResourceIds({ user: req.user, Model: Planner, limitKey: "maxPlanners" });
 
   return res
     .status(200)
-    .json(new ApiResponse(200, planners.map(serializePlanner), "Planners fetched successfully"));
+    .json(new ApiResponse(200, planners.map((planner) => serializePlanner(planner, readOnlyIds.has(String(planner._id)))), "Planners fetched successfully"));
 });
 
 export const createPlanner = asyncHandler(async (req, res) => {

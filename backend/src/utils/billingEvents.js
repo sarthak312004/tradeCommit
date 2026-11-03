@@ -43,14 +43,22 @@ export const eventSubject = (event) => {
   };
 };
 
-// The interval comes from OUR product ids first (never from anything a client sent), then from the provider's field.
 const intervalOf = (data, productIntervals) => {
-  const byProduct = productIntervals?.[cleanId(data.product_id)];
+  const productId = cleanId(data.product_id);
+  const byProduct = productId ? productIntervals?.[productId] : null;
   if (INTERVALS.includes(byProduct)) return byProduct;
   const frequency = String(data.payment_frequency_interval ?? "").toLowerCase();
   if (frequency === "month") return "monthly";
   if (frequency === "year") return "yearly";
   return null;
+};
+
+// Only product ids configured by us can activate Pro; provider-supplied metadata is not a product allowlist.
+const configuredIntervalOf = (data, productIntervals) => {
+  const productId = cleanId(data.product_id);
+  const interval = productId ? productIntervals?.[productId] : null;
+  if (INTERVALS.includes(interval)) return interval;
+  throw new BillingEventError("Subscription event has an unrecognized product");
 };
 
 const endAccessNow = (user, at) => {
@@ -82,8 +90,7 @@ export const planUpdateFor = (event, user, { at, productIntervals } = {}) => {
         planAccessUntil: nextBilling,
         cancelAtPeriodEnd: data.cancel_at_next_billing_date === true,
       };
-      const interval = intervalOf(data, productIntervals);
-      if (interval) update.planInterval = interval;
+      update.planInterval = configuredIntervalOf(data, productIntervals);
       if (subject.customerId) update.billingCustomerId = subject.customerId;
       if (subject.subscriptionId) update.billingSubscriptionId = subject.subscriptionId;
       return update;
@@ -100,9 +107,15 @@ export const planUpdateFor = (event, user, { at, productIntervals } = {}) => {
         const update = { planStatus: "cancelling", cancelAtPeriodEnd: true };
         const nextBilling = toDate(data.next_billing_date);
         if (!toDate(user?.planAccessUntil) && nextBilling) update.planAccessUntil = nextBilling;
+        if (subject.subscriptionId) update.billingSubscriptionId = subject.subscriptionId;
+        if (subject.customerId) update.billingCustomerId = subject.customerId;
         return update;
       }
-      return endAccessNow(user, at);
+      return {
+        ...endAccessNow(user, at),
+        ...(subject.subscriptionId ? { billingSubscriptionId: subject.subscriptionId } : {}),
+        ...(subject.customerId ? { billingCustomerId: subject.customerId } : {}),
+      };
     }
 
     case "subscription.expired":

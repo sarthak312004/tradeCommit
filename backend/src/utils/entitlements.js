@@ -3,7 +3,7 @@
 // and merges overrides on top. Everything else reads the returned entitlements, never the plan name.
 //
 //   effective plan = Pro when PLAN_ENFORCEMENT does not apply to the user,
-//                    or when now < planAccessUntil + GRACE_DAYS, or when now < legacyProUntil; otherwise Free.
+//                    or before planAccessUntil, or during past_due grace, or before legacyProUntil; otherwise Free.
 //   PLAN_ENFORCEMENT   off (default / anything unrecognised): everyone gets Pro entitlements
 //                      new: only users created after PLAN_ENFORCEMENT_FROM (ISO date) are enforced
 //                      all: every user is enforced
@@ -43,7 +43,10 @@ const isEnforced = (user) => {
 
 const hasPaidAccess = (user, nowMs) => {
   const accessUntil = toMs(user?.planAccessUntil);
-  if (Number.isFinite(accessUntil) && nowMs < accessUntil + GRACE_DAYS * DAY_MS) return true;
+  if (user?.planStatus !== "expired" && Number.isFinite(accessUntil)) {
+    if (nowMs < accessUntil) return true;
+    if (user?.planStatus === "past_due" && nowMs < accessUntil + GRACE_DAYS * DAY_MS) return true;
+  }
   const legacyUntil = toMs(user?.legacyProUntil);
   return Number.isFinite(legacyUntil) && nowMs < legacyUntil;
 };

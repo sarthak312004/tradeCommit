@@ -20,7 +20,7 @@ const makeStores = (users = {}) => {
       const last = user.billingLastEventAt ?? null;
       if (cond.billingLastEventAt === null) return last === null;
       if (cond.billingLastEventAt?.$exists === false) return !("billingLastEventAt" in user);
-      return last !== null && new Date(last) <= new Date(cond.billingLastEventAt.$lte);
+      return last !== null && new Date(last) < new Date(cond.billingLastEventAt.$lt);
     });
   const Users = {
     findById: (id) => query(db.users[String(id)] ?? null),
@@ -34,11 +34,42 @@ const makeStores = (users = {}) => {
     },
   };
   const Events = {
-    exists: async ({ eventId }) => (db.events.some((e) => e.eventId === eventId) ? { _id: 1 } : null),
-    findOne: ({ paymentId }) => query(db.events.find((e) => e.paymentId === paymentId && e.userId) ?? null),
+    findOne: (filter) => query(db.events.find((e) =>
+      (filter.eventId ? e.eventId === filter.eventId : e.paymentId === filter.paymentId && e.userId)
+    ) ?? null),
     create: async (doc) => {
       if (db.events.some((e) => e.eventId === doc.eventId)) throw Object.assign(new Error("dup"), { code: 11000 });
-      db.events.push(doc);
+      db.events.push({ ...doc });
+    },
+    findOneAndUpdate: async (filter, { $set }) => {
+      const row = db.events.find((entry) =>
+        entry.eventId === filter.eventId &&
+        entry.state === filter.state &&
+        (!entry.leaseUntil || new Date(entry.leaseUntil) <= new Date(filter.$or[0].leaseUntil.$lte))
+      );
+      if (!row) return null;
+      Object.assign(row, $set);
+      return row;
+    },
+    updateOne: async (filter, { $set, $unset }) => {
+      const row = db.events.find((entry) =>
+        entry.eventId === filter.eventId &&
+        entry.state === filter.state &&
+        entry.claimToken === filter.claimToken
+      );
+      if (!row) return { matchedCount: 0 };
+      Object.assign(row, $set);
+      for (const key of Object.keys($unset ?? {})) delete row[key];
+      return { matchedCount: 1 };
+    },
+    deleteOne: async (filter) => {
+      const index = db.events.findIndex((entry) =>
+        entry.eventId === filter.eventId &&
+        entry.state === filter.state &&
+        entry.claimToken === filter.claimToken
+      );
+      if (index >= 0) db.events.splice(index, 1);
+      return { deletedCount: index >= 0 ? 1 : 0 };
     },
   };
   return { db, deps: { User: Users, BillingEvent: Events, now: () => Date.parse(T3), productIntervals: { pdt_m: "monthly", pdt_y: "yearly" } } };
@@ -125,10 +156,28 @@ test("two copies racing in parallel leave one record and the same state", async 
     run(handler, webhookReq(event("subscription.active", T1), { id: "evt_r" })),
     run(handler, webhookReq(event("subscription.active", T1), { id: "evt_r" })),
   ]);
-  assert.equal(a.status, 200);
-  assert.equal(b.status, 200);
+  assert.deepEqual([a.status ?? a.error.statusCode, b.status ?? b.error.statusCode].sort(), [200, 500]);
   assert.equal(stores.db.events.length, 1);
   assert.equal(stores.db.users[UID].planStatus, "active");
+  assert.equal(stores.db.updates, 1);
+  const retry = await run(handler, webhookReq(event("subscription.active", T1), { id: "evt_r" }));
+  assert.equal(retry.status, 200);
+  assert.equal(retry.body.data.outcome, "duplicate");
+});
+
+test("an abandoned webhook claim is reclaimed after its lease expires", async () => {
+  const stores = makeStores({ [UID]: newUser() });
+  stores.db.events.push({
+    eventId: "evt_abandoned",
+    type: "subscription.active",
+    state: "processing",
+    claimToken: "old-claim",
+    leaseUntil: new Date(T1),
+  });
+  assert.equal(await processBillingEvent(stores.deps, event("subscription.active", T2), "evt_abandoned"), "applied");
+  assert.equal(stores.db.events.length, 1);
+  assert.equal(stores.db.events[0].state, "processed");
+  assert.equal(stores.db.events[0].claimToken, undefined);
 });
 
 test("a failed attempt is not recorded, so Dodo's retry is processed", async () => {
@@ -158,6 +207,13 @@ test("an older event arriving late never overwrites a newer state", async () => 
   assert.equal(await processBillingEvent(stores.deps, event("subscription.on_hold", T1), "e1"), "stale");
   assert.equal(stores.db.users[UID].planStatus, "active");
   assert.equal(stores.db.events.length, 2); // stale events are still recorded
+});
+
+test("when provider timestamps are equal, the first accepted billing event wins", async () => {
+  const stores = makeStores({ [UID]: newUser() });
+  assert.equal(await processBillingEvent(stores.deps, event("subscription.renewed", T1), "renewed"), "applied");
+  assert.equal(await processBillingEvent(stores.deps, event("subscription.cancelled", T1), "cancelled"), "stale");
+  assert.equal(stores.db.users[UID].planStatus, "active");
 });
 
 test("cancelled arriving before active (older active) keeps the newer cancellation", async () => {
@@ -199,7 +255,7 @@ test("full lifecycle: active -> past_due -> renewed -> cancelling -> expired", a
 });
 
 test("cancelled immediately ends access at the event time", async () => {
-  const stores = makeStores({ [UID]: newUser({ planStatus: "active", planAccessUntil: new Date(NEXT) }) });
+  const stores = makeStores({ [UID]: newUser({ planStatus: "active", billingSubscriptionId: "sub_1", planAccessUntil: new Date(NEXT) }) });
   await processBillingEvent(stores.deps, event("subscription.cancelled", T1, { cancel_at_next_billing_date: false }), "x");
   assert.equal(stores.db.users[UID].planStatus, "expired");
   assert.equal(new Date(stores.db.users[UID].planAccessUntil).toISOString(), new Date(T1).toISOString());
@@ -229,7 +285,7 @@ test("an unknown user answers 200, changes nothing and records only ids", async 
   assert.equal(out.status, 200);
   assert.equal(out.body.data.outcome, "no_user");
   assert.equal(stores.db.users[UID].planStatus, "none");
-  assert.deepEqual(Object.keys(stores.db.events[0]).sort(), ["eventId", "paymentId", "type", "userId"]);
+  assert.deepEqual(Object.keys(stores.db.events[0]).sort(), ["eventId", "paymentId", "processedAt", "state", "subscriptionId", "type", "userId"]);
 });
 
 test("one user's event never touches another user", async () => {
@@ -237,6 +293,54 @@ test("one user's event never touches another user", async () => {
   await processBillingEvent(stores.deps, event("subscription.active", T1), "e");
   assert.equal(stores.db.users[UID].planStatus, "active");
   assert.equal(stores.db.users[UID2].planStatus, "none");
+});
+
+test("subscription id binding takes precedence over mismatched metadata", async () => {
+  const stores = makeStores({
+    [UID]: newUser(),
+    [UID2]: newUser({ _id: UID2, planStatus: "active", billingSubscriptionId: "sub_2" }),
+  });
+  const ev = event("subscription.renewed", T1, { subscription_id: "sub_2" });
+  assert.equal(await processBillingEvent(stores.deps, ev, "mismatch"), "no_user");
+  assert.equal(stores.db.users[UID].planStatus, "none");
+  assert.equal(stores.db.users[UID2].planStatus, "active");
+  assert.equal(stores.db.updates, 0);
+});
+
+test("metadata cannot replace an existing live subscription binding", async () => {
+  const stores = makeStores({ [UID]: newUser({ planStatus: "active", billingSubscriptionId: "sub_old" }) });
+  const ev = event("subscription.active", T1, { subscription_id: "sub_new" });
+  assert.equal(await processBillingEvent(stores.deps, ev, "wrong-sub"), "no_user");
+  assert.equal(stores.db.users[UID].billingSubscriptionId, "sub_old");
+  assert.equal(stores.db.users[UID].planStatus, "active");
+});
+
+test("a verified first activation may bind a new subscription after the previous one expired", async () => {
+  const stores = makeStores({ [UID]: newUser({ planStatus: "expired", billingSubscriptionId: "sub_old" }) });
+  const ev = event("subscription.active", T1, { subscription_id: "sub_new" });
+  assert.equal(await processBillingEvent(stores.deps, ev, "new-sub"), "applied");
+  assert.equal(stores.db.users[UID].billingSubscriptionId, "sub_new");
+  assert.equal(stores.db.users[UID].planStatus, "active");
+});
+
+test("a refund cannot revoke a replacement subscription using an old payment association", async () => {
+  const stores = makeStores({ [UID]: newUser() });
+  await processBillingEvent(stores.deps, event("subscription.active", T1, { payment_id: "pay_old", subscription_id: "sub_old" }), "old-active");
+  stores.db.users[UID].planStatus = "expired";
+  await processBillingEvent(stores.deps, event("subscription.active", T2, { subscription_id: "sub_new" }), "new-active");
+  const refund = { type: "refund.succeeded", timestamp: T3, data: { payment_id: "pay_old", metadata: { userId: UID } } };
+  assert.equal(await processBillingEvent(stores.deps, refund, "old-refund"), "no_user");
+  assert.equal(stores.db.users[UID].billingSubscriptionId, "sub_new");
+  assert.equal(stores.db.users[UID].planStatus, "active");
+});
+
+test("legacy payment associations without a subscription id cannot revoke a currently bound plan", async () => {
+  const stores = makeStores({ [UID]: newUser({ planStatus: "active", billingSubscriptionId: "sub_current" }) });
+  stores.db.events.push({ eventId: "legacy-payment", userId: UID, paymentId: "pay_legacy" });
+  const refund = { type: "refund.succeeded", timestamp: T3, data: { payment_id: "pay_legacy" } };
+  assert.equal(await processBillingEvent(stores.deps, refund, "legacy-refund"), "no_user");
+  assert.equal(stores.db.users[UID].billingSubscriptionId, "sub_current");
+  assert.equal(stores.db.users[UID].planStatus, "active");
 });
 
 /* ---------------- checkout ---------------- */

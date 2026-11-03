@@ -23,8 +23,8 @@ const proUser = () => ({ createdAt: new Date("2026-01-01"), planAccessUntil: new
 
 // ---- export clamp -----------------------------------------------------------------------------------------------
 
-// 30 days counting today = 2026-10-05; one day of time-zone slack = 2026-10-04
-const WINDOW_START = "2026-10-04";
+// 30 days counting today = 2026-10-05.
+const WINDOW_START = "2026-10-05";
 
 test("unlimited export (null) leaves every range untouched", () => {
   for (const input of [{ range: "all" }, { range: "2y" }, { from: "2020-01-01", to: "2026-01-01" }]) {
@@ -84,12 +84,12 @@ test("a future end date is left alone (nothing exists there to leak)", () => {
 
 test("the window follows the entitlement value, not 30", () => {
   const out = clampExportRange(resolveExportRange({ range: "all" }), 7, NOW);
-  assert.equal(out.from, "2026-10-27"); // 7 days counting today start 10-28; one day of slack = 10-27
+  assert.equal(out.from, "2026-10-28"); // 7 days counting today
 });
 
 test("the window ends at the UTC day, so a month boundary is handled", () => {
   const out = clampExportRange(resolveExportRange({ range: "all" }), 30, Date.parse("2026-03-05T23:59:59.000Z"));
-  assert.equal(out.from, "2026-02-03"); // 30 days counting 03-05 = 02-04, minus one day of slack
+  assert.equal(out.from, "2026-02-04"); // 30 days counting 03-05
 });
 
 test("an entitlement of 0 (or an invalid value) blocks export with PLAN_LIMIT instead of opening it up", () => {

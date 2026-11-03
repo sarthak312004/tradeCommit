@@ -7,7 +7,7 @@ import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { createWithinPlanLimit } from "../utils/planLimits.js";
-import { assertOwnedResourceWritable } from "../utils/readOnlyResources.js";
+import { assertOwnedResourceWritable, getReadOnlyResourceIds } from "../utils/readOnlyResources.js";
 import { deleteImagesFromCloudinary } from "../utils/cloudinary.js";
 import { DEFAULT_CURRENCY, isValidCurrency, normalizeCurrency } from "../constants/currency.js";
 import { applyContextToFields, parseCustomFields } from "../utils/customFields.js";
@@ -85,7 +85,7 @@ const parseJournalContext = (raw) => {
   return { strategy, attributes };
 };
 
-const serializeJournal = (journal) => ({
+const serializeJournal = (journal, readOnly = false) => ({
   id: String(journal._id),
   _id: journal._id,
   name: journal.journalName,
@@ -97,6 +97,7 @@ const serializeJournal = (journal) => ({
   createdAt: journal.createdAt ? new Date(journal.createdAt).toISOString() : new Date().toISOString(),
   updatedAt: journal.updatedAt ? new Date(journal.updatedAt).toISOString() : new Date().toISOString(),
   updated: "Just now",
+  readOnly,
   trades: (journal.trades ?? []).map(serializeTrade),
 });
 
@@ -107,10 +108,11 @@ export const getAllJournals = asyncHandler(async (req, res) => {
       path: "trades",
       options: { sort: { date: -1, createdAt: -1 } },
     });
+  const readOnlyIds = await getReadOnlyResourceIds({ user: req.user, Model: Journal, limitKey: "maxJournals" });
 
   return res
     .status(200)
-    .json(new ApiResponse(200, journals.map(serializeJournal), "Journals fetched successfully"));
+    .json(new ApiResponse(200, journals.map((journal) => serializeJournal(journal, readOnlyIds.has(String(journal._id)))), "Journals fetched successfully"));
 });
 
 export const createJournal = asyncHandler(async (req, res) => {

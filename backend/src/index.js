@@ -24,6 +24,13 @@ if (process.env.NODE_ENV === 'production') {
         console.error(`Production secrets must be at least 32 characters: ${weakSecrets.join(', ')}`)
         process.exit(1)
     }
+
+    const enforcement = String(process.env.PLAN_ENFORCEMENT ?? '').trim().toLowerCase()
+    if (!['all', 'new'].includes(enforcement)) {
+        console.warn('PLAN_ENFORCEMENT is not active: all users receive Pro entitlements.')
+    } else if (enforcement === 'new' && !Number.isFinite(new Date(process.env.PLAN_ENFORCEMENT_FROM).getTime())) {
+        console.warn('PLAN_ENFORCEMENT=new has no valid PLAN_ENFORCEMENT_FROM; no users will be limited.')
+    }
 }
 
 const missingCloudinary = ['CLOUDINARY_CLOUD_NAME', 'CLOUDINARY_API_KEY', 'CLOUDINARY_API_SECRET']

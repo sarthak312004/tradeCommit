@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
 import { ApiError, publicErrorFields } from "./ApiError.js";
 import { getEntitlements } from "./entitlements.js";
-import { aiContextFor, aiLimits, buildQuota, dailyBudgetFor, poolFilter, resolvePlan, weeklyCap } from "./aiQuotaRules.js";
+import { aiContextFor, aiLimits, buildQuota, dailyBudgetFor, meetsWeeklyReviewMinimum, poolFilter, resolvePlan, weeklyCap } from "./aiQuotaRules.js";
 import { assertEntitled } from "./planLimits.js";
 
 const NOW = Date.parse("2026-11-03T10:00:00.000Z");
@@ -30,6 +30,13 @@ const pro = () => getEntitlements(proUser(), NOW);
 // confirmed reviews, oldest first, each `hoursAgo` hours before NOW
 const reviews = (...hoursAgo) => hoursAgo.map((h) => ({ createdAt: new Date(NOW - h * HOUR) }));
 const quotaFor = (entitlements, rows) => buildQuota({ rows, now: NOW, perDay: aiLimits().perDay, perWeek: weeklyCap(entitlements) });
+
+test("weekly reviews require the configured minimum even when the week is closed", () => {
+  assert.equal(meetsWeeklyReviewMinimum(4, 5), false);
+  assert.equal(meetsWeeklyReviewMinimum(5, 5), true);
+  assert.equal(meetsWeeklyReviewMinimum(10, 5), true);
+  assert.equal(meetsWeeklyReviewMinimum(5, 0), false);
+});
 
 // ---- weekly cap comes from the entitlement ------------------------------------------------------------------------
 
@@ -186,6 +193,8 @@ test("gates follow the entitlement, so an override or a config change opens them
   const entitlements = getEntitlements({ ...freeUser(), entitlementOverrides: { aiRangeReviews: true } }, NOW);
   assert.doesNotThrow(() => assertEntitled(entitlements, "aiRangeReviews", "x"));
   assert.throws(() => assertEntitled(entitlements, "aiHistory", "x"));
+  const noCarry = getEntitlements({ ...freeUser(), entitlementOverrides: { aiCarryForward: false } }, NOW);
+  assert.throws(() => assertEntitled(noCarry, "aiCarryForward", "x"));
 });
 
 test("a missing or malformed entitlement locks the feature", () => {

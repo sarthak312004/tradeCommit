@@ -1,5 +1,6 @@
 // Billing logic with its collaborators passed in (database models, payment client), so it can be tested without a database.
 // controllers/billing.controller.js wires the real ones.
+import { randomUUID } from "node:crypto";
 import { ApiError } from "./ApiError.js";
 import { ApiResponse } from "./ApiResponse.js";
 import { asyncHandler } from "./asyncHandler.js";
@@ -61,6 +62,7 @@ export const createCheckoutHandler = ({ getClient }) =>
 
 const OBJECT_ID = /^[a-f0-9]{24}$/i;
 const USER_FIELDS = "+billingSubscriptionId +billingLastEventAt";
+const EVENT_LEASE_MS = 5 * 60_000;
 
 // Which email (if any) a change of state deserves
 const transitionEmail = (from, to) => {
@@ -71,21 +73,42 @@ const transitionEmail = (from, to) => {
   return null;
 };
 
-const resolveUser = async ({ User: Users, BillingEvent: Events }, subject) => {
-  if (subject.userId && OBJECT_ID.test(subject.userId)) {
-    const user = await Users.findById(subject.userId).select(USER_FIELDS).lean();
-    if (user) return user;
+const resolveUser = async ({ User: Users, BillingEvent: Events }, subject, event) => {
+  const metadataUserId = subject.userId && OBJECT_ID.test(subject.userId) ? subject.userId : null;
+  const subscriptionUser = subject.subscriptionId
+    ? await Users.findOne({ billingSubscriptionId: subject.subscriptionId }).select(USER_FIELDS).lean()
+    : null;
+
+  if (subscriptionUser) {
+    return !metadataUserId || String(subscriptionUser._id) === metadataUserId ? subscriptionUser : null;
   }
-  if (subject.subscriptionId) {
-    const user = await Users.findOne({ billingSubscriptionId: subject.subscriptionId }).select(USER_FIELDS).lean();
-    if (user) return user;
-  }
+
   if (subject.paymentId) {
-    // refund / dispute events may carry only the payment: find the user through an earlier event of that payment
+    // Refunds and disputes must resolve through a payment previously associated with this account.
     const earlier = await Events.findOne({ paymentId: subject.paymentId, userId: { $ne: null } }).lean();
-    if (earlier) return Users.findById(earlier.userId).select(USER_FIELDS).lean();
+    if (earlier) {
+      const user = await Users.findById(earlier.userId).select(USER_FIELDS).lean();
+      if (!user || (metadataUserId && String(user._id) !== metadataUserId)) return null;
+      if (earlier.subscriptionId && user.billingSubscriptionId && earlier.subscriptionId !== user.billingSubscriptionId) return null;
+      if (!earlier.subscriptionId && user.billingSubscriptionId && !subject.subscriptionId) return null;
+      return user;
+    }
+    if (["refund.succeeded", "dispute.opened", "dispute.lost"].includes(event?.type)) return null;
   }
-  return null;
+
+  if (!metadataUserId) return null;
+  const user = await Users.findById(metadataUserId).select(USER_FIELDS).lean();
+  if (!user) return null;
+
+  if (!user.billingSubscriptionId && isLiveStatus(user.planStatus)) return null;
+  if (subject.subscriptionId && user.billingSubscriptionId && user.billingSubscriptionId !== subject.subscriptionId) {
+    // A verified first activation may represent a new purchase after the former subscription ended.
+    if (event?.type !== "subscription.active" || user.planStatus !== "expired") return null;
+  } else if (!subject.subscriptionId && user.billingSubscriptionId) {
+    return null;
+  }
+
+  return user;
 };
 
 /**
@@ -94,41 +117,90 @@ const resolveUser = async ({ User: Users, BillingEvent: Events }, subject) => {
  */
 export const processBillingEvent = async (deps, event, eventId) => {
   const { User: Users, BillingEvent: Events, now = Date.now } = deps;
-  if (await Events.exists({ eventId })) return "duplicate";
-
+  const receivedAt = new Date(now()).getTime();
   const subject = eventSubject(event);
-  const at = eventTime(event, now());
-  const user = await resolveUser(deps, subject);
+  const at = eventTime(event, receivedAt);
+  const claimToken = randomUUID();
+  try {
+    await Events.create({
+      eventId,
+      type: String(event?.type ?? "unknown"),
+      state: "processing",
+      claimToken,
+      leaseUntil: new Date(receivedAt + EVENT_LEASE_MS),
+    });
+  } catch (error) {
+    if (error?.code !== 11000) throw error;
+    const existing = await Events.findOne({ eventId }).lean();
+    if (!existing) throw error;
+    if (existing.state !== "processing") return "duplicate"; // includes legacy rows with no state field
+    if (existing.leaseUntil && new Date(existing.leaseUntil).getTime() > receivedAt) {
+      throw new BillingEventError("Webhook event is already being processed");
+    }
 
-  let outcome = "ignored";
+    const reclaimed = await Events.findOneAndUpdate(
+      {
+        eventId,
+        state: "processing",
+        $or: [{ leaseUntil: { $lte: new Date(receivedAt) } }, { leaseUntil: null }, { leaseUntil: { $exists: false } }],
+      },
+      { $set: { claimToken, leaseUntil: new Date(receivedAt + EVENT_LEASE_MS) } },
+      { new: true }
+    );
+    if (!reclaimed) throw new BillingEventError("Webhook event is already being processed");
+  }
+
+  let user = null;
   let transition = null;
   let update = null;
-  if (!user) {
-    console.warn(`Billing webhook: no matching user for ${event?.type}`); // event type only, no ids or payload
-    outcome = "no_user";
-  } else {
-    update = planUpdateFor(event, user, { at, productIntervals: deps.productIntervals ?? productIntervals() });
-    if (update) {
-      const result = await Users.updateOne(
-        {
-          _id: user._id,
-          // out-of-order guard: only apply when no newer event was applied before
-          $or: [{ billingLastEventAt: null }, { billingLastEventAt: { $exists: false } }, { billingLastEventAt: { $lte: at } }],
-        },
-        { $set: { ...update, billingLastEventAt: at } }
-      );
-      outcome = (result?.matchedCount ?? result?.n ?? 0) > 0 ? "applied" : "stale";
-      if (outcome === "applied") transition = transitionEmail(user.planStatus, update.planStatus);
-    }
-  }
-
+  let outcome = "ignored";
   try {
-    await Events.create({ eventId, type: String(event?.type ?? "unknown"), userId: user?._id ?? null, paymentId: subject.paymentId });
+    user = await resolveUser(deps, subject, event);
+    if (!user) {
+      console.warn(`Billing webhook: no matching user for ${event?.type}`); // event type only, no ids or payload
+      outcome = "no_user";
+    } else {
+      update = planUpdateFor(event, user, { at, productIntervals: deps.productIntervals ?? productIntervals() });
+      if (update) {
+        const result = await Users.updateOne(
+          {
+            _id: user._id,
+            // Equal-time events are ambiguous, so the first accepted event wins deterministically.
+            $or: [{ billingLastEventAt: null }, { billingLastEventAt: { $exists: false } }, { billingLastEventAt: { $lt: at } }],
+          },
+          { $set: { ...update, billingLastEventAt: at } }
+        );
+        outcome = (result?.matchedCount ?? result?.n ?? 0) > 0 ? "applied" : "stale";
+        if (outcome === "applied") transition = transitionEmail(user.planStatus, update.planStatus);
+      }
+    }
+
+    const completed = await Events.updateOne(
+      { eventId, state: "processing", claimToken },
+      {
+        $set: {
+          state: "processed",
+          processedAt: new Date(now()),
+          userId: user?._id ?? null,
+          paymentId: subject.paymentId,
+          subscriptionId: subject.subscriptionId,
+        },
+        $unset: { claimToken: 1, leaseUntil: 1 },
+      }
+    );
+    if ((completed?.matchedCount ?? completed?.n ?? 0) === 0) {
+      throw new BillingEventError("Webhook event claim was lost");
+    }
   } catch (error) {
-    if (error?.code !== 11000) throw error; // a concurrent retry already recorded it: fine
+    try {
+      await Events.deleteOne({ eventId, state: "processing", claimToken });
+    } catch (cleanupError) {
+      console.error("Could not release billing event claim:", cleanupError?.name);
+    }
+    throw error;
   }
 
-  // Notify only on a real change of state, and after the event is recorded, so a retry cannot send it twice. Best effort.
+  // Notify only after completion is recorded, so a retry cannot send the same best-effort notice twice.
   if (transition && deps.notify) {
     try {
       await deps.notify(transition, user, update);

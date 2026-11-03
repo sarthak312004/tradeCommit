@@ -5,12 +5,15 @@ let client = null;
 
 export const getDodoClient = async () => {
   if (client) return client;
+  const environment = process.env.DODO_ENV?.trim();
+  if (!["test_mode", "live_mode"].includes(environment)) return null;
+  if (process.env.NODE_ENV === "production" && environment !== "live_mode") return null;
   const bearerToken = process.env.DODO_PAYMENTS_API_KEY?.trim();
   if (!bearerToken) return null;
   const { default: DodoPayments } = await import("dodopayments");
   client = new DodoPayments({
     bearerToken,
-    environment: process.env.DODO_ENV === "live_mode" ? "live_mode" : "test_mode",
+    environment,
     webhookKey: process.env.DODO_PAYMENTS_WEBHOOK_KEY?.trim() || null,
   });
   return client;

@@ -277,6 +277,7 @@ export const getRangeReviewStatus = asyncHandler(async (req, res) => {
 // The one change the latest saved review asked the trader to carry into their next plan, so the planner can show it
 // while a plan is being written: { commitment: { start, end, rule, planLine, checkpoint, source } | null }. Never calls the AI.
 export const getCarryForward = asyncHandler(async (req, res) => {
+  assertEntitled(aiContextFor(req.user).entitlements, "aiCarryForward", "AI carry-forward is not available on your plan.");
   const journalId = requireJournalId(req);
   const journal = await Journal.findOne({ _id: journalId, owner: req.user._id }).select("_id").lean();
   if (!journal) throw new ApiError(404, "Journal not found");

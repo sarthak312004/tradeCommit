@@ -40,6 +40,7 @@ function SidebarSection({
   footer,
   usage = '',
   atLimit = false,
+  addDisabled = false,
   onLimit,
   children,
 }) {
@@ -76,6 +77,7 @@ function SidebarSection({
             aria-expanded={showForm}
             title={addLabel}
             aria-label={addLabel}
+            disabled={addDisabled}
             className={`flex h-7 w-7 items-center justify-center rounded-md ${ghostBtn}`}
           >
             <PlusIcon className="h-4 w-4" />

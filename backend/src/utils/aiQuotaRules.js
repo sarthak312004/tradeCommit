@@ -24,6 +24,9 @@ export const aiLimits = () => {
   };
 };
 
+export const meetsWeeklyReviewMinimum = (tradeCount, minimum) =>
+  Number.isInteger(tradeCount) && Number.isInteger(minimum) && minimum > 0 && tradeCount >= minimum;
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
 

@@ -2,7 +2,7 @@ import { AiUsage } from "../models/aiUsage.models.js";
 import { ApiError } from "./ApiError.js";
 import { isUserBusy } from "./aiJobGuard.js";
 
-import { aiContextFor, aiLimits, buildQuota, dailyBudgetFor, poolFilter, resolvePlan, weeklyCap } from "./aiQuotaRules.js";
+import { aiContextFor, aiLimits, buildQuota, dailyBudgetFor, meetsWeeklyReviewMinimum, poolFilter, resolvePlan, weeklyCap } from "./aiQuotaRules.js";
 
 // the limits live in aiQuotaRules.js (pure, testable without a database); re-exported for existing importers
 export { aiContextFor, aiLimits };
@@ -63,13 +63,11 @@ export const evaluateAccess = async ({ week, saved, ownerId, entitlements, plan 
   const needsReview = !saved || saved.inputHash !== week.inputHash;
   const reviewedBefore = saved ? saved.reviewedTradeCount ?? 0 : 0;
   const newTrades = Math.max(0, week.weekTrades.length - reviewedBefore);
-  // a finished week unlocks with a single trade; an open week waits for enough trades to find patterns
-  // a date-range review never takes the closed-week shortcut: it always needs the full minimum of trades
-  // Date ranges have ONE rule, always: the range must hold at least `firstTrades` trades. There is no "5 new trades"
-  // step for a refresh; a changed range is simply stale, and refreshing it is bounded by the daily/weekly caps below.
+  // Weekly reviews, including closed weeks, require enough trades for a useful first review.
+  // Date ranges have ONE rule: the range must hold at least `firstTrades` trades.
   const isRange = Boolean(week.strictMinimum);
   const rangeCount = week.weekTrades.length;
-  const threshold = isRange ? limits.firstTrades : week.isClosed ? 1 : saved ? limits.stepTrades : limits.firstTrades;
+  const threshold = isRange || !saved ? limits.firstTrades : week.isClosed ? 1 : limits.stepTrades;
   const rulesRewritten = Boolean(saved?.contextHash) && saved.contextHash !== week.contextHash;
 
   const quota = await getQuotaSnapshot(ownerId, entitlements);
@@ -88,6 +86,12 @@ export const evaluateAccess = async ({ week, saved, ownerId, entitlements, plan 
   const base = { needsReview, newTrades, threshold, usage, nextAvailableAt: null, quota };
 
   if (!needsReview) return { ...base, canGenerate: false, reason: "up_to_date", message: "" };
+
+  if (!isRange && !meetsWeeklyReviewMinimum(week.weekTrades.length, limits.firstTrades)) {
+    const missing = limits.firstTrades - week.weekTrades.length;
+    const message = `Log ${plural(missing, "more trade")} in ${week.scopeLabel ?? "this week"} to unlock your review (${week.weekTrades.length} of ${limits.firstTrades}). More trades give the mentor real patterns to work with.`;
+    return { ...base, canGenerate: false, reason: "not_enough_trades", message };
+  }
 
   if (isRange && rangeCount < threshold) {
     const missing = threshold - rangeCount;

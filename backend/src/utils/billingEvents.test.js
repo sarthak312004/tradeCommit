@@ -19,10 +19,13 @@ test("active / renewed / plan_changed: active status, access until next billing 
   }
 });
 
-test("the interval follows our product ids; the provider's frequency is only a fallback", () => {
+test("only our configured Pro product ids can activate a subscription", () => {
   assert.equal(planUpdateFor(subEvent("subscription.active", { product_id: "pdt_y" }), {}, ctx).planInterval, "yearly");
-  assert.equal(planUpdateFor(subEvent("subscription.active", { product_id: "other", payment_frequency_interval: "Year" }), {}, ctx).planInterval, "yearly");
-  assert.equal("planInterval" in planUpdateFor(subEvent("subscription.active", { product_id: "other" }), {}, ctx), false);
+  assert.throws(
+    () => planUpdateFor(subEvent("subscription.active", { product_id: "other", payment_frequency_interval: "Year" }), {}, ctx),
+    BillingEventError
+  );
+  assert.throws(() => planUpdateFor(subEvent("subscription.active", { product_id: null }), {}, ctx), BillingEventError);
 });
 
 test("an active event without a usable next billing date is a processing failure (Dodo retries)", () => {
@@ -42,7 +45,7 @@ test("on_hold and payment.failed: past_due for subscribers only, access date unt
 test("cancelled at period end: cancelling, access date unchanged", () => {
   const user = { planStatus: "active", planAccessUntil: new Date(NEXT) };
   const update = planUpdateFor(subEvent("subscription.cancelled", { cancel_at_next_billing_date: true }), user, ctx);
-  assert.deepEqual(update, { planStatus: "cancelling", cancelAtPeriodEnd: true });
+  assert.deepEqual(update, { planStatus: "cancelling", cancelAtPeriodEnd: true, billingSubscriptionId: "sub_1", billingCustomerId: "cus_1" });
 });
 
 test("cancelled immediately: expired, access ends at the event time", () => {
@@ -51,6 +54,7 @@ test("cancelled immediately: expired, access ends at the event time", () => {
   assert.equal(update.planStatus, "expired");
   assert.equal(update.planAccessUntil.toISOString(), AT.toISOString());
   assert.equal(update.cancelAtPeriodEnd, false);
+  assert.equal(update.billingSubscriptionId, "sub_1");
 });
 
 test("expired, refund.succeeded and dispute.lost end access; ending never extends an earlier end date", () => {

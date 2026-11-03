@@ -45,8 +45,8 @@ function ImportTradesDialog({ journals, currentJournalId, onImport, onOpenJourna
   const [defaultJournal, setDefaultJournal] = useState(() => (journals.some((journal) => journal.id === currentJournalId) ? currentJournalId : journals[0]?.id ?? ''))
   const [result, setResult] = useState(null)
   // the most trades one import may save on this plan (null = no limit); the server enforces it too
-  const { entitlements } = usePlan()
-  const maxPerImport = Number.isInteger(entitlements?.importMaxPerCommit) ? entitlements.importMaxPerCommit : null
+  const { entitlements, loading: planLoading } = usePlan()
+  const maxPerImport = !planLoading && Number.isInteger(entitlements?.importMaxPerCommit) ? entitlements.importMaxPerCommit : null
 
   const dialogRef = useRef(null)
   const isBusy = isReading || isImporting
@@ -200,10 +200,10 @@ function ImportTradesDialog({ journals, currentJournalId, onImport, onOpenJourna
 
   /* ---------------------------------------------------------------- step 3 */
 
-  const overImportLimit = maxPerImport !== null && selectedTrades.length > maxPerImport
+  const overImportLimit = planLoading || (maxPerImport !== null && selectedTrades.length > maxPerImport)
 
   const handleImport = async () => {
-    if (selectedTrades.length === 0 || isImporting || overImportLimit) return
+    if (selectedTrades.length === 0 || isImporting || planLoading || overImportLimit) return
     setIsImporting(true)
     setError('')
 
@@ -327,6 +327,7 @@ function ImportTradesDialog({ journals, currentJournalId, onImport, onOpenJourna
               ) : (
                 <p aria-live="polite" className="min-w-0">
                   <span className="font-medium text-zinc-800 dark:text-zinc-100">{selectedTrades.length} of {trades.length} selected</span>
+                  {planLoading && <span className="block">Checking your plan limits…</span>}
                   {selectedTrades.length > 0 && (
                     <span> · All will go to {journalName(defaultJournal)}</span>
                   )}
@@ -356,7 +357,7 @@ function ImportTradesDialog({ journals, currentJournalId, onImport, onOpenJourna
                   </>
                 )}
                 {step === 'review' && (
-                  <button type="button" onClick={handleImport} disabled={selectedTrades.length === 0 || isImporting || overImportLimit} className={primaryButton}>
+                  <button type="button" onClick={handleImport} disabled={selectedTrades.length === 0 || isImporting || planLoading || overImportLimit} className={primaryButton}>
                     {isImporting ? (
                       <span aria-hidden="true" className="h-3.5 w-3.5 animate-spin rounded-full border border-current/40 border-t-current" />
                     ) : (

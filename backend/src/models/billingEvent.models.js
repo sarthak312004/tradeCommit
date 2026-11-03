@@ -9,6 +9,11 @@ const billingEventSchema = new mongoose.Schema(
         type:{ type:String, required:true },
         userId:{ type:mongoose.Schema.Types.ObjectId, ref:'User', default:null },
         paymentId:{ type:String, default:null, index:true },
+        subscriptionId:{ type:String, default:null },
+        state:{ type:String, enum:['processing','processed'], default:'processed' },
+        claimToken:{ type:String, default:null },
+        leaseUntil:{ type:Date, default:null },
+        processedAt:{ type:Date, default:null },
         // Rows expire after 90 days: retries never come that late.
         createdAt:{ type:Date, default:Date.now, expires:60 * 60 * 24 * 90 }
     },

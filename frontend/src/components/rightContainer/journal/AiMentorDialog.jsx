@@ -31,9 +31,9 @@ function AiMentorDialog({ journalId, journalName, currency, isOpen, onClose, onO
   const [rangeKey, setRangeKey] = useState(0)
   const [quota, setQuota] = useState(null)
   const dialogRef = useRef(null)
-  const { entitlements } = usePlan()
+  const { entitlements, loading: planLoading } = usePlan()
   // the History tab needs the plan's history feature; a locked tab opens the upgrade prompt instead of switching
-  const historyLocked = entitlements !== null && entitlements.aiHistory !== true
+  const historyLocked = !planLoading && entitlements?.aiHistory !== true
 
   // every response carries the allowance as the server sees it right now; the newest one wins
   const reportAccess = useCallback((access) => {
@@ -69,6 +69,7 @@ function AiMentorDialog({ journalId, journalName, currency, isOpen, onClose, onO
   }, [journalId])
 
   const selectMode = (next) => {
+    if (next === 'history' && planLoading) return
     if (next === 'history' && historyLocked) {
       openUpgrade('aiHistory')
       return
@@ -128,6 +129,7 @@ function AiMentorDialog({ journalId, journalName, currency, isOpen, onClose, onO
                 type="button"
                 role="tab"
                 aria-selected={active}
+                disabled={item.id === 'history' && planLoading}
                 onClick={() => selectMode(item.id)}
                 className={`inline-flex h-10 cursor-pointer items-center whitespace-nowrap border-b-2 px-3.5 text-[13px] font-medium transition-colors ${focusRing} ${
                   active

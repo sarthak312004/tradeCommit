@@ -26,7 +26,7 @@ function Sidebar({ isSidebarOpen: isSidebarOpenProp, setIsSidebarOpen, isMobile 
   const { journals, selectedJournal, selectJournal } = useContext(journalContext)
   const { planners } = useContext(plannerContext)
   const { theme, setTheme } = useTheme()
-  const { entitlements } = usePlan()
+  const { entitlements, loading: planLoading } = usePlan()
   const navigate = useNavigate()
   const { pathname } = useLocation()
 
@@ -91,14 +91,14 @@ function Sidebar({ isSidebarOpen: isSidebarOpenProp, setIsSidebarOpen, isMobile 
   }
 
   // limits come from the plan's entitlements (null = unlimited, so no counter); the server enforces them too
-  const maxJournals = entitlements?.maxJournals ?? null
-  const maxPlanners = entitlements?.maxPlanners ?? null
+  const maxJournals = planLoading ? null : entitlements?.maxJournals ?? null
+  const maxPlanners = planLoading ? null : entitlements?.maxPlanners ?? null
   const journalsAtLimit = maxJournals !== null && journals.length >= maxJournals
   const plannersAtLimit = maxPlanners !== null && planners.length >= maxPlanners
 
   // a nudge that shows only until the first planner exists, and only once the user has a journal with trades
   const hasLoggedTrades = journals.some((journal) => (journal.trades?.length ?? 0) > 0)
-  const showCreatePlannerCta = hasLoggedTrades && planners.length === 0 && !plannersAtLimit && openFormSection !== "planners"
+  const showCreatePlannerCta = !planLoading && hasLoggedTrades && planners.length === 0 && !plannersAtLimit && openFormSection !== "planners"
 
   const journalRailItems = journals.map((journal) => ({
     id: journal.id,
@@ -176,6 +176,7 @@ function Sidebar({ isSidebarOpen: isSidebarOpenProp, setIsSidebarOpen, isMobile 
           addLabel="New journal"
           usage={maxJournals !== null ? `${journals.length} of ${maxJournals}` : ""}
           atLimit={journalsAtLimit}
+          addDisabled={planLoading}
           onLimit={() => openUpgrade("maxJournals")}
           isSidebarOpen={isSidebarOpen}
           setIsSidebarOpen={setIsSidebarOpen}
@@ -200,6 +201,7 @@ function Sidebar({ isSidebarOpen: isSidebarOpenProp, setIsSidebarOpen, isMobile 
           addLabel="New trade planner"
           usage={maxPlanners !== null ? `${planners.length} of ${maxPlanners}` : ""}
           atLimit={plannersAtLimit}
+          addDisabled={planLoading}
           onLimit={() => openUpgrade("maxPlanners")}
           isSidebarOpen={isSidebarOpen}
           setIsSidebarOpen={setIsSidebarOpen}
