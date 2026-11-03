@@ -123,7 +123,7 @@ function FormDrawer({ ref, ariaTitle, breadcrumb, onSubmit, onClose, footer, chi
         </div>
 
         {/* top bar */}
-        <div className="flex h-12 shrink-0 items-center justify-between px-3">
+        <div className="grid h-12 shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center px-3">
           <div className="flex min-w-0 items-center gap-1.5">
             <button
               type="button"
@@ -138,10 +138,12 @@ function FormDrawer({ ref, ariaTitle, breadcrumb, onSubmit, onClose, footer, chi
             </button>
             <p className={`truncate pl-1 text-xs ${deepMode ? 'text-stone-500 dark:text-stone-400' : 'text-zinc-600 dark:text-zinc-400'}`}>{breadcrumb}</p>
           </div>
-          <div className="flex min-w-0 items-center gap-2">{headerExtra}</div>
-          <button type="button" onClick={requestClose} aria-label="Close" title="Close" className={iconButtonClass}>
-            <CloseIcon className="h-4 w-4" />
-          </button>
+          <div className="flex min-w-0 items-center justify-center gap-2">{headerExtra}</div>
+          <div className="flex justify-self-end">
+            <button type="button" onClick={requestClose} aria-label="Close" title="Close" className={iconButtonClass}>
+              <CloseIcon className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
         {/* page body */}

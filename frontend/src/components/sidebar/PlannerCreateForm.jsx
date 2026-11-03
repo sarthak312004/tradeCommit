@@ -1,10 +1,8 @@
 import { useContext, useEffect, useRef, useState } from "react"
 import { plannerContext } from "../../context/Context"
 import {
-  CUSTOM_TYPE,
   DEFAULT_PLANNER_TYPE,
   MAX_PLANNER_NAME,
-  MAX_PLANNER_TYPE,
   PLANNER_TYPE_PRESETS,
 } from "../../utils/plannerTypes"
 import {
@@ -21,7 +19,6 @@ function PlannerCreateForm({ open, onClose }) {
   const { createPlanner } = useContext(plannerContext)
   const [name, setName] = useState("")
   const [type, setType] = useState(DEFAULT_PLANNER_TYPE)
-  const [customType, setCustomType] = useState("")
   const [error, setError] = useState("")
   const [isSaving, setIsSaving] = useState(false)
   const inputRef = useRef(null)
@@ -35,7 +32,6 @@ function PlannerCreateForm({ open, onClose }) {
   const reset = () => {
     setName("")
     setType(DEFAULT_PLANNER_TYPE)
-    setCustomType("")
     setError("")
     onClose()
   }
@@ -43,7 +39,7 @@ function PlannerCreateForm({ open, onClose }) {
   const handleSubmit = async (event) => {
     event.preventDefault()
     const trimmedName = name.trim()
-    const plannerType = (type === CUSTOM_TYPE ? customType : type).trim()
+    const plannerType = type.trim()
     if (!trimmedName || !plannerType || isSaving) return
 
     setIsSaving(true)
@@ -92,23 +88,7 @@ function PlannerCreateForm({ open, onClose }) {
             {PLANNER_TYPE_PRESETS.map((preset) => (
               <option key={preset} value={preset}>{preset}</option>
             ))}
-            <option value={CUSTOM_TYPE}>{CUSTOM_TYPE}</option>
           </select>
-          {type === CUSTOM_TYPE && (
-            <input
-              id="planner-custom-type"
-              type="text"
-              value={customType}
-              onChange={(event) => setCustomType(event.target.value)}
-              onKeyDown={(event) => event.key === "Escape" && reset()}
-              placeholder="e.g. Options"
-              maxLength={MAX_PLANNER_TYPE}
-              autoComplete="off"
-              readOnly={isSaving}
-              aria-label="Custom planner type"
-              className={`${createTextField} mt-2`}
-            />
-          )}
         </div>
 
       </div>
@@ -125,7 +105,7 @@ function PlannerCreateForm({ open, onClose }) {
         </button>
         <button
           type="submit"
-          disabled={!name.trim() || !(type === CUSTOM_TYPE ? customType.trim() : type) || isSaving}
+          disabled={!name.trim() || !type.trim() || isSaving}
           className={createSubmitButton}
         >
           {isSaving ? "Creating…" : "Create"}

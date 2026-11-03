@@ -20,8 +20,8 @@ import { isRichTextEmpty } from '../../../utils/richText'
 import { buildFieldChoices, collectCustomFieldOptions, resolveCardFields } from '../../../utils/tradeCardFields'
 import { useTradeCardFields } from '../../../hooks/useTradeCardFields'
 import { useTradeView } from '../../../hooks/useTradeView'
-import { SlidersIcon } from '../../../utils/Icons.jsx'
-import { loadTradeForm, preloadTradeForm } from '../../../utils/formLoaders'
+import { CalendarIcon, SlidersIcon } from '../../../utils/Icons.jsx'
+import { loadTradeForm, preloadTradeForm, preloadPlanForm } from '../../../utils/formLoaders'
 import { clearFormDraft, readFormDraft, writeFormDraft } from '../../../utils/formDraftStorage'
 import DialogSkeleton from '../../common/DialogSkeleton'
 
@@ -31,6 +31,8 @@ const TradeAnalysis = lazy(() => import('./TradeAnalysis'))
 const JournalContextDialog = lazy(() => import('./JournalContextDialog'))
 const ExportJournalDialog = lazy(() => import('./ExportJournalDialog'))
 const ImportTradesDialog = lazy(() => import('./import/ImportTradesDialog'))
+// "Plan today": connects/creates the journal's planner and opens the existing plan form over the journal
+const PlanTodayFlow = lazy(() => import('./PlanToday'))
 // the mentor is reachable from every tab, so its code is warmed up when the orb is hovered or focused
 const loadAiMentor = () => import('./AiMentorDialog')
 const AiMentorDialog = lazy(loadAiMentor)
@@ -101,6 +103,7 @@ function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades,
   const [isContextOpen, setIsContextOpen] = useState(() => readFormDraft(contextFormStateKey)?.open === true)
   const [isExportOpen, setIsExportOpen] = useState(false)
   const [isImportOpen, setIsImportOpen] = useState(false)
+  const [isPlanTodayOpen, setIsPlanTodayOpen] = useState(false)
   const { profile } = useProfile()
   const [, setGuideStateVersion] = useState(0)
   const importHintKey = journal?.id ? `tradecommit:import-hint:${journal.id}` : null
@@ -264,6 +267,7 @@ function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades,
   }
 
   const currency = journal.currency ?? DEFAULT_CURRENCY
+  const isJournalPending = Boolean(journal.syncState) || String(journal.id).startsWith('pending-')
   const hasJournalStrategy = !isRichTextEmpty(journal.context?.strategy?.trim())
   const isFiltered = isRangeActive(range)
   const subtitle = isFiltered
@@ -312,6 +316,20 @@ function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades,
             <SlidersIcon className="h-3.5 w-3.5" />
             Context
             {hasJournalContext(journalContext) && <span aria-label="Context added" className="h-1.5 w-1.5 rounded-full bg-sky-500" />}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsPlanTodayOpen(true)}
+            onPointerEnter={preloadPlanForm}
+            onFocus={preloadPlanForm}
+            // a journal that is still being created has no server id yet, so no planner can be connected to it
+            disabled={isJournalPending}
+            title={isJournalPending ? 'Available once this journal has finished saving' : "Write today's trading plan"}
+            className="flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-2.5 text-xs font-medium text-zinc-700 shadow-sm transition-colors hover:bg-zinc-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/40 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/[0.14] dark:bg-panel dark:text-zinc-200 dark:shadow-none dark:hover:bg-white/[0.06]"
+          >
+            <CalendarIcon className="h-3.5 w-3.5" />
+            Plan today
           </button>
 
           <button
@@ -378,6 +396,12 @@ function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades,
             onSave={(context, options) => onSaveContext(journal.id, context, options)}
             onClose={handleCloseContext}
           />
+        </Suspense>
+      )}
+
+      {isPlanTodayOpen && !isJournalPending && (
+        <Suspense fallback={null}>
+          <PlanTodayFlow journal={journal} onClose={() => setIsPlanTodayOpen(false)} />
         </Suspense>
       )}
 
@@ -519,7 +543,7 @@ function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades,
         </div>
       )}
 
-      {mentorProgress?.completed && !mentorProgress.firstFeedbackReceived && !mentorProgress.celebrated && !isMentorOpen && !isFormOpen && (
+      {mentorProgress?.completed && !mentorProgress.firstFeedbackReceived && !mentorProgress.celebrated && !isMentorOpen && !isFormOpen && !isPlanTodayOpen && (
         <MentorUnlockBadge
           target={mentorProgress.target}
           onDismiss={celebrateMentor}
@@ -530,7 +554,7 @@ function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades,
         />
       )}
 
-      {!isMentorOpen && !isFormOpen && (
+      {!isMentorOpen && !isFormOpen && !isPlanTodayOpen && (
         <MentorOrb
           onOpen={openMentor}
           onWarm={loadAiMentor}
