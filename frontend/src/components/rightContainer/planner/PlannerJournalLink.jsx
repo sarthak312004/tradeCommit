@@ -48,7 +48,7 @@ function PlannerJournalLink({ planner, showEmptyState = false }) {
       >
         Journal
       </span>
-      <JournalPicker journals={options} value={linked?.id ?? ''} onChange={handleChange} disabled={isSaving} />
+      <JournalPicker journals={options} value={linked?.id ?? ''} onChange={handleChange} disabled={isSaving || planner.readOnly === true} />
       {linked && <span className="hidden text-[11px] text-zinc-500 sm:inline dark:text-zinc-400">AI mentor compares your plans with these trades</span>}
       {error && <p role="alert" className="w-full text-xs font-medium text-rose-700 dark:text-rose-300">{error}</p>}
     </div>

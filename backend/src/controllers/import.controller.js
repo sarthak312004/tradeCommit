@@ -7,6 +7,7 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { applyContextToFields } from "../utils/customFields.js";
 import { getEntitlements } from "../utils/entitlements.js";
 import { assertWithinImportLimit } from "../utils/planLimits.js";
+import { assertOwnedResourcesWritable } from "../utils/readOnlyResources.js";
 import { getMentorProgress, recordNewTrade, tradeFingerprint } from "../utils/mentorProgress.js";
 import {
   MAX_IMPORT_TRADES,
@@ -108,6 +109,8 @@ export const commitImport = asyncHandler(async (req, res) => {
 
   const journals = await Journal.find({ _id: { $in: [...byJournal.keys()] }, owner: req.user._id });
   if (journals.length !== byJournal.size) throw new ApiError(404, "Journal not found");
+  // an import is a write: locked (read-only) journals cannot receive trades, and nothing is saved if any target is locked
+  await assertOwnedResourcesWritable({ user: req.user, Model: Journal, resources: journals, limitKey: "maxJournals", feature: "readonly_journal" });
 
   // validate everything before saving anything, so a bad row never leaves a half-imported file
   const prepared = journals.map((journal) => {

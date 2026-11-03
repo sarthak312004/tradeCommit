@@ -6,6 +6,7 @@ import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { createWithinPlanLimit } from "../utils/planLimits.js";
+import { assertOwnedResourceWritable } from "../utils/readOnlyResources.js";
 import { isValidPlanDateKey, isWeeklyPlanStart, parsePlanScope } from "../utils/planScope.js";
 import { deleteImagesFromCloudinary, uploadOnCloudinary } from "../utils/cloudinary.js";
 import {
@@ -167,6 +168,7 @@ export const createPlanner = asyncHandler(async (req, res) => {
 
 export const updatePlanner = asyncHandler(async (req, res) => {
   const planner = await findOwnedPlanner(req);
+  await assertOwnedResourceWritable({ user: req.user, Model: Planner, resource: planner, limitKey: "maxPlanners", feature: "readonly_planner" });
   const { name, type } = parsePlannerPayload(req.body, { requireName: false });
   const linkedJournal = await parseLinkedJournal(req.body, req.user._id);
   const hadLinkedJournal = Boolean(planner.linkedJournal);
@@ -186,6 +188,7 @@ export const updatePlanner = asyncHandler(async (req, res) => {
 
 export const deletePlanner = asyncHandler(async (req, res) => {
   const planner = await findOwnedPlanner(req);
+  await assertOwnedResourceWritable({ user: req.user, Model: Planner, resource: planner, limitKey: "maxPlanners", feature: "readonly_planner" });
 
   const entries = await PlanEntry.find({ planner: planner._id, owner: req.user._id });
   await PlanEntry.deleteMany({ planner: planner._id, owner: req.user._id });
@@ -213,6 +216,7 @@ export const getPlanEntries = asyncHandler(async (req, res) => {
 
 export const createPlanEntry = asyncHandler(async (req, res) => {
   const planner = await findOwnedPlanner(req);
+  await assertOwnedResourceWritable({ user: req.user, Model: Planner, resource: planner, limitKey: "maxPlanners", feature: "readonly_planner" });
   const parsed = parseEntryPayload(req.body);
   await assertNoWeeklyDuplicate({ parsed, ownerId: req.user._id, plannerId: planner._id });
 
@@ -235,6 +239,7 @@ export const createPlanEntry = asyncHandler(async (req, res) => {
 
 export const updatePlanEntry = asyncHandler(async (req, res) => {
   const planner = await findOwnedPlanner(req);
+  await assertOwnedResourceWritable({ user: req.user, Model: Planner, resource: planner, limitKey: "maxPlanners", feature: "readonly_planner" });
   const { entryId } = req.params;
   requireObjectId(entryId, "plan");
   const entry = await PlanEntry.findOne({ _id: entryId, planner: planner._id, owner: req.user._id });
@@ -264,6 +269,7 @@ export const updatePlanEntry = asyncHandler(async (req, res) => {
 
 export const deletePlanEntry = asyncHandler(async (req, res) => {
   const planner = await findOwnedPlanner(req);
+  await assertOwnedResourceWritable({ user: req.user, Model: Planner, resource: planner, limitKey: "maxPlanners", feature: "readonly_planner" });
   const { entryId } = req.params;
   requireObjectId(entryId, "plan");
 
@@ -278,6 +284,7 @@ export const deletePlanEntry = asyncHandler(async (req, res) => {
 
 export const uploadPlanImage = asyncHandler(async (req, res) => {
   const planner = await findOwnedPlanner(req);
+  await assertOwnedResourceWritable({ user: req.user, Model: Planner, resource: planner, limitKey: "maxPlanners", feature: "readonly_planner" });
   if (!req.file) throw new ApiError(400, "An image file is required");
 
   const uploaded = await uploadOnCloudinary(req.file.buffer, `trade-planner/${planner._id}`);

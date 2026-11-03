@@ -2,6 +2,7 @@ import { Router } from "express";
 import { billingPortal, billingStatus, cancelSubscription, createCheckout, resumeSubscription, syncSubscription } from "../controllers/billing.controller.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 import { rateLimit } from "../middlewares/rateLimit.middleware.js";
+import { requireTrustedOrigin } from "../middlewares/csrf.middleware.js";
 
 const router = Router()
 
@@ -11,13 +12,13 @@ const syncLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 5, refundFailed: 
 const changeLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 20, refundFailed: true, keyBy: perUser })
 
 // Starts a hosted checkout for the logged-in user. The webhook is mounted separately in app.js (it needs the raw body).
-router.post("/checkout", verifyJWT, createCheckout)
+router.post("/checkout", requireTrustedOrigin, verifyJWT, createCheckout)
 
 // Self-service management. Ownership comes from req.user only; Dodo ids are read from the user document, never from the request.
 router.get("/status", verifyJWT, billingStatus)
-router.post("/portal", verifyJWT, changeLimiter, billingPortal)
-router.post("/cancel", verifyJWT, changeLimiter, cancelSubscription)
-router.post("/resume", verifyJWT, changeLimiter, resumeSubscription)
-router.post("/sync", verifyJWT, syncLimiter, syncSubscription)
+router.post("/portal", requireTrustedOrigin, verifyJWT, changeLimiter, billingPortal)
+router.post("/cancel", requireTrustedOrigin, verifyJWT, changeLimiter, cancelSubscription)
+router.post("/resume", requireTrustedOrigin, verifyJWT, changeLimiter, resumeSubscription)
+router.post("/sync", requireTrustedOrigin, verifyJWT, syncLimiter, syncSubscription)
 
 export { router as billingRouter }

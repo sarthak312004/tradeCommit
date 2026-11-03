@@ -89,6 +89,8 @@ function AnalysisLoading() {
 }
 
 function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades, onOpenJournal, onAddTrade, onUpdateTrade, onDeleteTrade, onUploadTradeImage, onSaveContext, onRetryTrade, onDiscardTrade, onOpenCreateForm }) {
+  // locked on Free: viewable and exportable, never editable (the API enforces this too and answers 403 PLAN_LIMIT)
+  const isReadOnly = journal?.readOnly === true
   const tradeFormStateKey = journal?.id ? `tradecommit:open-trade-form:${journal.id}` : null
   const contextFormStateKey = journal?.id ? `tradecommit:open-context-form:${journal.id}` : null
   const [restoredTradeForm] = useState(() => readFormDraft(tradeFormStateKey))
@@ -118,7 +120,8 @@ function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades,
     isGuideFinished(getGuideState(profile.username)) &&
     !isImportHintDismissed &&
     (journal?.trades?.length ?? 0) === 0 &&
-    onImportTrades
+    onImportTrades &&
+    !isReadOnly
   )
 
   useEffect(() => {
@@ -209,6 +212,7 @@ function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades,
   const fieldChoices = useMemo(() => buildFieldChoices(customFieldOptions), [customFieldOptions])
 
   const handleOpenNewTrade = (date = null) => {
+    if (isReadOnly) return
     const selectedDate = typeof date === 'string' ? date : null
     writeFormDraft(tradeFormStateKey, { open: true, tradeId: null, date: selectedDate })
     setEditingTrade(null)
@@ -217,6 +221,7 @@ function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades,
   }
 
   const handleOpenEditTrade = (trade) => {
+    if (isReadOnly) return
     if (trade.syncState) return // still saving, or failed: use the card's Retry / Discard instead
     writeFormDraft(tradeFormStateKey, { open: true, tradeId: trade.id, date: null })
     setEditingTrade(trade)
@@ -232,6 +237,7 @@ function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades,
   }
 
   const handleOpenContext = () => {
+    if (isReadOnly) return
     writeFormDraft(contextFormStateKey, { open: true })
     setIsContextOpen(true)
   }
@@ -338,8 +344,9 @@ function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades,
             type="button"
             onClick={handleOpenContext}
             data-tour="journal-context"
-            title="Strategy and default trade properties"
-            className="flex h-8 cursor-pointer items-center gap-2 rounded-lg border border-zinc-300 bg-white px-2.5 text-xs font-medium text-zinc-700 shadow-sm transition-colors hover:bg-zinc-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/40 dark:border-white/[0.14] dark:bg-panel dark:text-zinc-200 dark:shadow-none dark:hover:bg-white/[0.06]"
+            disabled={isReadOnly}
+            title={isReadOnly ? 'Read-only on Free. Upgrade to edit' : "Strategy and default trade properties"}
+            className="flex h-8 cursor-pointer items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50 rounded-lg border border-zinc-300 bg-white px-2.5 text-xs font-medium text-zinc-700 shadow-sm transition-colors hover:bg-zinc-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/40 dark:border-white/[0.14] dark:bg-panel dark:text-zinc-200 dark:shadow-none dark:hover:bg-white/[0.06]"
           >
             <SlidersIcon className="h-3.5 w-3.5" />
             Context
@@ -366,14 +373,16 @@ function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades,
             onPointerEnter={preloadTradeForm}
             onFocus={preloadTradeForm}
             data-tour="add-trade"
-            className="tc-btn-primary h-8 cursor-pointer rounded-lg bg-sky-600 px-3 text-xs font-semibold text-white transition hover:bg-sky-600"
+            disabled={isReadOnly}
+            title={isReadOnly ? 'Read-only on Free. Upgrade to edit' : undefined}
+            className="tc-btn-primary h-8 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 rounded-lg bg-sky-600 px-3 text-xs font-semibold text-white transition hover:bg-sky-600"
           >
             + Add trade
           </button>
 
           <div className="relative">
             <JournalActionsMenu
-              onImport={onImportTrades ? () => {
+              onImport={onImportTrades && !isReadOnly ? () => {
                 dismissImportHint()
                 setIsImportOpen(true)
               } : undefined}
@@ -414,7 +423,7 @@ function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades,
         </div>
       </div>
 
-      {isContextOpen && (
+      {isContextOpen && !isReadOnly && (
         <Suspense fallback={<DialogSkeleton variant="context" />}>
           <JournalContextDialog
             journalId={journal.id}
@@ -479,7 +488,7 @@ function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades,
         </Suspense>
       )}
 
-      {isFormOpen && (
+      {isFormOpen && !isReadOnly && (
         <Suspense fallback={null}>
           <TradeForm
             key={editingTrade?.id ?? 'new-trade'}
@@ -494,6 +503,12 @@ function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades,
             onUploadImage={(file) => onUploadTradeImage(journal.id, file)}
           />
         </Suspense>
+      )}
+
+      {isReadOnly && (
+        <p role="status" className="mb-3 rounded-lg bg-amber-500/10 px-3 py-2 text-xs font-medium text-amber-800 dark:text-amber-200">
+          Read-only on Free. Upgrade to edit
+        </p>
       )}
 
       {view === 'calendar' ? (
@@ -544,8 +559,8 @@ function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades,
           fieldIds={cardFieldIds}
           fieldChoices={fieldChoices}
           onFieldsChange={setCardFieldIds}
-          onSelect={handleOpenEditTrade}
-          onDelete={(tradeId) => onDeleteTrade(journal.id, tradeId)}
+          onSelect={isReadOnly ? undefined : handleOpenEditTrade}
+          onDelete={isReadOnly ? undefined : (tradeId) => onDeleteTrade(journal.id, tradeId)}
           onRetry={onRetryTrade}
           onDiscard={onDiscardTrade}
         />
@@ -562,8 +577,8 @@ function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades,
               fieldIds={cardFieldIds}
               fieldChoices={fieldChoices}
               onFieldsChange={setCardFieldIds}
-              onSelect={handleOpenEditTrade}
-              onDelete={(tradeId) => onDeleteTrade(journal.id, tradeId)}
+              onSelect={isReadOnly ? undefined : handleOpenEditTrade}
+              onDelete={isReadOnly ? undefined : (tradeId) => onDeleteTrade(journal.id, tradeId)}
               onRetry={onRetryTrade}
               onDiscard={onDiscardTrade}
             />

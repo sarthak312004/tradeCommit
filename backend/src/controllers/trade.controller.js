@@ -4,6 +4,7 @@ import { Trade } from "../models/trade.models.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
+import { assertOwnedResourceWritable } from "../utils/readOnlyResources.js";
 import { deleteImagesFromCloudinary, uploadOnCloudinary } from "../utils/cloudinary.js";
 import { parseCustomFields } from "../utils/customFields.js";
 import { recordNewTrade } from "../utils/mentorProgress.js";
@@ -144,15 +145,16 @@ export const uploadTradeImage = asyncHandler(async (req, res) => {
   if (!mongoose.isValidObjectId(journalId)) {
     throw new ApiError(400, "A valid journal ID is required");
   }
-  if (!req.file) {
-    throw new ApiError(400, "An image file is required");
-  }
 
   const journal = await Journal.findOne({ _id: journalId, owner: req.user._id });
   if (!journal) {
     throw new ApiError(404, "Journal not found");
   }
 
+  await assertOwnedResourceWritable({ user: req.user, Model: Journal, resource: journal, limitKey: "maxJournals", feature: "readonly_journal" });
+  if (!req.file) {
+    throw new ApiError(400, "An image file is required");
+  }
   const uploadedImage = await uploadOnCloudinary(req.file.buffer, `trading-journal/${journalId}`);
 
   return res
@@ -162,7 +164,6 @@ export const uploadTradeImage = asyncHandler(async (req, res) => {
 
 export const createTrade = asyncHandler(async (req, res) => {
   const { journalId } = req.params;
-  const parsed = parseTradePayload(req.body);
 
   if (!mongoose.isValidObjectId(journalId)) {
     throw new ApiError(400, "A valid journal ID is required");
@@ -173,6 +174,8 @@ export const createTrade = asyncHandler(async (req, res) => {
     owner: req.user._id,
   });
   if (!journal) throw new ApiError(404, "Journal not found");
+  await assertOwnedResourceWritable({ user: req.user, Model: Journal, resource: journal, limitKey: "maxJournals", feature: "readonly_journal" });
+  const parsed = parseTradePayload(req.body);
 
   const trade = await Trade.create({
     ...parsed,
@@ -209,6 +212,7 @@ export const updateTrade = asyncHandler(async (req, res) => {
   if (!journal) {
     throw new ApiError(404, "Journal not found");
   }
+  await assertOwnedResourceWritable({ user: req.user, Model: Journal, resource: journal, limitKey: "maxJournals", feature: "readonly_journal" });
 
   const trade = await Trade.findOne(
     { _id: tradeId, journal: journal._id, owner: req.user._id },
@@ -247,6 +251,7 @@ export const deleteTrade = asyncHandler(async (req, res) => {
   if (!journal) {
     throw new ApiError(404, "Journal not found");
   }
+  await assertOwnedResourceWritable({ user: req.user, Model: Journal, resource: journal, limitKey: "maxJournals", feature: "readonly_journal" });
 
   const trade = await Trade.findOneAndDelete({ _id: tradeId, journal: journal._id, owner: req.user._id });
   if (!trade) {

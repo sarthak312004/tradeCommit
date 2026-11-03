@@ -7,6 +7,7 @@ import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { createWithinPlanLimit } from "../utils/planLimits.js";
+import { assertOwnedResourceWritable } from "../utils/readOnlyResources.js";
 import { deleteImagesFromCloudinary } from "../utils/cloudinary.js";
 import { DEFAULT_CURRENCY, isValidCurrency, normalizeCurrency } from "../constants/currency.js";
 import { applyContextToFields, parseCustomFields } from "../utils/customFields.js";
@@ -159,6 +160,10 @@ export const createJournal = asyncHandler(async (req, res) => {
 
 export const updateJournal = asyncHandler(async (req, res) => {
   const { journalId } = req.params;
+  const ownedJournal = await Journal.findOne({ _id: journalId, owner: req.user._id });
+  if (!ownedJournal) throw new ApiError(404, "Journal not found");
+  await assertOwnedResourceWritable({ user: req.user, Model: Journal, resource: ownedJournal, limitKey: "maxJournals", feature: "readonly_journal" });
+
   const { journalName, name, context, mode, applyToExistingTrades } = req.body ?? {};
   // true (default) = also update trades logged before; false = only trades created from now on
   if (applyToExistingTrades !== undefined && typeof applyToExistingTrades !== "boolean") {
@@ -234,6 +239,7 @@ export const deleteJournal = asyncHandler(async (req, res) => {
   if (!journal) {
     throw new ApiError(404, "Journal not found");
   }
+  await assertOwnedResourceWritable({ user: req.user, Model: Journal, resource: journal, limitKey: "maxJournals", feature: "readonly_journal" });
 
   const trades = await Trade.find({ journal: journal._id, owner: req.user._id });
   await Trade.deleteMany({ journal: journal._id, owner: req.user._id });

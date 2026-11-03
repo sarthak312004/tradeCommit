@@ -69,11 +69,15 @@ function PlannerWorkspace({ planner }) {
     })
   }, [formStateKey, formState, currentEntry])
 
+  // locked on Free: viewable, never editable (the API enforces this too and answers 403 PLAN_LIMIT)
+  const isReadOnly = planner.readOnly === true
+
   const handleSubmit = (values, prepare) =>
     currentEntry ? updateEntry(currentEntry.id, values, prepare) : addEntry(values, prepare)
 
   // `options` is only sent by the weekly band: { scope: 'week', sections }, with `date` = the week's first day
   const openNewPlan = useCallback((date, options) => {
+    if (isReadOnly) return
     if (options?.scope === 'week') {
       const sections = Array.isArray(options.sections) ? options.sections : []
       writeFormDraft(formStateKey, { open: true, entryId: null, date, scope: 'week', sections })
@@ -82,7 +86,7 @@ function PlannerWorkspace({ planner }) {
     }
     writeFormDraft(formStateKey, { open: true, entryId: null, date })
     setFormState({ entry: null, date })
-  }, [formStateKey])
+  }, [formStateKey, isReadOnly])
 
   const openPlanFromCalendar = useCallback((date, options) => {
     openNewPlan(date, options)
@@ -119,6 +123,11 @@ function PlannerWorkspace({ planner }) {
         <div className="mb-4 flex flex-wrap items-center gap-2">
           <PlannerJournalLink planner={planner} showEmptyState={showConnectionHint} />
         </div>
+        {isReadOnly && (
+          <p role="status" className="mb-4 rounded-lg bg-amber-500/10 px-3 py-2 text-xs font-medium text-amber-800 dark:text-amber-200">
+            Read-only on Free. Upgrade to edit
+          </p>
+        )}
         {error && <p role="alert" className="mb-4 text-sm text-rose-500">{error}</p>}
         {isLoading && <p role="status" className="mb-2 text-xs text-zinc-500 dark:text-zinc-400">Loading plans…</p>}
         <PlannerCalendar
@@ -135,6 +144,8 @@ function PlannerWorkspace({ planner }) {
               <button
                 type="button"
                 onClick={() => openNewPlan(todayKey())}
+                disabled={isReadOnly}
+                title={isReadOnly ? 'Read-only on Free. Upgrade to edit' : undefined}
                 onPointerEnter={preloadPlanForm}
                 onFocus={preloadPlanForm}
                 className="shrink-0 rounded-full bg-sky-600/10 px-2 py-1 font-medium text-sky-800 transition-colors hover:bg-sky-600/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-600 dark:bg-sky-400/10 dark:text-sky-300 dark:hover:bg-sky-400/15 dark:focus-visible:ring-sky-400"
@@ -160,7 +171,8 @@ function PlannerWorkspace({ planner }) {
             initialSections={currentEntry ? undefined : formState.sections}
             quickSection={currentEntry?.scope === 'week' ? formState.quickSection : undefined}
             onSubmit={handleSubmit}
-            onDelete={currentEntry ? () => removeEntry(currentEntry.id) : undefined}
+            onDelete={currentEntry && !isReadOnly ? () => removeEntry(currentEntry.id) : undefined}
+            readOnly={isReadOnly}
             onClose={closeForm}
             onUploadImage={uploadImage}
             carryForward={linkedJournalId && entitlements?.aiCarryForward ? carryForward : null}

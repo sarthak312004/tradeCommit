@@ -106,7 +106,7 @@ function TradeCard({ trade, currency = DEFAULT_CURRENCY, detailFields = [], fiel
     if (event.target !== event.currentTarget) return
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault()
-      onSelect(trade)
+      onSelect?.(trade)
     }
   }
 
@@ -131,7 +131,7 @@ function TradeCard({ trade, currency = DEFAULT_CURRENCY, detailFields = [], fiel
       <article
         role="button"
         tabIndex="0"
-        onClick={() => onSelect(trade)}
+        onClick={() => onSelect?.(trade)}
         onKeyDown={handleCardKeyDown}
         aria-busy={isSaving}
         className={`tc-surface tc-trade-card relative flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-zinc-300/50 bg-white/70 px-4 py-2.5 text-left transition-[box-shadow,border-color,background-color,border-radius] hover:border-zinc-300 hover:bg-white group-hover/chip:bg-white group-has-[:focus-visible]/chip:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-600 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas dark:border-white/[0.07] dark:bg-panel dark:hover:border-zinc-700 dark:hover:bg-panel-hi dark:group-hover/chip:bg-panel-hi dark:group-has-[:focus-visible]/chip:bg-panel-hi dark:focus-visible:ring-sky-400 dark:focus-visible:ring-offset-night ${
@@ -215,7 +215,7 @@ function TradeCard({ trade, currency = DEFAULT_CURRENCY, detailFields = [], fiel
             </button>
           )}
 
-          {!trade.syncState && !isDeleteConfirmationOpen && (
+          {onDelete && !trade.syncState && !isDeleteConfirmationOpen && (
             <button
               type="button"
               title="Delete trade"
