@@ -21,6 +21,9 @@ import { verifyJWT } from "../middlewares/auth.middleware.js";
 //                                     into the next plan: { commitment: { start, end, rule, planLine, checkpoint, source } | null }.
 //                                     Read by the planner and the journal so feedback reaches the next plan. Never calls Gemini.
 // GET  /:reviewId                     one saved range review, for opening it from the history.
+//
+// Plan gates (entitlements, never the plan name; 403 { code: "PLAN_LIMIT", feature }): POST / and GET /preview need
+// aiRangeReviews; GET / and GET /:reviewId need aiHistory. /status and /carry-forward stay open to every plan.
 const router = Router({ mergeParams: true });
 
 router.get("/", verifyJWT, listAiReviewHistory);

@@ -66,3 +66,12 @@ export const assertWithinImportLimit = (entitlements, total) => {
   if (limit === null || limit === undefined) return;
   if (total > limit) throw importLimitError(limit, total);
 };
+
+/**
+ * 403 { code: "PLAN_LIMIT", feature } unless the entitlement `feature` (a boolean key such as "aiRangeReviews") is on.
+ * Reads the entitlement only, never a plan name, so moving a feature between plans is a config change.
+ */
+export const assertEntitled = (entitlements, feature, message) => {
+  if (entitlements?.[feature] === true) return;
+  throw new ApiError(403, message, [], "", { code: PLAN_LIMIT_CODE, feature });
+};

@@ -9,7 +9,7 @@ import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { buildMentorPrompt, REVIEW_SCHEMA, sanitizeReview, SYSTEM_PROMPT } from "../utils/aiMentorPrompt.js";
-import { evaluateAccess, getQuotaSnapshot, withUsageReservation } from "../utils/aiQuota.js";
+import { aiContextFor, evaluateAccess, getQuotaSnapshot, withUsageReservation } from "../utils/aiQuota.js";
 import { isUserBusy, markUserBusy, releaseUser } from "../utils/aiJobGuard.js";
 import { generateJson } from "../utils/gemini.js";
 import { runQueued } from "../utils/geminiQueue.js";
@@ -126,7 +126,7 @@ const serialize = (week, saved, access) => ({
   access,
 });
 
-const generate = async (week) => {
+const generate = async (week, ai) => {
   const ownerId = week.journal.owner;
   // the flywheel link: what the previous review asked the trader to carry into this week
   const lastCommitment = await findLastCommitment({ journalId: week.journal._id, ownerId, before: week.weekStart });
@@ -136,7 +136,7 @@ const generate = async (week) => {
   // The generation is reserved first so concurrent traders cannot overshoot the shared daily budget, but it only
   // counts once the review is saved. If Gemini is rate limited, the queue is full, the call times out or the answer
   // is unusable, the reservation is deleted and the trader's daily/weekly allowance is untouched.
-  return withUsageReservation({ ownerId, journalId: week.journal._id, weekStart: week.weekStart }, async () => {
+  return withUsageReservation({ ownerId, journalId: week.journal._id, weekStart: week.weekStart, ...ai }, async () => {
     const { result, model } = await runQueued(() => generateJson({ system: SYSTEM_PROMPT, prompt, schema: REVIEW_SCHEMA }));
     const review = sanitizeReview(result, tradeLabels, { hasPlanContext, weekStart: week.weekStart, weekEnd: week.weekEnd, hasLast, closedCount, leakReport });
     if (!review.summary || !review.headline) throw new ApiError(502, "The AI returned an incomplete review. Please try again.");
@@ -157,7 +157,7 @@ const generate = async (week) => {
 export const getAiReview = asyncHandler(async (req, res) => {
   const week = await loadWeek(req);
   const saved = await AiReview.findOne({ journal: week.journal._id, weekStart: week.weekStart }).lean();
-  const access = await evaluateAccess({ week, saved, ownerId: req.user._id });
+  const access = await evaluateAccess({ week, saved, ownerId: req.user._id, ...aiContextFor(req.user) });
   return res.status(200).json(new ApiResponse(200, serialize(week, saved, access), "AI review fetched"));
 });
 
@@ -172,10 +172,11 @@ export const createAiReview = asyncHandler(async (req, res) => {
   if (week.weekTrades.length === 0) throw new ApiError(400, "There are no trades in this week to review.");
 
   const ownerId = req.user._id;
+  const ai = aiContextFor(req.user); // this user's caps (entitlements) and budget pool (plan)
   const key = `${week.journal._id}:${week.weekStart}`;
   const respond = async (saved) => {
     await recordOnboardingActionSafely(ownerId, ONBOARDING_ACTION.MENTOR_REVIEW_CREATED, "weekly mentor review");
-    const access = await evaluateAccess({ week, saved, ownerId });
+    const access = await evaluateAccess({ week, saved, ownerId, ...ai });
     return res.status(200).json(new ApiResponse(200, serialize(week, saved, access), "AI review ready"));
   };
 
@@ -192,7 +193,7 @@ export const createAiReview = asyncHandler(async (req, res) => {
     return respond(await inFlight.get(key));
   }
 
-  const access = await evaluateAccess({ week, saved, ownerId });
+  const access = await evaluateAccess({ week, saved, ownerId, ...ai });
   if (!access.canGenerate) {
     throw new ApiError(access.reason === "not_enough_trades" ? 403 : 429, access.message || "A new review is not available right now.");
   }
@@ -204,7 +205,7 @@ export const createAiReview = asyncHandler(async (req, res) => {
   }
   if (isUserBusy(ownerId)) throw new ApiError(429, "Your other review is still being written. Wait for it to finish, then try again.");
 
-  const job = generate(week).finally(() => {
+  const job = generate(week, ai).finally(() => {
     inFlight.delete(key);
     releaseUser(ownerId);
   });
@@ -215,13 +216,13 @@ export const createAiReview = asyncHandler(async (req, res) => {
 });
 
 // GET /api/v1/journals/:journalId/ai-review/quota
-// The trader's allowance, shared by weekly and date-range reviews (a review written in either counts in both).
+// The trader's allowance for their plan, shared by weekly and date-range reviews (a review written in either counts in both).
 // Never calls the AI. The mentor dialog reads it whenever you switch between Weekly and Date range.
 export const getAiQuota = asyncHandler(async (req, res) => {
   const { journalId } = req.params;
   if (!mongoose.isValidObjectId(journalId)) throw new ApiError(400, "A valid journal ID is required");
   const journal = await Journal.findOne({ _id: journalId, owner: req.user._id }).select("_id").lean();
   if (!journal) throw new ApiError(404, "Journal not found");
-  const quota = await getQuotaSnapshot(req.user._id);
+  const quota = await getQuotaSnapshot(req.user._id, aiContextFor(req.user).entitlements);
   return res.status(200).json(new ApiResponse(200, quota, "AI review allowance fetched"));
 });

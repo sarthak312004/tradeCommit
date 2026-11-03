@@ -12,7 +12,8 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { sanitizeReview, REVIEW_SCHEMA } from "../utils/aiMentorPrompt.js";
 import { buildRangePrompt, RANGE_SYSTEM_PROMPT } from "../utils/aiRangePrompt.js";
 import { isUserBusy, markUserBusy, releaseUser } from "../utils/aiJobGuard.js";
-import { evaluateAccess, isGenerating, withUsageReservation } from "../utils/aiQuota.js";
+import { aiContextFor, evaluateAccess, isGenerating, withUsageReservation } from "../utils/aiQuota.js";
+import { assertEntitled } from "../utils/planLimits.js";
 import { generateJson } from "../utils/gemini.js";
 import { runQueued } from "../utils/geminiQueue.js";
 import { htmlToPlainText } from "../utils/richText.js";
@@ -151,7 +152,7 @@ const serialize = (range, saved, access) => ({
 
 const findSaved = (range) => AiRangeReview.findOne({ journal: range.journal._id, owner: range.journal.owner, rangeStart: range.rangeStart, rangeEnd: range.rangeEnd }).lean();
 
-const generate = async (range) => {
+const generate = async (range, ai) => {
   const ownerId = range.journal.owner;
   // the flywheel link: what the previous review asked the trader to carry into this period
   const lastCommitment = await findLastCommitment({ journalId: range.journal._id, ownerId, before: range.rangeStart });
@@ -160,7 +161,7 @@ const generate = async (range) => {
 
   // Reserved first (shared daily budget), counted only once the review is saved. Any failure on the way, such as a
   // Gemini rate limit, a full queue, a timeout or an unusable answer, deletes the reservation: no allowance is used.
-  return withUsageReservation({ ownerId, journalId: range.journal._id, weekStart: range.rangeStart }, async () => {
+  return withUsageReservation({ ownerId, journalId: range.journal._id, weekStart: range.rangeStart, ...ai }, async () => {
     const { result, model } = await runQueued(() => generateJson({ system: RANGE_SYSTEM_PROMPT, prompt, schema: REVIEW_SCHEMA }));
     const review = sanitizeReview(result, tradeLabels, { hasPlanContext, weekStart: range.rangeStart, weekEnd: range.rangeEnd, maxPlanDays: MAX_PLAN_DAYS_IN_REVIEW, hasLast, closedCount, leakReport });
     if (!review.summary || !review.headline) throw new ApiError(502, "The AI returned an incomplete review. Please try again.");
@@ -190,9 +191,11 @@ const generate = async (range) => {
 // Cheap, never calls the AI: the saved review for that exact range (if any), the range's numbers and `access`
 // (may a new review be generated now, and why not).
 export const previewRangeReview = asyncHandler(async (req, res) => {
+  const ai = aiContextFor(req.user);
+  assertEntitled(ai.entitlements, "aiRangeReviews", "Date-range AI reviews are part of the Pro plan.");
   const range = await loadRange({ ownerId: req.user._id, journalId: requireJournalId(req), start: req.query?.start, end: req.query?.end });
   const saved = await findSaved(range);
-  const access = await evaluateAccess({ week: range, saved, ownerId: req.user._id });
+  const access = await evaluateAccess({ week: range, saved, ownerId: req.user._id, ...ai });
   return res.status(200).json(new ApiResponse(200, serialize(range, saved, access), "AI range review fetched"));
 });
 
@@ -201,6 +204,8 @@ export const previewRangeReview = asyncHandler(async (req, res) => {
 // (1 a day, 3 a week, shared with weekly reviews) and the shared daily budget, then asks Gemini and saves the result.
 export const createRangeReview = asyncHandler(async (req, res) => {
   const ownerId = req.user._id;
+  const ai = aiContextFor(req.user); // this user's caps (entitlements) and budget pool (plan)
+  assertEntitled(ai.entitlements, "aiRangeReviews", "Date-range AI reviews are part of the Pro plan.");
   const range = await loadRange({ ownerId, journalId: requireJournalId(req), start: req.body?.start, end: req.body?.end });
   if (!range.hasStrategy) {
     throw new ApiError(400, "Write your strategy in this journal's Context first, so the mentor has rules to check your trades against.");
@@ -210,7 +215,7 @@ export const createRangeReview = asyncHandler(async (req, res) => {
   const key = `${range.journal._id}:${range.rangeStart}:${range.rangeEnd}`;
   const respond = async (saved) => {
     await recordOnboardingActionSafely(ownerId, ONBOARDING_ACTION.MENTOR_REVIEW_CREATED, "range mentor review");
-    const access = await evaluateAccess({ week: range, saved, ownerId });
+    const access = await evaluateAccess({ week: range, saved, ownerId, ...ai });
     return res.status(200).json(new ApiResponse(200, serialize(range, saved, access), "AI range review ready"));
   };
 
@@ -227,7 +232,7 @@ export const createRangeReview = asyncHandler(async (req, res) => {
     return respond(await inFlight.get(key));
   }
 
-  const access = await evaluateAccess({ week: range, saved, ownerId });
+  const access = await evaluateAccess({ week: range, saved, ownerId, ...ai });
   if (!access.canGenerate) {
     throw new ApiError(access.reason === "not_enough_trades" ? 403 : 429, access.message || "A new review is not available right now.");
   }
@@ -239,7 +244,7 @@ export const createRangeReview = asyncHandler(async (req, res) => {
   }
   if (isUserBusy(ownerId)) throw new ApiError(429, "Your other review is still being written. Wait for it to finish, then try again.");
 
-  const job = generate(range).finally(() => {
+  const job = generate(range, ai).finally(() => {
     inFlight.delete(key);
     releaseUser(ownerId);
   });
@@ -283,6 +288,8 @@ export const getCarryForward = asyncHandler(async (req, res) => {
 // GET /api/v1/journals/:journalId/ai-range-reviews/:reviewId
 // Opens one saved range review from the history list (with its current stale flag and access). Never calls the AI.
 export const getRangeReviewById = asyncHandler(async (req, res) => {
+  const ai = aiContextFor(req.user);
+  assertEntitled(ai.entitlements, "aiHistory", "AI review history is part of the Pro plan.");
   const journalId = requireJournalId(req);
   const { reviewId } = req.params;
   if (!mongoose.isValidObjectId(reviewId)) throw new ApiError(400, "A valid review ID is required");
@@ -291,7 +298,7 @@ export const getRangeReviewById = asyncHandler(async (req, res) => {
   if (!saved) throw new ApiError(404, "Review not found");
 
   const range = await loadRange({ ownerId: req.user._id, journalId, start: saved.rangeStart, end: saved.rangeEnd });
-  const access = await evaluateAccess({ week: range, saved, ownerId: req.user._id });
+  const access = await evaluateAccess({ week: range, saved, ownerId: req.user._id, ...ai });
   return res.status(200).json(new ApiResponse(200, serialize(range, saved, access), "AI range review fetched"));
 });
 
@@ -299,6 +306,7 @@ export const getRangeReviewById = asyncHandler(async (req, res) => {
 // Every past review of this journal, weekly and date-range together, newest first. Light rows only (no full review),
 // so browsing the history is free and fast. Page with `before` = the previous page's `nextBefore`.
 export const listAiReviewHistory = asyncHandler(async (req, res) => {
+  assertEntitled(aiContextFor(req.user).entitlements, "aiHistory", "AI review history is part of the Pro plan.");
   const journalId = requireJournalId(req);
   const ownerId = req.user._id;
 
