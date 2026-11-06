@@ -9,7 +9,7 @@ export const billingApi = {
   status: () => requestJson(`${BASE}/status`, { cache: 'no-store' }),
   cancel: () => requestJson(`${BASE}/cancel`, { method: 'POST', body: {} }),
   resume: () => requestJson(`${BASE}/resume`, { method: 'POST', body: {} }),
-  sync: () => requestJson(`${BASE}/sync`, { method: 'POST', body: {} }),
+  sync: (hints = {}) => requestJson(`${BASE}/sync`, { method: 'POST', body: hints && typeof hints === 'object' ? hints : {} }),
   /** Resolves to { url }: the payment provider's customer portal (payment method, invoices, history). */
   portal: () => requestJson(`${BASE}/portal`, { method: 'POST', body: {} }),
 }

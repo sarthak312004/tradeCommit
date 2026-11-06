@@ -34,17 +34,21 @@ test("a user with no billing fields is on the free plan", () => {
   assert.deepEqual(limitsOf(getEntitlements(user, NOW)), freeLimits());
 });
 
-test("an active subscription is pro until planAccessUntil", () => {
+test("an active subscription is pro until planAccessUntil and through the renewal grace window", () => {
   const user = { planStatus: "active", planInterval: "monthly", planAccessUntil: at(10 * DAY) };
   assert.equal(getEffectivePlan(user, NOW), "pro");
   assert.deepEqual(limitsOf(getEntitlements(user, NOW)), proLimits());
+  assert.equal(getEffectivePlan(user, NOW + 10 * DAY + GRACE_MS - 1), "pro");
+  assert.equal(getEffectivePlan(user, NOW + 10 * DAY + GRACE_MS), "free");
 });
 
-test("a cancelling subscription keeps pro only until the paid period ends", () => {
+test("a cancelling subscription keeps pro through the paid period and the grace window, then becomes free", () => {
   const user = { planStatus: "cancelling", cancelAtPeriodEnd: true, planAccessUntil: at(5 * DAY) };
   assert.equal(getEffectivePlan(user, NOW), "pro");
   assert.equal(getEffectivePlan(user, NOW + 5 * DAY - 1), "pro");
-  assert.equal(getEffectivePlan(user, NOW + 5 * DAY), "free");
+  assert.equal(getEffectivePlan(user, NOW + 5 * DAY), "pro");
+  assert.equal(getEffectivePlan(user, NOW + 5 * DAY + GRACE_MS - 1), "pro");
+  assert.equal(getEffectivePlan(user, NOW + 5 * DAY + GRACE_MS), "free");
   assert.deepEqual(limitsOf(getEntitlements(user, NOW + 6 * DAY + GRACE_MS)), freeLimits());
 });
 
@@ -288,6 +292,25 @@ test("planState reports the effective plan, so it follows the enforcement mode",
   process.env.PLAN_ENFORCEMENT = "off";
   assert.equal(planState({}, NOW).plan, "pro");
   assert.equal(planState({}, NOW).status, "none");
+});
+
+test("planState surfaces an active legacyProUntil date until it expires", () => {
+  const activeLegacy = planState({ legacyProUntil: at(10 * DAY) }, NOW);
+  assert.deepEqual(activeLegacy, {
+    plan: "pro",
+    status: "none",
+    accessUntil: at(10 * DAY).toISOString(),
+    cancelAtPeriodEnd: false,
+    interval: null,
+  });
+  const expiredLegacy = planState({ legacyProUntil: at(-DAY) }, NOW);
+  assert.deepEqual(expiredLegacy, {
+    plan: "free",
+    status: "none",
+    accessUntil: null,
+    cancelAtPeriodEnd: false,
+    interval: null,
+  });
 });
 
 test("METRIC_TIERS lists every metric id the frontend defines", (t) => {

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react"
 import { journalContext } from "./Context"
 
 import { DEFAULT_CURRENCY } from "../utils/currencies"
+import { readJson } from "../utils/http"
 import { fetchPrefetched } from "../utils/prefetch"
 import { MAX_IMPORT_BATCH_SIZE } from "../services/importApi"
 import { refreshProfile } from "../services/profileApi"
@@ -93,22 +94,12 @@ const normalizeJournalForFrontend = (journal) => ({
     mode: journal.mode === "backtest" ? "backtest" : "live",
     currency: journal.currency ?? DEFAULT_CURRENCY,
     context: normalizeContext(journal.context),
+    readOnly: journal.readOnly === true,
     createdAt: journal.createdAt ?? new Date().toISOString(),
     updatedAt: journal.updatedAt ?? new Date().toISOString(),
     updated: "Just now",
     trades: (journal.trades ?? []).map(normalizeTradeForFrontend),
 })
-
-const readJson = async (response) => {
-    const payload = await response.json().catch(() => null)
-    if (!response.ok) {
-        if (response.status === 401) {
-            window.dispatchEvent(new Event("auth-expired"))
-        }
-        throw new Error(payload?.message ?? "Request failed")
-    }
-    return payload?.data
-}
 
 function JournalContextProvider({children}){
     const [journals, setJournals] = useState([])
@@ -152,11 +143,13 @@ function JournalContextProvider({children}){
         }
 
         window.addEventListener("auth-state-changed", loadJournals)
+        window.addEventListener("plan-state-changed", loadJournals)
         loadJournals()
 
         return () => {
             latestLoad += 1
             window.removeEventListener("auth-state-changed", loadJournals)
+            window.removeEventListener("plan-state-changed", loadJournals)
         }
     }, [])
 

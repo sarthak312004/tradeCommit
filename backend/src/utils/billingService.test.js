@@ -71,6 +71,16 @@ const makeStores = (users = {}) => {
       if (index >= 0) db.events.splice(index, 1);
       return { deletedCount: index >= 0 ? 1 : 0 };
     },
+    updateMany: async (filter, { $set }) => {
+      let matchedCount = 0;
+      for (const entry of db.events) {
+        if (entry.subscriptionId === filter.subscriptionId && entry.userId === filter.userId && entry.state === filter.state) {
+          Object.assign(entry, $set);
+          matchedCount += 1;
+        }
+      }
+      return { matchedCount };
+    },
   };
   return { db, deps: { User: Users, BillingEvent: Events, now: () => Date.parse(T3), productIntervals: { pdt_m: "monthly", pdt_y: "yearly" } } };
 };
@@ -271,6 +281,22 @@ test("refund.succeeded and dispute.lost expire a subscriber, found through the p
   }
 });
 
+test("a payment.succeeded arriving before subscription.active is linked once active arrives, so a later refund still resolves", async () => {
+  const stores = makeStores({ [UID]: newUser() });
+  await processBillingEvent(stores.deps, { type: "payment.succeeded", timestamp: T1, data: { payment_id: "pay_early", subscription_id: "sub_1" } }, "pay");
+  await processBillingEvent(stores.deps, event("subscription.active", T2, { subscription_id: "sub_1" }), "act");
+  assert.equal(await processBillingEvent(stores.deps, { type: "refund.succeeded", timestamp: T3, data: { payment_id: "pay_early" } }, "ref"), "applied");
+  assert.equal(stores.db.users[UID].planStatus, "expired");
+});
+
+test("a partial refund is recorded as ignored and keeps Pro access intact", async () => {
+  const stores = makeStores({ [UID]: newUser() });
+  await processBillingEvent(stores.deps, event("subscription.active", T1, { payment_id: "pay_1" }), "act");
+  const partial = { type: "refund.succeeded", timestamp: T2, data: { payment_id: "pay_1", is_partial: true } };
+  assert.equal(await processBillingEvent(stores.deps, partial, "partial-ref"), "ignored");
+  assert.equal(stores.db.users[UID].planStatus, "active");
+});
+
 test("the user is found by subscription id when the metadata is missing", async () => {
   const stores = makeStores({ [UID]: newUser({ planStatus: "active", billingSubscriptionId: "sub_1", planAccessUntil: new Date(NEXT) }) });
   const ev = { type: "subscription.on_hold", timestamp: T1, data: { subscription_id: "sub_1" } };
@@ -320,6 +346,28 @@ test("a verified first activation may bind a new subscription after the previous
   const ev = event("subscription.active", T1, { subscription_id: "sub_new" });
   assert.equal(await processBillingEvent(stores.deps, ev, "new-sub"), "applied");
   assert.equal(stores.db.users[UID].billingSubscriptionId, "sub_new");
+  assert.equal(stores.db.users[UID].planStatus, "active");
+});
+
+test("a monthly subscriber cannot start yearly checkout until monthly cancellation is scheduled", async () => {
+  const stores = makeStores({
+    [UID]: newUser({ planStatus: "active", planInterval: "monthly", billingSubscriptionId: "sub_monthly" }),
+  });
+  const yearlyActive = event("subscription.active", T2, { subscription_id: "sub_yearly", product_id: "pdt_y" });
+  assert.equal(await processBillingEvent(stores.deps, yearlyActive, "up-yearly-active"), "no_user");
+  assert.equal(stores.db.users[UID].billingSubscriptionId, "sub_monthly");
+  assert.equal(stores.db.users[UID].planInterval, "monthly");
+  assert.equal(stores.db.users[UID].planStatus, "active");
+});
+
+test("a monthly subscriber with cancellation scheduled can start yearly", async () => {
+  const stores = makeStores({
+    [UID]: newUser({ planStatus: "cancelling", planInterval: "monthly", billingSubscriptionId: "sub_monthly" }),
+  });
+  const yearlyActive = event("subscription.active", T2, { subscription_id: "sub_yearly", product_id: "pdt_y" });
+  assert.equal(await processBillingEvent(stores.deps, yearlyActive, "up-yearly"), "applied");
+  assert.equal(stores.db.users[UID].billingSubscriptionId, "sub_yearly");
+  assert.equal(stores.db.users[UID].planInterval, "yearly");
   assert.equal(stores.db.users[UID].planStatus, "active");
 });
 
@@ -373,8 +421,19 @@ test("checkout rejects an unknown interval and refuses users who already subscri
     assert.equal(out.error.statusCode, 409);
     assert.equal(out.error.code, "ALREADY_SUBSCRIBED");
   }
+  const activeMonthlyYearly = await run(
+    checkout(client),
+    checkoutReq({ interval: "yearly" }, { planStatus: "active", planInterval: "monthly" })
+  );
+  assert.equal(activeMonthlyYearly.error.statusCode, 409);
+  const cancellingMonthlyYearly = await run(
+    checkout(client),
+    checkoutReq({ interval: "yearly" }, { planStatus: "cancelling", planInterval: "monthly" })
+  );
+  assert.equal(cancellingMonthlyYearly.status, 200);
   assert.equal((await run(checkout(client), checkoutReq({ interval: "monthly" }, { planStatus: "expired" }))).status, 200);
-  assert.equal(client.calls.length, 1);
+  assert.equal((await run(checkout(client), checkoutReq({ interval: "monthly" }, { planStatus: "cancelling", planAccessUntil: new Date("2020-01-01T00:00:00Z") }))).status, 200);
+  assert.equal(client.calls.length, 3);
 });
 
 test("checkout answers 503 when billing is not configured and 502 (no details) when the provider fails", async () => {

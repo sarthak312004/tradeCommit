@@ -22,6 +22,7 @@ function JournalCard({ journal, isSelected }) {
 			noun="journal"
 			Icon={FileIcon}
 			badge={journal.syncState === "saving" ? "Creating…" : undefined}
+			readOnly={journal.readOnly === true}
 			isSelected={isSelected}
 			onSelect={handleSelect}
 			onRename={(name) => updateJournal(journal.id, name)}

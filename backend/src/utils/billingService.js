@@ -4,13 +4,15 @@ import { randomUUID } from "node:crypto";
 import { ApiError } from "./ApiError.js";
 import { ApiResponse } from "./ApiResponse.js";
 import { asyncHandler } from "./asyncHandler.js";
-import { BillingEventError, eventSubject, eventTime, isLiveStatus, planUpdateFor } from "./billingEvents.js";
+import { BillingEventError, eventSubject, eventTime, extractProductId, isLiveStatus, planUpdateFor } from "./billingEvents.js";
+import { isSubscriptionTermElapsed } from "./entitlements.js";
 
 const INTERVALS = ["monthly", "yearly"];
 // Product ids come from the server environment only; the client just says "monthly" or "yearly".
 const PRODUCT_ENV = { monthly: "DODO_PRODUCT_PRO_MONTHLY", yearly: "DODO_PRODUCT_PRO_YEARLY" };
 
-const productIdFor = (interval) => process.env[PRODUCT_ENV[interval]]?.trim() || null;
+const cleanEnv = (value) => (value ?? "").trim().replace(/^['"]+|['"]+$/g, "").trim();
+const productIdFor = (interval) => cleanEnv(process.env[PRODUCT_ENV[interval]]) || null;
 
 const productIntervals = () => {
   const map = {};
@@ -21,7 +23,7 @@ const productIntervals = () => {
   return map;
 };
 
-const appUrl = () => (process.env.APP_URL ?? "").trim().replace(/\/+$/, "");
+const appUrl = () => cleanEnv(process.env.APP_URL).replace(/\/+$/, "");
 
 /* ---------------------------------- POST /api/v1/billing/checkout ---------------------------------- */
 
@@ -31,7 +33,9 @@ export const createCheckoutHandler = ({ getClient }) =>
     if (!INTERVALS.includes(interval)) throw new ApiError(400, 'interval must be "monthly" or "yearly"');
 
     const user = req.user; // from verifyJWT; never an id from the request
-    if (isLiveStatus(user.planStatus)) {
+    const isYearlyAfterMonthlyCancellation =
+      user.planStatus === "cancelling" && user.planInterval === "monthly" && interval === "yearly";
+    if (isLiveStatus(user.planStatus) && !isSubscriptionTermElapsed(user) && !isYearlyAfterMonthlyCancellation) {
       throw new ApiError(409, "You already have a subscription. Manage it from the billing page.", [], "", { code: "ALREADY_SUBSCRIBED" });
     }
 
@@ -73,7 +77,8 @@ const transitionEmail = (from, to) => {
   return null;
 };
 
-const resolveUser = async ({ User: Users, BillingEvent: Events }, subject, event) => {
+const resolveUser = async (deps, subject, event, receivedAt = Date.now()) => {
+  const { User: Users, BillingEvent: Events } = deps;
   const metadataUserId = subject.userId && OBJECT_ID.test(subject.userId) ? subject.userId : null;
   const subscriptionUser = subject.subscriptionId
     ? await Users.findOne({ billingSubscriptionId: subject.subscriptionId }).select(USER_FIELDS).lean()
@@ -100,12 +105,23 @@ const resolveUser = async ({ User: Users, BillingEvent: Events }, subject, event
   const user = await Users.findById(metadataUserId).select(USER_FIELDS).lean();
   if (!user) return null;
 
-  if (!user.billingSubscriptionId && isLiveStatus(user.planStatus)) return null;
+  const intervals = deps.productIntervals ?? productIntervals();
+  const eventProductId = extractProductId(event?.data);
+  const eventInterval = eventProductId ? intervals?.[eventProductId] : null;
+  const isNewPurchaseEvent =
+    event?.type === "subscription.active" ||
+    (event?.type === "payment.succeeded" && !subject.subscriptionId && Boolean(eventInterval));
+  const canReplaceBinding =
+    !isLiveStatus(user.planStatus) ||
+    isSubscriptionTermElapsed(user, receivedAt) ||
+    (user.planStatus === "cancelling" && user.planInterval === "monthly" && eventInterval === "yearly");
+
+  if (!user.billingSubscriptionId && isLiveStatus(user.planStatus) && !canReplaceBinding) return null;
   if (subject.subscriptionId && user.billingSubscriptionId && user.billingSubscriptionId !== subject.subscriptionId) {
-    // A verified first activation may represent a new purchase after the former subscription ended.
-    if (event?.type !== "subscription.active" || user.planStatus !== "expired") return null;
+    // A verified first activation may represent a new purchase after the former subscription ended or when upgrading to yearly.
+    if (!isNewPurchaseEvent || !canReplaceBinding) return null;
   } else if (!subject.subscriptionId && user.billingSubscriptionId) {
-    return null;
+    if (!isNewPurchaseEvent || !canReplaceBinding) return null;
   }
 
   return user;
@@ -155,7 +171,7 @@ export const processBillingEvent = async (deps, event, eventId) => {
   let update = null;
   let outcome = "ignored";
   try {
-    user = await resolveUser(deps, subject, event);
+    user = await resolveUser(deps, subject, event, receivedAt);
     if (!user) {
       console.warn(`Billing webhook: no matching user for ${event?.type}`); // event type only, no ids or payload
       outcome = "no_user";
@@ -190,6 +206,14 @@ export const processBillingEvent = async (deps, event, eventId) => {
     );
     if ((completed?.matchedCount ?? completed?.n ?? 0) === 0) {
       throw new BillingEventError("Webhook event claim was lost");
+    }
+    if (user?._id && subject.subscriptionId && typeof Events.updateMany === "function") {
+      await Events.updateMany(
+        { subscriptionId: subject.subscriptionId, userId: null, state: "processed" },
+        { $set: { userId: user._id } }
+      ).catch((error) => {
+        console.error("Could not link prior billing events:", error?.name);
+      });
     }
   } catch (error) {
     try {

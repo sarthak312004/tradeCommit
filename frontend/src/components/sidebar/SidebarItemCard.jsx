@@ -50,7 +50,7 @@ const iconTone = {
  * @param {Function} onRename    (newName) => void
  * @param {Function} onDelete    () => void
  */
-function SidebarItemCard({ id, label, noun, Icon, badge, isSelected, onSelect, onRename, onDelete }) {
+function SidebarItemCard({ id, label, noun, Icon, badge, readOnly = false, isSelected, onSelect, onRename, onDelete }) {
 	const [isEditing, setIsEditing] = useState(false)
 	const [draftName, setDraftName] = useState(label)
 	const [isDeleteConfirmationOpen, setIsDeleteConfirmationOpen] = useState(false)
@@ -75,6 +75,7 @@ function SidebarItemCard({ id, label, noun, Icon, badge, isSelected, onSelect, o
 	}, [isDeleteConfirmationOpen, isDeleting])
 
 	const handleStartEditing = () => {
+		if (readOnly) return
 		setDraftName(label)
 		setIsEditing(true)
 		setIsDeleteConfirmationOpen(false)
@@ -165,15 +166,23 @@ function SidebarItemCard({ id, label, noun, Icon, badge, isSelected, onSelect, o
 						onClick={onSelect}
 						data-nav-select=""
 						aria-current={isSelected ? "true" : undefined}
+						title={readOnly ? "Read-only on Free. Upgrade to edit" : undefined}
 						className={`flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md py-1 pl-2 pr-1 text-left focus-visible:ring-inset ${focusRing}`}
 					>
 						{leadingIcon}
-						<span
-							className={`truncate text-[13px] leading-5 ${
-								isSelected ? "font-semibold text-zinc-900 dark:text-zinc-50" : "font-normal text-zinc-800 dark:text-zinc-300"
-							}`}
-						>
-							{label}
+						<span className="min-w-0 flex-1">
+							<span
+								className={`block truncate text-[13px] leading-5 ${
+									isSelected ? "font-semibold text-zinc-900 dark:text-zinc-50" : "font-normal text-zinc-800 dark:text-zinc-300"
+								}`}
+							>
+								{label}
+							</span>
+							{readOnly && (
+								<span className="block truncate text-[10px] leading-3.5 text-amber-800 dark:text-amber-300">
+									Read-only on Free. Upgrade to edit
+								</span>
+							)}
 						</span>
 						{badge && (
 							<span className="shrink-0 rounded bg-black/[0.05] px-1.5 text-[10px] leading-4 text-zinc-600 dark:bg-white/[0.07] dark:text-zinc-300">
@@ -182,30 +191,32 @@ function SidebarItemCard({ id, label, noun, Icon, badge, isSelected, onSelect, o
 						)}
 					</button>
 
-					<div
-						className={`flex items-center gap-0.5 pr-1 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 ${
-							isDeleteConfirmationOpen ? "opacity-100" : "opacity-0"
-						}`}
-					>
-						<button
-							type="button"
-							title={`Rename ${label}`}
-							aria-label={`Rename ${label}`}
-							onClick={handleStartEditing}
-							className={`${iconButton} ${iconTone.neutral}`}
+					{!readOnly && (
+						<div
+							className={`flex items-center gap-0.5 pr-1 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 ${
+								isDeleteConfirmationOpen ? "opacity-100" : "opacity-0"
+							}`}
 						>
-							<PencilIcon />
-						</button>
-						<button
-							type="button"
-							title={`Delete ${label}`}
-							aria-label={`Delete ${label}`}
-							onClick={() => setIsDeleteConfirmationOpen(true)}
-							className={`${iconButton} ${iconTone.danger}`}
-						>
-							<TrashIcon />
-						</button>
-					</div>
+							<button
+								type="button"
+								title={`Rename ${label}`}
+								aria-label={`Rename ${label}`}
+								onClick={handleStartEditing}
+								className={`${iconButton} ${iconTone.neutral}`}
+							>
+								<PencilIcon />
+							</button>
+							<button
+								type="button"
+								title={`Delete ${label}`}
+								aria-label={`Delete ${label}`}
+								onClick={() => setIsDeleteConfirmationOpen(true)}
+								className={`${iconButton} ${iconTone.danger}`}
+							>
+								<TrashIcon />
+							</button>
+						</div>
+					)}
 
 					{isDeleteConfirmationOpen && createPortal(
 						<div

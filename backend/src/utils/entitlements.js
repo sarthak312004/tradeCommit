@@ -3,7 +3,8 @@
 // and merges overrides on top. Everything else reads the returned entitlements, never the plan name.
 //
 //   effective plan = Pro when PLAN_ENFORCEMENT does not apply to the user,
-//                    or before planAccessUntil, or during past_due grace, or before legacyProUntil; otherwise Free.
+//                    or before planAccessUntil, or during the grace window (active / cancelling / past_due),
+//                    or before legacyProUntil; otherwise Free.
 //   PLAN_ENFORCEMENT   off (default / anything unrecognised): everyone gets Pro entitlements
 //                      new: only users created after PLAN_ENFORCEMENT_FROM (ISO date) are enforced
 //                      all: every user is enforced
@@ -41,11 +42,13 @@ const isEnforced = (user) => {
   return Number.isFinite(from) && Number.isFinite(created) && created > from;
 };
 
+const GRACE_STATUSES = ["active", "cancelling", "past_due"];
+
 const hasPaidAccess = (user, nowMs) => {
   const accessUntil = toMs(user?.planAccessUntil);
   if (user?.planStatus !== "expired" && Number.isFinite(accessUntil)) {
     if (nowMs < accessUntil) return true;
-    if (user?.planStatus === "past_due" && nowMs < accessUntil + GRACE_DAYS * DAY_MS) return true;
+    if (GRACE_STATUSES.includes(user?.planStatus) && nowMs < accessUntil + GRACE_DAYS * DAY_MS) return true;
   }
   const legacyUntil = toMs(user?.legacyProUntil);
   return Number.isFinite(legacyUntil) && nowMs < legacyUntil;
@@ -62,13 +65,31 @@ export const getEffectivePlan = (user, now = Date.now()) => {
   return hasPaidAccess(user, resolveNow(now)) ? "pro" : "free";
 };
 
+/** True when the user's paid subscription period (plus any grace window) has already elapsed. */
+export const isSubscriptionTermElapsed = (user, now = Date.now()) => {
+  if (!user?.planAccessUntil) return false;
+  const accessUntil = toMs(user.planAccessUntil);
+  if (!Number.isFinite(accessUntil)) return false;
+  const nowMs = resolveNow(now);
+  const graceMs = GRACE_STATUSES.includes(user?.planStatus) ? GRACE_DAYS * DAY_MS : 0;
+  return nowMs >= accessUntil + graceMs;
+};
+
 /** The billing summary the client may see. Never includes billing ids or overrides. */
 export const planState = (user, now = Date.now()) => {
+  const nowMs = resolveNow(now);
   const accessUntil = toMs(user?.planAccessUntil);
+  const legacyUntil = toMs(user?.legacyProUntil);
+  const hasPaidUntil = user?.planStatus !== "expired" && Number.isFinite(accessUntil) && nowMs < accessUntil;
+  const effectiveUntil = hasPaidUntil
+    ? accessUntil
+    : Number.isFinite(legacyUntil) && nowMs < legacyUntil
+      ? legacyUntil
+      : accessUntil;
   return {
-    plan: getEffectivePlan(user, now),
+    plan: getEffectivePlan(user, nowMs),
     status: PLAN_STATUSES.includes(user?.planStatus) ? user.planStatus : "none",
-    accessUntil: Number.isFinite(accessUntil) ? new Date(accessUntil).toISOString() : null,
+    accessUntil: Number.isFinite(effectiveUntil) ? new Date(effectiveUntil).toISOString() : null,
     cancelAtPeriodEnd: user?.cancelAtPeriodEnd === true,
     interval: PLAN_INTERVALS.includes(user?.planInterval) ? user.planInterval : null,
   };

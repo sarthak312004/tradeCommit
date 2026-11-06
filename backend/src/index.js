@@ -28,8 +28,23 @@ if (process.env.NODE_ENV === 'production') {
     const enforcement = String(process.env.PLAN_ENFORCEMENT ?? '').trim().toLowerCase()
     if (!['all', 'new'].includes(enforcement)) {
         console.warn('PLAN_ENFORCEMENT is not active: all users receive Pro entitlements.')
-    } else if (enforcement === 'new' && !Number.isFinite(new Date(process.env.PLAN_ENFORCEMENT_FROM).getTime())) {
-        console.warn('PLAN_ENFORCEMENT=new has no valid PLAN_ENFORCEMENT_FROM; no users will be limited.')
+    } else {
+        if (enforcement === 'new' && !Number.isFinite(new Date(process.env.PLAN_ENFORCEMENT_FROM).getTime())) {
+            console.warn('PLAN_ENFORCEMENT=new has no valid PLAN_ENFORCEMENT_FROM; no users will be limited.')
+        }
+        const missingBilling = [
+            'DODO_ENV',
+            'DODO_PAYMENTS_API_KEY',
+            'DODO_PAYMENTS_WEBHOOK_KEY',
+            'DODO_PRODUCT_PRO_MONTHLY',
+            'DODO_PRODUCT_PRO_YEARLY',
+            'APP_URL',
+        ].filter((name) => !process.env[name]?.trim())
+        if (missingBilling.length > 0) {
+            console.warn(`Billing is incomplete in production (${missingBilling.join(', ')}); checkout or webhooks will be unavailable.`)
+        } else if (process.env.DODO_ENV.trim() !== 'live_mode') {
+            console.warn('DODO_ENV must be live_mode in production; billing is disabled until live_mode is set.')
+        }
     }
 }
 

@@ -22,7 +22,7 @@ const main = async () => {
 
   try {
     await dbConnection();
-    const cursor = User.find({ createdAt: { $lt: cutoff } })
+    const cursor = User.find({ createdAt: { $lte: cutoff } })
       .select('_id createdAt planStatus planAccessUntil legacyProUntil +billingSubscriptionId')
       .lean()
       .cursor();

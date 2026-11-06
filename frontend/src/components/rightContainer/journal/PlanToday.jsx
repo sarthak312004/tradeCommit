@@ -371,7 +371,8 @@ function ConnectedPlanToday({ planner, journal, onClose, onRetry }) {
         initialEntry={currentEntry}
         initialDate={today}
         onSubmit={handleSubmit}
-        onDelete={currentEntry ? () => removeEntry(currentEntry.id) : undefined}
+        onDelete={currentEntry && !planner.readOnly ? () => removeEntry(currentEntry.id) : undefined}
+        readOnly={planner.readOnly === true}
         onClose={onClose}
         onUploadImage={uploadImage}
         carryForward={entitlements?.aiCarryForward ? carryForward : null}

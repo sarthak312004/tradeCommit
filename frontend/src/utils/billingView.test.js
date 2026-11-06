@@ -33,17 +33,31 @@ test('cancelling: can resume inside the paid period, cannot cancel again', () =>
   assert.equal(v.showUpgrade, false)
 })
 
-test('cancelling after the paid period ended: no resume button', () => {
-  assert.equal(view(state('cancelling', { accessUntil: PAST })).canResume, false)
+test('cancelling after the paid period ended: no resume button; inside grace shows grace state; after grace offers upgrade', () => {
+  const insideGrace = view(state('cancelling', { accessUntil: PAST, plan: 'pro' }))
+  assert.equal(insideGrace.canResume, false)
+  assert.equal(insideGrace.showUpgrade, false)
+  assert.match(insideGrace.summary, /grace/)
   assert.equal(view(state('cancelling', { accessUntil: null })).canResume, false)
+
+  const afterGrace = view(state('cancelling', { accessUntil: PAST, plan: 'free' }))
+  assert.equal(afterGrace.canResume, false)
+  assert.equal(afterGrace.badge.label, 'Ended')
+  assert.equal(afterGrace.showUpgrade, true)
 })
 
-test('past_due: shows the banner, still cancellable, badge says payment issue', () => {
+test('past_due: shows the banner, still cancellable inside grace, offers upgrade outside grace', () => {
   const v = view(state('past_due'))
   assert.equal(v.showPastDueBanner, true)
   assert.equal(v.canCancel, true)
   assert.equal(v.badge.label, 'Payment issue')
   assert.equal(v.badge.tone, 'negative')
+
+  const outsideGrace = view(state('past_due', { plan: 'free', accessUntil: PAST }))
+  assert.equal(outsideGrace.showPastDueBanner, true)
+  assert.equal(outsideGrace.canCancel, false)
+  assert.equal(outsideGrace.showUpgrade, true)
+  assert.match(outsideGrace.summary, /ended/)
 })
 
 test('expired: can subscribe again (even during the grace days) and still reach invoices', () => {
@@ -69,7 +83,16 @@ test('Pro without a subscription (early access or plans not enforced): no upgrad
   const v = view({ plan: 'pro', status: 'none', accessUntil: null, cancelAtPeriodEnd: false, interval: null })
   assert.equal(v.showUpgrade, false)
   assert.equal(v.showPortal, false)
+  assert.equal(v.showLegacyBanner, false)
   assert.match(v.summary, /included/)
+})
+
+test('legacy grandfathered Pro before expiry shows the free-until banner and date', () => {
+  const v = view({ plan: 'pro', status: 'none', accessUntil: FUTURE, cancelAtPeriodEnd: false, interval: null })
+  assert.equal(v.showLegacyBanner, true)
+  assert.equal(v.showUpgrade, false)
+  assert.equal(v.showPortal, false)
+  assert.match(v.summary, /^Pro is free on your account until /)
 })
 
 test('a missing plan state is treated as free and never throws', () => {

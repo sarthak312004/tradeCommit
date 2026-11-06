@@ -72,22 +72,22 @@ export default function PricingCard({ onBusyChange, secondaryAction = null }) {
         ))}
       </div>
 
-      <div className="mt-4" aria-live="polite">
+      <div className="mt-3.5 flex flex-wrap items-baseline justify-between gap-2" aria-live="polite">
         <p className="flex items-baseline gap-1.5">
-          <span className="text-3xl font-semibold tracking-[-0.03em] text-zinc-900 dark:text-zinc-50">{view.primary.text}</span>
+          <span className="text-2xl font-semibold tracking-[-0.03em] text-zinc-900 dark:text-zinc-50">{view.primary.text}</span>
           <span className="text-xs text-zinc-600 dark:text-zinc-300">/ {unit}</span>
+          {view.primary.perMonthText && <span className="text-xs text-zinc-500 dark:text-zinc-400">(~{view.primary.perMonthText}/mo)</span>}
         </p>
-        {view.primary.perMonthText && <p className="mt-0.5 text-xs text-zinc-600 dark:text-zinc-300">about {view.primary.perMonthText} a month</p>}
-        <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-300">
-          {view.secondary.regionLabel}: {view.secondary.text} / {unit}
+        <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+          {view.secondary.regionLabel}: {view.secondary.text}/{unit}
         </p>
       </div>
 
       {bullets.length > 0 && (
-        <ul className="mt-4 space-y-1.5" aria-label="What Pro adds">
-          {bullets.map((bullet) => (
-            <li key={bullet.id} className="flex items-start gap-2 text-[13px] leading-5 text-zinc-700 dark:text-zinc-200">
-              <svg viewBox="0 0 20 20" className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700 dark:text-emerald-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <ul className="mt-3.5 space-y-1.5" aria-label="What Pro adds">
+          {bullets.slice(0, 6).map((bullet) => (
+            <li key={bullet.id} className="flex items-start gap-2 text-[12.5px] leading-5 text-zinc-700 dark:text-zinc-200">
+              <svg viewBox="0 0 20 20" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-700 dark:text-emerald-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="m4 10.5 4 4 8-9" />
               </svg>
               {bullet.text}
@@ -96,9 +96,9 @@ export default function PricingCard({ onBusyChange, secondaryAction = null }) {
         </ul>
       )}
 
-      <p className="mt-4 text-[11px] leading-4 text-zinc-600 dark:text-zinc-300">Final price is shown at checkout based on your billing country</p>
+      <p className="mt-3 text-[11px] leading-4 text-zinc-500 dark:text-zinc-400">Final price is shown at checkout based on your billing country.</p>
 
-      {error && <p role="alert" className="mt-3 text-xs text-rose-600 dark:text-rose-400">{error}</p>}
+      {error && <p role="alert" className="mt-2.5 text-xs text-rose-600 dark:text-rose-400">{error}</p>}
 
       <div className="mt-4 flex justify-end gap-2">
         {secondaryAction}

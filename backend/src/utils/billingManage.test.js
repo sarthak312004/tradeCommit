@@ -49,6 +49,8 @@ const run = async (handler, req = {}) => {
 beforeEach(() => {
   process.env.APP_URL = "https://app.example.com";
   process.env.PLAN_ENFORCEMENT = "all";
+  process.env.DODO_PRODUCT_PRO_MONTHLY = "pdt_m";
+  process.env.DODO_PRODUCT_PRO_YEARLY = "pdt_y";
   db = { user: { _id: UID, email: "a@b.co", fullname: "Asha", planStatus: "active", planAccessUntil: new Date(FUTURE), planInterval: "monthly", cancelAtPeriodEnd: false, billingCustomerId: "cus_1", billingSubscriptionId: "sub_1" } };
   calls = []; emails = []; dodoFails = false; portalLink = "https://pay.example.com/portal/x";
   subscriptionOnDodo = { status: "active", next_billing_date: FUTURE, cancel_at_next_billing_date: false };
@@ -171,6 +173,40 @@ test("sync repairs a missed renewal", async () => {
   assert.equal(new Date(db.user.planAccessUntil).toISOString(), new Date(FUTURE).toISOString());
 });
 
+test("sync binds a verified yearly subscription returned from checkout", async () => {
+  db.user.planStatus = "cancelling";
+  subscriptionOnDodo = {
+    status: "active",
+    subscription_id: "sub_yearly",
+    product_id: "pdt_y",
+    next_billing_date: FUTURE,
+    cancel_at_next_billing_date: false,
+    customer: { customer_id: "cus_1" },
+  };
+  const out = await run(handlers().sync, { body: { subscriptionId: "sub_yearly" } });
+  assert.equal(out.status, 200);
+  assert.equal(out.body.data.interval, "yearly");
+  assert.equal(db.user.planInterval, "yearly");
+  assert.equal(db.user.billingSubscriptionId, "sub_yearly");
+  assert.deepEqual(calls, [["retrieve", "sub_yearly"]]);
+});
+
+test("sync refuses to bind a separate yearly subscription while monthly is still active", async () => {
+  subscriptionOnDodo = {
+    status: "active",
+    subscription_id: "sub_yearly",
+    product_id: "pdt_y",
+    next_billing_date: FUTURE,
+    cancel_at_next_billing_date: false,
+    customer: { customer_id: "cus_1" },
+  };
+  const out = await run(handlers().sync, { body: { subscriptionId: "sub_yearly" } });
+  assert.equal(out.error.statusCode, 409);
+  assert.equal(out.error.code, "CANCEL_MONTHLY_FIRST");
+  assert.equal(db.user.planInterval, "monthly");
+  assert.equal(db.user.billingSubscriptionId, "sub_1");
+});
+
 test("sync picks up a cancellation made in the portal", async () => {
   subscriptionOnDodo = { status: "active", next_billing_date: FUTURE, cancel_at_next_billing_date: true };
   await run(handlers().sync);
@@ -221,6 +257,14 @@ test("sync does not overwrite a newer applied webhook", async () => {
 test("sync answers 502 and changes nothing when Dodo fails", async () => {
   dodoFails = true;
   const out = await run(handlers().sync);
+  assert.equal(out.error.statusCode, 502);
+  assert.equal(db.user.planStatus, "active");
+});
+
+test("sync surfaces failed checkout-return lookups instead of reporting an unchanged plan", async () => {
+  db.user.billingSubscriptionId = null;
+  dodoFails = true;
+  const out = await run(handlers().sync, { body: { subscriptionId: "sub_yearly" } });
   assert.equal(out.error.statusCode, 502);
   assert.equal(db.user.planStatus, "active");
 });

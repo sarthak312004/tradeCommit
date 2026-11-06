@@ -37,6 +37,7 @@ export default function SubscriptionPanel({ view, onState }) {
   const adopt = (data) => {
     if (data && typeof data === 'object' && data.status) onState(data)
     refreshProfile() // entitlements follow the server's state
+    window.dispatchEvent(new Event('plan-state-changed'))
   }
 
   const openPortal = async () => {
@@ -69,6 +70,12 @@ export default function SubscriptionPanel({ view, onState }) {
         {view.intervalLabel && view.live && <span className="text-xs text-zinc-600 dark:text-zinc-300">{view.intervalLabel} plan</span>}
       </div>
       <p className="mt-2 text-sm leading-6 text-zinc-700 dark:text-zinc-200">{view.summary}</p>
+
+      {view.showLegacyBanner && (
+        <div role="status" className="mt-3 rounded-lg border border-emerald-700/30 bg-emerald-600/10 p-3 text-[13px] leading-5 text-emerald-900 dark:border-emerald-400/30 dark:text-emerald-200">
+          Early-user grant: all Pro features are unlocked free until {view.until}.
+        </div>
+      )}
 
       {view.showPastDueBanner && (
         <div role="alert" className="mt-3 rounded-lg border border-rose-700/30 bg-rose-600/10 p-3 text-[13px] leading-5 text-rose-900 dark:border-rose-400/30 dark:text-rose-200">

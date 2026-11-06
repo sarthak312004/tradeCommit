@@ -1,7 +1,8 @@
 import { readJson, requestJson } from '../utils/http'
-import { DEFAULT_PLANNER_TYPE } from '../utils/plannerTypes'
-import { normalizeEntry } from '../utils/plannerEntry'
+import { normalizeEntry, normalizePlanner } from '../utils/plannerEntry'
 import { refreshProfile } from './profileApi'
+
+export { normalizePlanner }
 
 const API_BASE = '/api/v1/planners'
 const entriesCache = new Map()
@@ -11,16 +12,6 @@ const updateCachedEntries = (plannerId, update) => {
   const current = entriesCache.get(plannerId)
   if (current) entriesCache.set(plannerId, update(current))
 }
-
-export const normalizePlanner = (planner) => ({
-  id: planner.id ?? planner._id,
-  name: planner.name ?? 'Untitled planner',
-  type: planner.type ?? DEFAULT_PLANNER_TYPE,
-  // the journal this planner is connected to (so the AI mentor can compare plans with executed trades), or null
-  linkedJournalId: planner.linkedJournalId ?? null,
-  createdAt: planner.createdAt,
-  updatedAt: planner.updatedAt
-})
 
 export const plannerApi = {
   async list() {
