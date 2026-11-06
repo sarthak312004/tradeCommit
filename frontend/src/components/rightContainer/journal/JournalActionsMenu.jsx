@@ -3,20 +3,34 @@ import { DownloadIcon, MoreIcon } from '../../../utils/Icons.jsx'
 import { controlNeutral } from '../../common/controlStyles'
 import { UploadIcon } from './import/importIcons.jsx'
 
+function WebhookBoltIcon({ className = '' }) {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true" className={className}>
+      <path d="M9 2 4 9h4l-1 5 5-7H8l1-5Z" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
 /**
  * The 3-dot button in the journal header. It opens a small menu of extra actions for the selected journal.
- * Add more entries to `items` later (import, duplicate, archive...) and they show up here.
  *
  * @param {Function} onImport  opens the import dialog (CSV / Excel)
  * @param {Function} onExport  opens the export dialog
  */
-function JournalActionsMenu({ onImport, onExport, onMenuOpen }) {
+function JournalActionsMenu({ onImport, onExport, onAutoLog, isAutoLogActive = false, onMenuOpen }) {
   const [isOpen, setIsOpen] = useState(false)
   const containerRef = useRef(null)
   const buttonRef = useRef(null)
 
   const items = [
     ...(onImport ? [{ id: 'import', label: 'Import trades', hint: 'From a CSV or Excel file', Icon: UploadIcon, onSelect: onImport }] : []),
+    ...(onAutoLog ? [{
+      id: 'auto-log',
+      label: 'Auto-log trades',
+      hint: isAutoLogActive ? 'Webhook is active' : 'Connect a broker or charting platform',
+      Icon: WebhookBoltIcon,
+      onSelect: onAutoLog
+    }] : []),
     { id: 'export', label: 'Export journal', hint: 'Excel, CSV, PDF, JSON or ZIP', Icon: DownloadIcon, onSelect: onExport }
   ]
 
@@ -79,7 +93,12 @@ function JournalActionsMenu({ onImport, onExport, onMenuOpen }) {
             >
               <Icon className="mt-0.5 h-4 w-4 shrink-0 text-zinc-600 dark:text-zinc-300" />
               <span className="min-w-0">
-                <span className="block text-[13px] font-medium text-zinc-800 dark:text-zinc-100">{label}</span>
+                <span className="flex items-center gap-1.5 text-[13px] font-medium text-zinc-800 dark:text-zinc-100">
+                  {label}
+                  {id === 'auto-log' && isAutoLogActive && (
+                    <span aria-label="Auto-log active" className="h-1.5 w-1.5 shrink-0 rounded-full bg-sky-500" />
+                  )}
+                </span>
                 <span className="mt-0.5 block text-xs text-zinc-600 dark:text-zinc-400">{hint}</span>
               </span>
             </button>

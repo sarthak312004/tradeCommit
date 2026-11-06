@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, lazy, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
 import JournalCalendar from './JournalCalendar'
 import TradeCard from './TradeCard'
@@ -25,12 +25,14 @@ import { loadTradeForm, preloadTradeForm, preloadPlanForm } from '../../../utils
 import { clearFormDraft, readFormDraft, writeFormDraft } from '../../../utils/formDraftStorage'
 import { savedToastText } from '../../../utils/quickLog'
 import { showToast, updateToast } from '../../../utils/toastStore'
+import { journalContext as JournalStateContext } from '../../../context/Context'
 import DialogSkeleton from '../../common/DialogSkeleton'
 
 // loaded on demand so the first paint ships less JavaScript
 const TradeForm = lazy(loadTradeForm)
 const TradeAnalysis = lazy(() => import('./TradeAnalysis'))
 const JournalContextDialog = lazy(() => import('./JournalContextDialog'))
+const AutoLogDialog = lazy(() => import('./AutoLogDialog'))
 const ExportJournalDialog = lazy(() => import('./ExportJournalDialog'))
 const ImportTradesDialog = lazy(() => import('./import/ImportTradesDialog'))
 // "Plan today": connects/creates the journal's planner and opens the existing plan form over the journal
@@ -89,6 +91,7 @@ function AnalysisLoading() {
 }
 
 function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades, onOpenJournal, onAddTrade, onUpdateTrade, onDeleteTrade, onUploadTradeImage, onSaveContext, onRetryTrade, onDiscardTrade, onOpenCreateForm }) {
+  const journalCtx = useContext(JournalStateContext)
   // locked on Free: viewable and exportable, never editable (the API enforces this too and answers 403 PLAN_LIMIT)
   const isReadOnly = journal?.readOnly === true
   const tradeFormStateKey = journal?.id ? `tradecommit:open-trade-form:${journal.id}` : null
@@ -105,6 +108,7 @@ function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades,
   const [newTradeDate, setNewTradeDate] = useState(() => restoredTradeForm?.date ?? null)
   const [range, setRange] = useState(ALL_TIME)
   const [isContextOpen, setIsContextOpen] = useState(() => readFormDraft(contextFormStateKey)?.open === true)
+  const [isAutoLogOpen, setIsAutoLogOpen] = useState(false)
   const [isExportOpen, setIsExportOpen] = useState(false)
   const [isImportOpen, setIsImportOpen] = useState(false)
   const [isPlanTodayOpen, setIsPlanTodayOpen] = useState(false)
@@ -303,6 +307,7 @@ function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades,
   const currency = journal.currency ?? DEFAULT_CURRENCY
   const isJournalPending = Boolean(journal.syncState) || String(journal.id).startsWith('pending-')
   const hasJournalStrategy = !isRichTextEmpty(journal.context?.strategy?.trim())
+  const isAutoLogActive = Boolean(journal.autoLog?.enabled)
   const isFiltered = isRangeActive(range)
   const subtitle = isFiltered
     ? `${visibleTrades.length} of ${journal.trades.length} trades, ${describeRangeInline(range)}`
@@ -387,6 +392,8 @@ function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades,
                 setIsImportOpen(true)
               } : undefined}
               onExport={() => setIsExportOpen(true)}
+              onAutoLog={!isJournalPending ? () => setIsAutoLogOpen(true) : undefined}
+              isAutoLogActive={isAutoLogActive}
               onMenuOpen={dismissImportHint}
             />
             {showImportHint && (
@@ -432,6 +439,16 @@ function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades,
             mode={journal.mode}
             onSave={(context, options) => onSaveContext(journal.id, context, options)}
             onClose={handleCloseContext}
+          />
+        </Suspense>
+      )}
+
+      {isAutoLogOpen && !isJournalPending && (
+        <Suspense fallback={null}>
+          <AutoLogDialog
+            journal={journal}
+            onClose={() => setIsAutoLogOpen(false)}
+            onAutoLogUpdated={(journalId, config) => journalCtx?.updateJournalAutoLogState?.(journalId, config)}
           />
         </Suspense>
       )}

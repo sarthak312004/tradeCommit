@@ -34,6 +34,50 @@ Nothing below is marked passed. "Code-read" = traced in source; "Unit" = automat
 | Grandfathering dry-run default, 60 days, no re-grant, concurrent-safe filter | Yes | No (script needs MongoDB) | Pending: dry-run on a DB copy |
 | Frontend: banner, disabled add/edit/delete/context/import (journal); new plan, save, delete, journal link (planner) | Yes | No frontend tests | Pending |
 
+## Pre-merge QA: trade webhooks and plans / billing
+
+Run billing checks only against Dodo **test mode** products and test credentials. Use a disposable test account and journal; do not use a production webhook URL, live payment method, or paste a webhook URL/token into logs, screenshots, tickets, or chat. The webhook URL is a bearer secret: anyone who has it can submit trades to that journal.
+
+### Trade webhook: Pro account
+
+1. Confirm the test account's profile reports `entitlements.autoLogWebhook: true`. Open a saved journal, go to **⋯ → Auto-log trades**, choose **Custom JSON webhook**, enable incoming trades, copy the URL, and save.
+2. In PowerShell, paste the URL at the prompt. This sends one filled execution and then retries the identical execution ID:
+
+   ```powershell
+   $WebhookUrl = Read-Host 'Paste the test journal webhook URL'
+   $ExecutionId = "qa-$([guid]::NewGuid().ToString('N'))"
+   $Body = @{
+       symbol   = 'WEBHOOK-QA'
+       action   = 'BUY'
+       quantity = 1
+       price    = 100
+       status   = 'FILLED'
+       trade_id = $ExecutionId
+       time     = (Get-Date).ToUniversalTime().ToString('o')
+   } | ConvertTo-Json
+
+   $First = Invoke-RestMethod -Method Post -Uri $WebhookUrl `
+       -ContentType 'application/json' -Body $Body
+   $First | ConvertTo-Json -Depth 6
+
+   $Retry = Invoke-RestMethod -Method Post -Uri $WebhookUrl `
+       -ContentType 'application/json' -Body $Body
+   $Retry | ConvertTo-Json -Depth 6
+   ```
+
+3. Expect the first response to report `loggedCount: 1`; the retry should report `loggedCount: 0` and `skippedDuplicates: 1`. Confirm the journal contains exactly one `WEBHOOK-QA` trade and the Auto-log dialog shows a recent event and an incremented update count.
+4. Send a new execution ID with `status = 'PENDING'`. It should be acknowledged but ignored (`loggedCount: 0`); it must not create a trade. Do not reuse the original execution ID for this check.
+5. Disable incoming trades in the dialog and send a fresh filled execution. The request should fail with HTTP 403 and no trade should appear. Re-enable it afterward if continuing tests.
+6. Exercise failure conditions using a copied URL only in the local PowerShell session: alter its token and expect HTTP 401/404; use the old URL after regenerating it and expect HTTP 404. Do not print or save either URL.
+
+### Plan gates and billing: Free and Pro test accounts
+
+1. On a Free test account, verify the landing page and **Plans & billing** Pro cards both list **Auto-log trades from brokers and charting platforms**. Open **⋯ → Auto-log trades** and confirm the Pro feature prompt is shown, matches the current light/dark theme, and its plan action opens the shared upgrade flow. Free must not be able to enable or use a webhook.
+2. On a Pro test account, verify the profile reports `entitlements.autoLogWebhook: true`; Auto-log opens its configuration rather than the Pro prompt, can be enabled, and successfully receives the test trade above. Confirm the plans/billing page shows the current subscription accurately.
+3. From Free, test monthly and yearly checkout using Dodo test mode. Complete a test payment and verify the success/activation flow, billing status, and refreshed entitlements (including `autoLogWebhook: true`). Do not treat the browser redirect alone as proof: verify the server-backed plan/profile state and that the webhook succeeds.
+4. Test subscription management with test-mode actions/webhooks: cancellation should retain Pro access through the paid period; past-due/grace and expiry/refund transitions should match the existing manual QA matrix. Confirm entitlements and webhook access change with the server-reported state, not just the displayed plan label.
+5. Check browser/server errors and the Dodo test dashboard for failed requests or webhook deliveries. Record the test account state and outcomes; leave this checklist pending until each applicable case has been run.
+
 ### Direct API mutation test (locked journal / planner)
 
 Use an account with 2+ journals and 2+ planners on Free (`PLAN_ENFORCEMENT=all`, or a post-cutoff account under `new`). Take the cookie from a logged-in browser session; `L*` = a locked (not the oldest) resource id from `GET /api/v1/journals` / `GET /api/v1/planners` where `readOnly` is `true`.

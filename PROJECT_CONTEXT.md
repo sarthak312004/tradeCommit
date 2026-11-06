@@ -101,6 +101,7 @@ These are the route mounts in `backend/src/app.js`. Route handlers and auth requ
 |---|---|---|
 | `/api/v1/auth` | `routes/user.routes.js` | Google sign-in/signup, password login, email-code login, logout, profile (`GET`/`PATCH /profile`), onboarding state, preferences, password set/reset |
 | `/api/v1/journals` | `routes/journal.routes.js` | Journal CRUD and journal export |
+| `/api/v1/webhooks/journal/:webhookToken` | `controllers/autoLog.controller.js` | Token-authenticated broker/chart execution webhook; trade data is normalized and deduplicated |
 | `/api/v1/journals/:journalId/trades` | `routes/trade.routes.js` | Trade CRUD and trade image upload |
 | `/api/v1/journals/:journalId/ai-review` | `routes/aiReview.routes.js` | Weekly AI mentor review and quota |
 | `/api/v1/journals/:journalId/ai-range-reviews` | `routes/aiRangeReview.routes.js` | Date-range AI review/history/preview/carry-forward |
@@ -111,6 +112,13 @@ These are the route mounts in `backend/src/app.js`. Route handlers and auth requ
 | `/api/v1/imports` | `routes/import.routes.js` | Import template, preview, commit |
 
 `backend/src/routes/market.controller.js` is a controller file located in the routes directory; the mounted router is `market.routes.js`.
+
+### Trade auto-logging webhook
+
+- Pro users configure a journal-specific webhook URL from the journal's Auto-log dialog. The URL token is a bearer credential; keep it private and rotate it if exposed.
+- The public `POST /api/v1/webhooks/journal/:webhookToken` endpoint is authenticated by that high-entropy token rather than a session cookie. It is rate-limited and accepts the existing JSON body limit.
+- The receiver normalizes supported broker/chart payloads, ignores non-filled events, deduplicates execution IDs, and maps entry/exit fills to journal trades. Per-journal in-process locking serializes retries within one server process.
+- Secret tokens and processed execution IDs are excluded from default Mongoose projections and journal API responses. No broker credentials or outbound broker URL polling are stored.
 
 ### Authentication middleware
 

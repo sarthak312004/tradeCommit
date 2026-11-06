@@ -22,6 +22,7 @@ export const lockedFeatureBullets = (entitlements) => {
   if (Number.isInteger(entitlements.exportDays)) add('exportDays', `Export beyond the last ${plural(entitlements.exportDays, 'day', 'days')}`)
   if (Number.isInteger(entitlements.importMaxPerCommit)) add('importMaxPerCommit', `Import more than ${plural(entitlements.importMaxPerCommit, 'trade', 'trades')} at once`)
   if (entitlements.deepMode === false) add('deepMode', 'Deep Mode')
+  if (entitlements.autoLogWebhook === false) add('autoLogWebhook', 'Auto-log trades from brokers and charting platforms')
 
   return bullets
 }

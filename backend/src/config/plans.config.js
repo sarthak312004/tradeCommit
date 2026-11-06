@@ -33,6 +33,7 @@ export const PLANS = {
     exportDays: 30,
     importMaxPerCommit: 50,
     deepMode: true,
+    autoLogWebhook: false,
   },
   pro: {
     maxJournals: null,
@@ -45,6 +46,7 @@ export const PLANS = {
     exportDays: null,
     importMaxPerCommit: null,
     deepMode: true,
+    autoLogWebhook: true,
   },
 };
 

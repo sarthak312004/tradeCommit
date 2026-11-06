@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { PRO_PLAN_FEATURES } from '../config/planFeatures.js'
 import { lockedFeatureBullets } from './planFeatures.js'
 
 const limited = {
@@ -42,6 +43,13 @@ test('booleans that are off become bullets', () => {
   const lines = text({ ...limited, aiCarryForward: false, deepMode: false })
   assert.ok(lines.includes('AI carry-forward into your next plan'))
   assert.ok(lines.includes('Deep Mode'))
+})
+
+test('auto-log is listed as a Pro feature and appears while it is locked', () => {
+  const feature = 'Auto-log trades from brokers and charting platforms'
+  assert.ok(PRO_PLAN_FEATURES.includes(feature))
+  assert.ok(text({ ...limited, autoLogWebhook: false }).includes(feature))
+  assert.ok(!text({ ...limited, autoLogWebhook: true }).includes(feature))
 })
 
 test('no bullets while entitlements load or when nothing is limited', () => {

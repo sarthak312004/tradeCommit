@@ -14,6 +14,7 @@ const COPY = {
   aiWeeklyPer7Days: ['More AI reviews', 'You have used the AI reviews your plan allows this week.'],
   exportDays: ['Full export range', 'Export your whole trade history, not just the most recent days.'],
   import: ['Bigger imports', 'Import more trades at once.'],
+  autoLogWebhook: ['Trade webhooks', 'Automatically log executed trades from your broker or charting platform.'],
   analytics: ['Full analytics', 'Unlock every analytics tab, metric and filter.']
 }
 export const upgradeCopy = (feature) => {

@@ -9,6 +9,7 @@ import mongoose from 'mongoose'
 import { rateLimit } from './middlewares/rateLimit.middleware.js'
 import { publicErrorFields } from './utils/ApiError.js'
 import { handleDodoWebhook } from './controllers/billing.controller.js'
+import { receiveJournalWebhook } from './controllers/autoLog.controller.js'
 
 const app = express()
 
@@ -102,6 +103,10 @@ app.use("/api/v1/market", marketRouter)
 app.use("/api/v1/progress", progressRouter)
 app.use("/api/v1/imports", importRouter)
 app.use("/api/v1/billing", billingRouter)
+
+// The journal webhook is authenticated by its high-entropy per-journal URL token, not a session cookie.
+const tradeWebhookLimiter = rateLimit({ windowMs: 60 * 1000, max: 120, message: "Too many webhook deliveries, please slow down" })
+app.post("/api/v1/webhooks/journal/:webhookToken", tradeWebhookLimiter, receiveJournalWebhook)
 
 app.use("/api", (req, res) => {
     res.status(404).json({ statusCode: 404, success: false, message: "Route not found", errors: [] })

@@ -22,6 +22,7 @@ export const PRO_PLAN_FEATURES = [
   "AI reviews: 1/day, 3/rolling 7 days",
   "AI Deep Mode",
   "Date-range AI reviews",
+  "Auto-log trades from brokers and charting platforms",
   "Unlimited export history",
   "Higher import limits (existing limits)",
   "Full planning & journaling workflow",
