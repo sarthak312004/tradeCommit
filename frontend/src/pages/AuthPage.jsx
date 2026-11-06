@@ -7,6 +7,8 @@ import SignupFlow from "../components/auth/SignupFlow"
 import { Field, PasswordField } from "../components/auth/fields"
 import { SERIF, headingCls, linkBtnCls, messageCls, mutedCls, submitCls, tabCls } from "../components/auth/authStyles"
 import { ThemeCycleButton } from "../components/sidebar/ThemeToggle"
+import { FREE_PLAN_EXCLUDED_FEATURES, FREE_PLAN_FEATURES, PRO_PLAN_FEATURES } from "../config/planFeatures"
+import { displayRegion, formatPrice, pricingView, REGION_IN } from "../config/pricing"
 import { useTheme } from "../hooks/useTheme"
 import { authPost, errorText } from "../services/authApi"
 
@@ -298,13 +300,206 @@ function ExportPreview() {
   )
 }
 
-function AuthPanel({ mode, login, setLogin, message, loading, showForgot, switchMode, handleLogin, handleGoogleCredential, handleGoogleSignup, finishLogin, autoFocus = false }) {
+function LandingPlansSection({ onChoosePlan }) {
+  const [interval, setBillingInterval] = useState("yearly")
+  const [region] = useState(displayRegion)
+  const pricing = pricingView(interval, region)
+  const unit = interval === "yearly" ? "year" : "month"
+  const freePriceText = formatPrice(0, region === REGION_IN ? "inr" : "usd")
+
+  return (
+    <section id="pricing" aria-labelledby="pricing-title" className="scroll-mt-16 px-5 py-14 sm:px-8 sm:py-20 lg:px-10">
+      <div className="mx-auto max-w-5xl">
+        <div className="flex flex-col items-start justify-between gap-5 sm:flex-row sm:items-end">
+          <div className="max-w-xl">
+            <p className="tc-eyebrow">Plans & pricing</p>
+            <h2 id="pricing-title" className={`${SERIF} text-balance text-[30px] font-medium leading-[1.05] tracking-[-.035em] sm:text-4xl`}>
+              Start on Essential. Upgrade when your process grows.
+            </h2>
+            <p className="mt-3 text-[15px] leading-6 text-zinc-600 dark:text-zinc-400">
+              Begin free with a complete daily journaling routine, or unlock unlimited workspaces and deeper AI reviews with Pro anytime.
+            </p>
+          </div>
+
+          <div
+            role="radiogroup"
+            aria-label="Billing period"
+            className="inline-flex h-9 shrink-0 items-center rounded-full border border-zinc-300/80 bg-[#ebe9e3] p-1 dark:border-white/[0.10] dark:bg-[#191919]"
+          >
+            {[
+              { id: "monthly", label: "Monthly" },
+              { id: "yearly", label: "Yearly" },
+            ].map((item) => {
+              const active = interval === item.id
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  onClick={() => setBillingInterval(item.id)}
+                  className={`inline-flex h-full cursor-pointer items-center gap-1.5 rounded-full px-3.5 text-xs font-medium transition-colors ${focusRing} ${
+                    active
+                      ? "bg-white text-zinc-900 shadow-xs dark:bg-white/[0.14] dark:text-zinc-50"
+                      : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200"
+                  }`}
+                >
+                  {item.label}
+                  {item.id === "yearly" && pricing.savingsPercent > 0 && (
+                    <span className="text-[10px] font-semibold text-[#b95b3b] dark:text-[#e08a68]">
+                      Save {pricing.savingsPercent}%
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        <div className="mt-8 grid gap-5 sm:mt-10 md:grid-cols-2 md:items-stretch">
+          {/* ESSENTIAL (FREE) CARD */}
+          <article
+            aria-label="Essential plan"
+            className="flex flex-col justify-between rounded-[24px] border border-zinc-200/90 bg-[#f1efe9] p-6 transition-colors hover:bg-[#f5f3ed] sm:p-7 dark:border-white/[0.07] dark:bg-[#171717] dark:hover:bg-[#1a1a1a]"
+          >
+            <div>
+              <div className="flex items-center justify-between gap-2">
+                <h3 className={`${SERIF} text-2xl font-medium tracking-tight text-zinc-900 dark:text-zinc-100`}>Essential</h3>
+                <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-500 dark:text-zinc-400">
+                  Free forever
+                </span>
+              </div>
+              <p className="mt-1.5 text-[13px] leading-5 text-zinc-600 dark:text-zinc-400">
+                Core trading tools
+              </p>
+
+              <div className="mt-5 flex items-baseline justify-between gap-2 border-b border-zinc-300/60 pb-4 dark:border-white/[0.07]">
+                <p className="flex items-baseline gap-1.5">
+                  <span className="text-3xl font-semibold tracking-[-0.03em] text-zinc-900 dark:text-zinc-50">
+                    {freePriceText}
+                  </span>
+                  <span className="text-xs text-zinc-500 dark:text-zinc-400">/ forever</span>
+                </p>
+                <span className="text-[11px] text-zinc-500 dark:text-zinc-400">No card required</span>
+              </div>
+
+              <ul className="mt-4 space-y-2.5" aria-label="Essential plan features">
+                {FREE_PLAN_FEATURES.map((point) => (
+                  <li key={point} className="flex items-start gap-2.5 text-[13px] leading-5 text-zinc-700 dark:text-zinc-300">
+                    <span className="mt-0.5 shrink-0 text-zinc-500 dark:text-zinc-400">
+                      <Icon name="check" size={15} />
+                    </span>
+                    <span>{point}</span>
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-4 border-t border-zinc-300/60 pt-3 dark:border-white/[0.07]">
+                <p className="mb-2 text-[11px] font-medium text-zinc-500 dark:text-zinc-400">Not included</p>
+                <ul className="space-y-2" aria-label="Features not included in Essential">
+                  {FREE_PLAN_EXCLUDED_FEATURES.map((point) => (
+                    <li key={point} className="flex items-start gap-2.5 text-[13px] leading-5 text-zinc-500 dark:text-zinc-400">
+                      <span className="mt-0.5 shrink-0 text-zinc-400 dark:text-zinc-500">
+                        <Icon name="close" size={15} />
+                      </span>
+                      <span>{point}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+
+            <div className="mt-6 pt-1">
+              <button
+                type="button"
+                onClick={() => onChoosePlan("Essential")}
+                className="tc-hero-button w-full"
+              >
+                Start with Essential <Icon name="arrow" size={15} />
+              </button>
+            </div>
+          </article>
+
+          {/* PRO CARD */}
+          <article
+            aria-label="Pro plan"
+            className="tc-surface flex flex-col justify-between rounded-[24px] border border-zinc-300 bg-[#f7f6f2] p-6 shadow-[0_30px_90px_-55px_rgba(24,24,27,0.45)] transition-colors sm:p-7 dark:border-white/[0.14] dark:bg-[#1c1c1c]"
+          >
+            <div>
+              <div className="flex items-center justify-between gap-2">
+                <h3 className={`${SERIF} text-2xl font-medium tracking-tight text-zinc-900 dark:text-zinc-50`}>Pro</h3>
+                <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#b95b3b] dark:text-[#e08a68]">
+                  Recommended
+                </span>
+              </div>
+              <p className="mt-1.5 text-[13px] leading-5 text-zinc-600 dark:text-zinc-400">
+                Everything in Free, plus full access to TradeCommit.
+              </p>
+
+              <div
+                className="mt-5 flex flex-wrap items-baseline justify-between gap-2 border-b border-zinc-300/60 pb-4 dark:border-white/[0.08]"
+                aria-live="polite"
+              >
+                <p className="flex items-baseline gap-1.5">
+                  <span className="text-3xl font-semibold tracking-[-0.03em] text-zinc-900 dark:text-zinc-50">
+                    {pricing.primary.text}
+                  </span>
+                  <span className="text-xs text-zinc-600 dark:text-zinc-400">/ {unit}</span>
+                  {pricing.primary.perMonthText && (
+                    <span className="text-xs text-zinc-500 dark:text-zinc-400">(~{pricing.primary.perMonthText}/mo)</span>
+                  )}
+                </p>
+                <span className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                  {pricing.secondary.regionLabel}: {pricing.secondary.text}/{unit}
+                </span>
+              </div>
+
+              <ul className="mt-4 space-y-2.5" aria-label="Pro plan features">
+                {PRO_PLAN_FEATURES.map((point) => (
+                  <li key={point} className="flex items-start gap-2.5 text-[13px] leading-5 text-zinc-800 dark:text-zinc-200">
+                    <span className="mt-0.5 shrink-0 text-emerald-700 dark:text-emerald-400">
+                      <Icon name="check" size={15} />
+                    </span>
+                    <span>{point}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="mt-6 pt-1">
+              <button
+                type="button"
+                onClick={() => onChoosePlan("Pro")}
+                className="tc-hero-button tc-hero-button-primary w-full"
+              >
+                Register & choose Pro <Icon name="arrow" size={15} />
+              </button>
+            </div>
+          </article>
+        </div>
+
+        <p className="mt-4 text-center text-xs text-zinc-500 dark:text-zinc-400">
+          Every account starts free on Essential — you can upgrade to Pro anytime from Plan &amp; billing inside your workspace.
+        </p>
+      </div>
+    </section>
+  )
+}
+
+function AuthPanel({ mode, selectedPlan, login, setLogin, message, loading, showForgot, switchMode, handleLogin, handleGoogleCredential, handleGoogleSignup, finishLogin, autoFocus = false }) {
   return (
     <div className="w-full max-w-[400px]">
       <div className="mb-5">
         <p className="mb-2 text-[10px] font-medium uppercase tracking-[0.2em] text-zinc-400">Your trading workspace</p>
         <h2 className={`${headingCls} text-[26px] sm:text-[29px]`}>{mode === "register" ? "Start with a clear mind." : mode === "login" ? "Welcome back." : "Let's get you back in."}</h2>
         <p className={`mt-1.5 text-[13px] ${mutedCls}`}>{mode === "register" ? "Create your space. Build your process." : "Your journal is ready when you are."}</p>
+        {mode === "register" && selectedPlan && (
+          <p className="mt-2.5 inline-flex items-center gap-1.5 rounded-full border border-zinc-300/80 bg-white/70 px-3 py-1 text-[11px] font-medium text-zinc-700 dark:border-white/[0.12] dark:bg-white/[0.05] dark:text-zinc-300">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-600 dark:bg-emerald-400" />
+            {selectedPlan === "Pro"
+              ? "Pro selected · Register first, then upgrade in Plan & billing"
+              : "Essential selected · Free forever, upgrade anytime"}
+          </p>
+        )}
       </div>
 
       <div className="mb-5 flex gap-5 border-b border-zinc-300/70 dark:border-white/[0.08]" role="tablist" aria-label="Account">
@@ -378,6 +573,7 @@ export default function AuthPage() {
   const navigate = useNavigate()
   const { theme, setTheme } = useTheme()
   const [mode, setMode] = useState("login")
+  const [selectedPlan, setSelectedPlan] = useState(null)
   const [login, setLoginState] = useState({ identifier: "", password: "" })
   const [message, setMessage] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -391,7 +587,13 @@ export default function AuthPage() {
   const switchMode = (next) => { setMode(next); setMessage(null); setAuthOpen(true) }
   // The inline form and the dialog share the same ids, so only one of them is mounted at a time.
   // The inline card keeps its height while the dialog is open so the page doesn't jump behind it.
-  const openAuth = (next = "login") => { setInlineHeight(inlineRef.current?.offsetHeight ?? 0); setMode(next); setMessage(null); setAuthOpen(true) }
+  const openAuth = (next = "login", plan = null) => {
+    setInlineHeight(inlineRef.current?.offsetHeight ?? 0)
+    setSelectedPlan(plan)
+    setMode(next)
+    setMessage(null)
+    setAuthOpen(true)
+  }
   const finishLogin = () => { window.dispatchEvent(new Event("auth-state-changed")); navigate(REDIRECT_AFTER_LOGIN) }
   const finishRegistration = () => { window.dispatchEvent(new Event("auth-state-changed")); navigate(REDIRECT_AFTER_LOGIN, { replace: true }) }
 
@@ -437,7 +639,7 @@ export default function AuthPage() {
   // same endpoint: creates the account on first use; new accounts land on the dashboard like before (replace, no back to login)
   const handleGoogleSignup = (credential) => run(async () => { await authPost("/google", { credential }); finishRegistration() })
 
-  const panelProps = { mode, login, setLogin, message, loading, showForgot, handleLogin, handleGoogleCredential, handleGoogleSignup, finishLogin }
+  const panelProps = { mode, selectedPlan, login, setLogin, message, loading, showForgot, handleLogin, handleGoogleCredential, handleGoogleSignup, finishLogin }
 
   return (
     <div className="tc-landing min-h-dvh overflow-x-hidden bg-canvas text-zinc-900 transition-colors duration-300 dark:bg-[#101010] dark:text-zinc-100">
@@ -451,6 +653,7 @@ export default function AuthPage() {
             <a href="#features" onClick={scrollToId("features")} className={navLink}>Features</a>
             <a href="#mentor" onClick={scrollToId("mentor")} className={navLink}>AI mentor</a>
             <a href="#planner" onClick={scrollToId("planner")} className={navLink}>Planner</a>
+            <a href="#pricing" onClick={scrollToId("pricing")} className={navLink}>Pricing</a>
             <a href="#start" onClick={scrollToId("start")} className={navLink}>Start</a>
           </nav>
           <div className="flex items-center gap-1.5 sm:gap-2">
@@ -588,6 +791,8 @@ export default function AuthPage() {
             </div>
           </div>
         </section>
+
+        <LandingPlansSection onChoosePlan={(plan) => openAuth("register", plan)} />
 
         <section id="start" aria-labelledby="start-title" className="relative scroll-mt-16 border-t border-zinc-200/70 bg-[#e4e2dc] px-5 py-14 sm:px-8 sm:py-20 lg:px-10 dark:border-white/[0.06] dark:bg-[#111]">
           <div className="mx-auto grid max-w-7xl gap-9 sm:gap-12 lg:grid-cols-[1fr_440px] lg:items-start">

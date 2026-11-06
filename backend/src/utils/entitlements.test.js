@@ -219,11 +219,13 @@ test("metricAccess for a free user: free metrics open, pro metrics locked", () =
   for (const [id, tier] of Object.entries(METRIC_TIERS)) {
     assert.equal(metricAccess[id], tier === "free", id);
   }
-  for (const id of ["totalTrades", "winRate", "netPnl", "winsLosses", "avgWinLoss", "bestWorstTrade", "avgRiskReward", "equityCurve", "monthlyPnl", "longShort"]) {
+  for (const id of ["totalTrades", "winRate", "netPnl", "winsLosses", "avgWinLoss", "avgRiskReward", "equityCurve", "analyticsFilters"]) {
     assert.equal(metricAccess[id], true, id);
   }
   assert.equal(metricAccess.profitFactor, false);
-  assert.equal(metricAccess.analyticsFilters, false);
+  assert.equal(metricAccess.bestWorstTrade, false);
+  assert.equal(metricAccess.monthlyPnl, false);
+  assert.equal(metricAccess.longShort, false);
 });
 
 test("metricAccess for a pro user: every listed metric is open", () => {

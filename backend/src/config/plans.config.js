@@ -50,18 +50,19 @@ export const PLANS = {
 
 // metricId -> the lowest plan that may see it ('free' = everyone, 'pro' = Pro only)
 export const METRIC_TIERS = {
-  // basic analytics
+  // basic analytics (top strip, equity curve & filters)
   totalTrades: "free",
   winRate: "free",
   netPnl: "free",
   winsLosses: "free",
   avgWinLoss: "free",
-  bestWorstTrade: "free",
   avgRiskReward: "free",
   equityCurve: "free",
-  monthlyPnl: "free",
-  longShort: "free",
-  // advanced financial and risk analytics
+  analyticsFilters: "free",
+  // advanced financial and risk analytics (Pro section below basic row)
+  bestWorstTrade: "pro",
+  monthlyPnl: "pro",
+  longShort: "pro",
   profitFactor: "pro",
   expectancy: "pro",
   avgR: "pro",
@@ -83,8 +84,6 @@ export const METRIC_TIERS = {
   drawdownChart: "pro",
   pnlDistribution: "pro",
   rMultipleDistribution: "pro",
-  // filters
-  analyticsFilters: "pro",
 };
 
 // Days of Pro access kept after planAccessUntil (late renewals / failed payments). Env GRACE_DAYS, default 3.

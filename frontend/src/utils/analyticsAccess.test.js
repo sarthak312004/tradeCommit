@@ -15,7 +15,7 @@ import {
 
 // What GET /auth/profile returns as `entitlements.metricAccess`, built by hand for the cases below.
 const everyMetric = (allowed) => Object.fromEntries(Object.keys(METRIC_LABELS).map((id) => [id, allowed(id)]))
-const BASIC = new Set(['totalTrades', 'winRate', 'netPnl', 'winsLosses', 'avgWinLoss', 'bestWorstTrade', 'avgRiskReward', 'equityCurve', 'monthlyPnl', 'longShort'])
+const BASIC = new Set(['totalTrades', 'winRate', 'netPnl', 'winsLosses', 'avgWinLoss', 'avgRiskReward', 'equityCurve', 'analyticsFilters'])
 const free = { metricAccess: everyMetric((id) => BASIC.has(id)) }
 const pro = { metricAccess: everyMetric(() => true) }
 

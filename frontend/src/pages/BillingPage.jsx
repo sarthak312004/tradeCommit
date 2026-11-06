@@ -4,6 +4,7 @@ import CancelDialog from '../components/billing/CancelDialog'
 import ScrollFade from '../components/common/ScrollFade'
 import { controlNeutral, focusRing } from '../components/common/controlStyles'
 import TopBar from '../components/rightContainer/TopBar'
+import { FREE_PLAN_EXCLUDED_FEATURES, FREE_PLAN_FEATURES, PRO_PLAN_FEATURES } from '../config/planFeatures'
 import { displayRegion, formatPrice, pricingView, REGION_IN } from '../config/pricing'
 import { useActivationPolling } from '../hooks/useActivationPolling'
 import { usePlan } from '../hooks/usePlan'
@@ -18,23 +19,6 @@ const INTERVALS = [
 ]
 const UNIT = { monthly: 'month', yearly: 'year' }
 const FALLBACK_URL = import.meta.env.VITE_UPGRADE_URL
-
-const FREE_FEATURES = [
-  '1 trading journal & 1 daily planner',
-  'Core performance overview & P&L calendar',
-  '1 weekly AI mentor review every 7 days',
-  'Last 30 days CSV trade export',
-  'Up to 100 trades per CSV import',
-]
-
-const PRO_FEATURES = [
-  'Unlimited trading journals & daily planners',
-  'Every analytics tab, deep metric & filter',
-  '3 weekly AI reviews + custom date-range reviews',
-  'Full AI review history & plan carry-forward',
-  'Deep Mode distraction-free focus workspace',
-  'Full-history CSV export & 5,000 trades per import',
-]
 
 const STATUS_DOT = {
   positive: 'bg-emerald-600 dark:bg-emerald-400',
@@ -69,11 +53,27 @@ function CheckMark({ accent = false }) {
   )
 }
 
+function UnavailableMark() {
+  return (
+    <svg
+      viewBox="0 0 20 20"
+      className="mt-0.5 h-3.5 w-3.5 shrink-0 text-zinc-400 dark:text-zinc-500"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      aria-hidden="true"
+    >
+      <path d="m6 6 8 8M14 6l-8 8" />
+    </svg>
+  )
+}
+
 /**
  * /billing and /billing/success (where checkout returns).
  * Minimal, side-by-side Free vs Pro layout inspired by Claude's billing page:
  * - Active plan is hinted inline in the header and on the active plan card (never inside a separate status box).
- * - Compact card proportions prevent vertical overflow on desktop viewports.
+ * - Expanded plan details remain within the page's scrollable content area.
  * - On /billing/success, automatically reconciles with Dodo (POST /billing/sync) in addition to polling status.
  */
 export default function BillingPage() {
@@ -308,7 +308,7 @@ export default function BillingPage() {
             </div>
           )}
 
-          {/* Side-by-side plan comparison cards (Claude-inspired minimal proportions, zero vertical overflow) */}
+          {/* Side-by-side plan comparison cards within the scrollable billing content area. */}
           <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 md:items-stretch">
             {/* FREE PLAN CARD */}
             <article
@@ -330,7 +330,7 @@ export default function BillingPage() {
                   )}
                 </div>
                 <p className="mt-0.5 text-xs text-zinc-600 dark:text-zinc-400">
-                  Essential journaling for disciplined daily execution.
+                  Core trading tools
                 </p>
 
                 <div className="mt-3.5 flex items-baseline justify-between gap-2 border-b border-zinc-200/80 pb-3.5 dark:border-white/[0.08]">
@@ -344,13 +344,24 @@ export default function BillingPage() {
                 </div>
 
                 <ul className="mt-3.5 space-y-2" aria-label="Free plan features">
-                  {FREE_FEATURES.map((feature) => (
+                  {FREE_PLAN_FEATURES.map((feature) => (
                     <li key={feature} className="flex items-start gap-2 text-[12.5px] leading-5 text-zinc-700 dark:text-zinc-300">
                       <CheckMark />
                       <span>{feature}</span>
                     </li>
                   ))}
                 </ul>
+                <div className="mt-3.5 border-t border-zinc-200/80 pt-3 dark:border-white/[0.08]">
+                  <p className="mb-2 text-[11px] font-medium text-zinc-500 dark:text-zinc-400">Not included</p>
+                  <ul className="space-y-2" aria-label="Features not included in Free">
+                    {FREE_PLAN_EXCLUDED_FEATURES.map((feature) => (
+                      <li key={feature} className="flex items-start gap-2 text-[12.5px] leading-5 text-zinc-500 dark:text-zinc-400">
+                        <UnavailableMark />
+                        <span>{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               </div>
 
               <div className="mt-5 pt-1">
@@ -384,7 +395,7 @@ export default function BillingPage() {
                   )}
                 </div>
                 <p className="mt-0.5 text-xs text-zinc-600 dark:text-zinc-400">
-                  Unlimited workspace, full analytics & deeper AI reviews.
+                  Everything in Free, plus full access to TradeCommit.
                 </p>
 
                 <div
@@ -406,7 +417,7 @@ export default function BillingPage() {
                 </div>
 
                 <ul className="mt-3.5 space-y-2" aria-label="Pro plan features">
-                  {PRO_FEATURES.map((feature) => (
+                  {PRO_PLAN_FEATURES.map((feature) => (
                     <li key={feature} className="flex items-start gap-2 text-[12.5px] leading-5 text-zinc-800 dark:text-zinc-200">
                       <CheckMark accent />
                       <span>{feature}</span>

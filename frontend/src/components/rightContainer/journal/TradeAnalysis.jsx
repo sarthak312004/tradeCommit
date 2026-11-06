@@ -3,7 +3,7 @@ import EquityCurve from './EquityCurve'
 import MonthlyPnl from './MonthlyPnl'
 import AnalyticsBoundary from './analytics/AnalyticsBoundary'
 import AnalyticsFilters from './analytics/AnalyticsFilters'
-import MetricGate, { LockedBlock, PlanCheckNotice } from './analytics/MetricGate'
+import MetricGate, { LockedBlock, NativeAnalyticsPreview, PlanCheckNotice } from './analytics/MetricGate'
 import { AnalyticsAccessContext } from './analytics/accessContext'
 import { DrawdownChart } from './analytics/charts'
 import { EmptyNote, TabLoading } from './analytics/parts'
@@ -26,6 +26,59 @@ const TABS = [
 ]
 
 const NO_FILTERS = { instrument: '', strategy: '', setup: '' }
+
+const OVERVIEW_PRO_METRICS = [
+  'profitFactor',
+  'expectancy',
+  'avgR',
+  'bestWorstTrade',
+  'maxDrawdown',
+  'recoveryFactor',
+  'streaks',
+  'riskConsistency',
+  'longShort',
+  'monthlyPnl'
+]
+
+const OVERVIEW_PRO_HIGHLIGHTS = [
+  'Performance (Profit factor, Expectancy, Avg R, Best & worst trade)',
+  'Risk & consistency (Max drawdown, Recovery factor, Streaks)',
+  'Long vs Short directional breakdown',
+  'Monthly P&L performance history'
+]
+
+const TAB_LOCK_META = {
+  breakdown: {
+    title: 'Unlock Strategy, Setup & Time Breakdowns',
+    subtitle: 'See which instruments, setups, days of the week, and sessions generate your edge.',
+    highlights: [
+      'Monthly performance heatmap',
+      'Day of week & Time of day',
+      'Holding duration',
+      'Instrument, Strategy & Setup tables',
+      'Long vs Short detail'
+    ]
+  },
+  distribution: {
+    title: 'Unlock P&L & R-Multiple Distributions',
+    subtitle: 'Visualize the shape of your trade outcomes, tail risk, and R-multiple dispersion.',
+    highlights: [
+      'Winning vs losing P&L histogram',
+      'Median win & median loss',
+      'R-multiple distribution bands',
+      'Outlier trade detection'
+    ]
+  },
+  compare: {
+    title: 'Unlock Period-over-Period Comparison',
+    subtitle: 'Benchmark any two date ranges side by side to measure whether your execution is improving.',
+    highlights: [
+      'Period A vs Period B table',
+      'Win rate, Profit factor & Expectancy deltas',
+      'Average R & Drawdown change tracking'
+    ]
+  }
+}
 
 const saved = (list) => list.filter((trade) => trade.syncState !== 'failed')
 
@@ -50,8 +103,8 @@ function Stat({ label, value, hint, tone = 'neutral' }) {
   )
 }
 
-function MetricList({ title, rows, locked = [] }) {
-  if (!rows.length && !locked.length) return null
+function MetricList({ title, rows }) {
+  if (!rows.length) return null
   return (
     <div>
       <h3 className="mb-1 text-xs font-medium text-zinc-600 dark:text-zinc-300">{title}</h3>
@@ -66,7 +119,6 @@ function MetricList({ title, rows, locked = [] }) {
           </div>
         ))}
       </dl>
-      {locked.length > 0 && <LockedBlock ids={locked} compact className="mt-2" />}
     </div>
   )
 }
@@ -85,7 +137,7 @@ function TradeAnalysis({ trades, allTrades, range, currency, rangeLabel, mode })
   const ready = status === 'ready'
   const access = useMemo(() => ({ status, entitlements, retry: retryProfile }), [status, entitlements, retryProfile])
   const can = useCallback((metricId) => canViewMetric(metricId, entitlements), [entitlements])
-  // filters only apply while the plan includes them (a plan change mid-session must not keep filtering silently)
+  // Filters remain available on Free; a plan change mid-session must not keep filtering silently.
   const activeFilters = ready && can('analyticsFilters') ? filters : NO_FILTERS
 
   // a trade that failed to save (shown with Retry / Discard) isn't in the journal yet, so it stays out of the numbers
@@ -112,7 +164,6 @@ function TradeAnalysis({ trades, allTrades, range, currency, rangeLabel, mode })
   const modeLabel = mode === 'backtest' ? 'Backtest journal' : mode === 'live' ? 'Live journal' : null
   const rSampleHint = stats.rSample > 0 && stats.rSample < stats.closedTrades ? `from ${stats.rSample} of ${stats.closedTrades} trades with a stop loss` : null
 
-  // rows the server allows, plus the ids of the ones it locks (those become one upgrade prompt, not a gap)
   const split = (entries) => ({
     rows: entries.filter((entry) => can(entry.metric)),
     locked: lockedMetricIds(entries.map((entry) => entry.metric), entitlements)
@@ -120,14 +171,89 @@ function TradeAnalysis({ trades, allTrades, range, currency, rangeLabel, mode })
 
   const sideNote = (side) => (side.count ? `${plural(side.count, 'trade')}, ${formatPercent(side.winRate)} win` : 'no trades')
 
+  // Basic metrics row (all 5 free and accessible in the same row)
+  const basicStats = [
+    {
+      metric: 'totalTrades',
+      node: <Stat key="total" label="Total trades" value={String(stats.totalTrades)} hint={`${stats.closedTrades} closed, ${stats.openTrades} open`} />
+    },
+    {
+      metric: 'winRate',
+      node: <Stat key="win" label="Win rate" value={formatPercent(stats.winRate)} hint={hasClosed ? `${stats.wins} won, ${stats.losses} lost` : undefined} />
+    },
+    {
+      metric: 'avgWinLoss',
+      node: (
+        <Stat
+          key="payoff"
+          label="Payoff ratio"
+          value={formatRatio(stats.payoffRatio)}
+          tone={stats.payoffRatio === null ? 'neutral' : stats.payoffRatio >= 1 ? 'positive' : 'negative'}
+          hint={
+            stats.avgWin !== null && stats.avgLoss !== null
+              ? `${money(stats.avgWin)} avg win / ${money(-stats.avgLoss)} avg loss`
+              : 'avg win / avg loss, by amount'
+          }
+        />
+      )
+    },
+    {
+      metric: 'avgRiskReward',
+      node: (
+        <Stat
+          key="rr"
+          label="Risk to reward"
+          value={rewardRisk === null ? '-' : formatRatio(rewardRisk)}
+          tone={rewardRisk === null ? 'neutral' : rewardRisk >= 1 ? 'positive' : 'negative'}
+          hint={
+            stats.rewardRisk !== null
+              ? `avg winner ${formatR(stats.avgWinR)} / avg loser ${formatR(stats.avgLossR)}`
+              : rewardRisk !== null
+                ? 'avg win / avg loss by amount (no stop losses logged)'
+                : 'needs a winning and a losing trade'
+          }
+        />
+      )
+    },
+    {
+      metric: 'winsLosses',
+      node: (
+        <Stat
+          key="wl"
+          label="Winners / losers"
+          value={hasClosed ? `${stats.wins} / ${stats.losses}` : '-'}
+          hint={stats.breakevenTrades ? `${stats.breakevenTrades} breakeven` : hasClosed ? `${plural(stats.closedTrades, 'closed trade')}` : 'no closed trades yet'}
+        />
+      )
+    }
+  ]
+  const basicGroup = split(basicStats)
+
+  // Pro section below the basic row (Performance, Risk and consistency, Long vs short, Monthly P&L)
   const performanceGroup = split([
-    { metric: 'avgWinLoss', label: 'Average win', value: money(stats.avgWin), tone: stats.avgWin ? 'positive' : 'neutral' },
-    { metric: 'avgWinLoss', label: 'Average loss', value: money(stats.avgLoss === null ? null : -stats.avgLoss), tone: stats.avgLoss ? 'negative' : 'neutral' },
-    { metric: 'avgRiskReward', label: 'Payoff ratio', value: formatRatio(stats.payoffRatio), note: 'avg win / avg loss, by amount' },
+    {
+      metric: 'profitFactor',
+      label: 'Profit factor',
+      value: formatRatio(stats.profitFactor),
+      note: stats.profitFactor === Infinity ? 'no losing trades yet' : 'gross profit / gross loss',
+      tone: stats.profitFactor === null ? 'neutral' : stats.profitFactor >= 1 ? 'positive' : 'negative'
+    },
+    {
+      metric: 'expectancy',
+      label: 'Expectancy',
+      value: money(stats.expectancy, { signed: true }),
+      note: stats.avgR === null ? 'average per closed trade' : `average per closed trade, ${formatR(stats.avgR)}`,
+      tone: toneOf(stats.expectancy)
+    },
+    ...(can('profitFactor') || can('expectancy') || can('bestWorstTrade') || can('avgR')
+      ? [
+          { metric: 'avgWinLoss', label: 'Average win', value: money(stats.avgWin), tone: stats.avgWin ? 'positive' : 'neutral' },
+          { metric: 'avgWinLoss', label: 'Average loss', value: money(stats.avgLoss === null ? null : -stats.avgLoss), tone: stats.avgLoss ? 'negative' : 'neutral' }
+        ]
+      : []),
     { metric: 'avgR', label: 'Average R', value: formatR(stats.avgR), note: rSampleHint ?? 'per trade with a stop loss', tone: stats.avgR === null ? 'neutral' : toneOf(stats.avgR) },
     { metric: 'bestWorstTrade', label: 'Best trade', value: money(stats.bestTrade, { signed: true }), tone: toneOf(stats.bestTrade) },
-    { metric: 'bestWorstTrade', label: 'Worst trade', value: money(stats.worstTrade, { signed: true }), tone: toneOf(stats.worstTrade) },
-    { metric: 'winsLosses', label: 'Winners / losers', value: hasClosed ? `${stats.wins} / ${stats.losses}` : '-', note: stats.breakevenTrades ? `${stats.breakevenTrades} breakeven` : null }
+    { metric: 'bestWorstTrade', label: 'Worst trade', value: money(stats.worstTrade, { signed: true }), tone: toneOf(stats.worstTrade) }
   ])
 
   const riskGroup = split([
@@ -166,60 +292,18 @@ function TradeAnalysis({ trades, allTrades, range, currency, rangeLabel, mode })
     { metric: 'longShort', label: 'Short', value: money(stats.short.count ? stats.short.netPnl : null, { signed: true }), note: sideNote(stats.short), tone: stats.short.count ? toneOf(stats.short.netPnl) : 'neutral' }
   ])
 
-  const keyStats = [
-    { metric: 'totalTrades', node: <Stat key="total" label="Total trades" value={String(stats.totalTrades)} hint={`${stats.closedTrades} closed, ${stats.openTrades} open`} /> },
-    { metric: 'winRate', node: <Stat key="win" label="Win rate" value={formatPercent(stats.winRate)} hint={hasClosed ? `${stats.wins} won, ${stats.losses} lost` : undefined} /> },
-    {
-      metric: 'profitFactor',
-      node: (
-        <Stat
-          key="pf"
-          label="Profit factor"
-          value={formatRatio(stats.profitFactor)}
-          hint={stats.profitFactor === Infinity ? 'no losing trades yet' : 'gross profit / gross loss'}
-        />
-      )
-    },
-    {
-      metric: 'expectancy',
-      node: (
-        <Stat
-          key="exp"
-          label="Expectancy"
-          value={money(stats.expectancy, { signed: true })}
-          tone={toneOf(stats.expectancy)}
-          hint={stats.avgR === null ? 'average per closed trade' : `average per closed trade, ${formatR(stats.avgR)}`}
-        />
-      )
-    },
-    {
-      metric: 'avgRiskReward',
-      node: (
-        <Stat
-          key="rr"
-          label="Reward : risk"
-          value={rewardRisk === null ? '-' : formatRatio(rewardRisk)}
-          tone={rewardRisk === null ? 'neutral' : rewardRisk >= 1 ? 'positive' : 'negative'}
-          hint={
-            stats.rewardRisk !== null
-              ? `avg winner ${formatR(stats.avgWinR)} / avg loser ${formatR(stats.avgLossR)}`
-              : rewardRisk !== null
-                ? 'avg win / avg loss by amount (no stop losses logged)'
-                : 'needs a winning and a losing trade'
-          }
-        />
-      )
-    }
-  ]
-  const keyGroup = split(keyStats)
+  const overviewProLocked = lockedMetricIds(OVERVIEW_PRO_METRICS, entitlements)
+  const hasUnlockedProRows = performanceGroup.rows.length > 0 || riskGroup.rows.length > 0 || sideGroup.rows.length > 0
   const hasMonthly = stats.monthly.length > 0
   const excluded = [
     stats.openTrades ? `${plural(stats.openTrades, 'open trade')}` : null,
     stats.incompleteTrades ? `${plural(stats.incompleteTrades, 'trade')} with missing entry or quantity` : null
   ].filter(Boolean)
 
-  // whole panel: a skeleton while loading, one notice when the plan could not be read, one upgrade prompt when the
-  // server locks every metric of the tab (the tab itself stays visible)
+  const tabLockMeta = TAB_LOCK_META[tab] ?? {}
+
+  // whole panel: a skeleton while loading, one notice when the plan could not be read, one seamless blur overlay when
+  // the server locks every metric of the tab (the tab itself stays visible)
   const panelNotice = !ready ? (
     status === 'error' ? (
       <div className="p-5 sm:p-6"><PlanCheckNotice /></div>
@@ -227,13 +311,19 @@ function TradeAnalysis({ trades, allTrades, range, currency, rangeLabel, mode })
       <TabLoading />
     )
   ) : isTabLocked(tab, entitlements) ? (
-    <div className="p-5 sm:p-6"><LockedBlock ids={TAB_METRICS[tab]} /></div>
+    <LockedBlock
+      ids={TAB_METRICS[tab]}
+      title={tabLockMeta.title}
+      subtitle={tabLockMeta.subtitle}
+      highlights={tabLockMeta.highlights}
+    />
   ) : null
 
   return (
     <AnalyticsAccessContext.Provider value={access}>
     <div className="tc-surface rounded-2xl border border-zinc-300 bg-white shadow-card dark:border-white/[0.12] dark:bg-panel dark:shadow-none">
-      <div className="p-5 pb-3 sm:p-6 sm:pb-4">
+      {/* Header row: Net P&L on the left, View Tabs (Overview, Breakdown, Distribution, Compare) on the right */}
+      <div className="flex flex-wrap items-start justify-between gap-4 p-5 pb-3 sm:p-6 sm:pb-4">
         <div className="min-w-0">
           <p className="text-xs text-zinc-600 dark:text-zinc-300">Net P&amp;L</p>
           {!ready ? (
@@ -252,10 +342,12 @@ function TradeAnalysis({ trades, allTrades, range, currency, rangeLabel, mode })
             {filterLabel ? `, filtered to ${filterLabel}` : ''}
           </p>
         </div>
-      </div>
 
-      <div className="border-t border-zinc-300 px-5 pt-3 sm:px-6 dark:border-white/[0.12]">
-        <div role="tablist" aria-label="Analysis views" className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-3">
+        <div
+          role="tablist"
+          aria-label="Analysis views"
+          className="flex items-center gap-1 self-start overflow-x-auto rounded-xl border border-zinc-200/80 bg-zinc-50/70 p-1 dark:border-white/[0.08] dark:bg-white/[0.03]"
+        >
           {TABS.map((item) => (
             <button
               key={item.id}
@@ -267,14 +359,18 @@ function TradeAnalysis({ trades, allTrades, range, currency, rangeLabel, mode })
               onClick={() => setTab(item.id)}
               className={`cursor-pointer whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium transition ${
                 tab === item.id
-                  ? 'bg-zinc-100 text-zinc-900 dark:bg-white/[0.08] dark:text-zinc-100'
-                  : 'text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900 dark:text-zinc-300 dark:hover:bg-white/[0.05] dark:hover:text-zinc-100'
+                  ? 'bg-white text-zinc-900 shadow-sm dark:bg-white/[0.1] dark:text-zinc-100 dark:shadow-none'
+                  : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'
               }`}
             >
               {item.label}
             </button>
           ))}
         </div>
+      </div>
+
+      {/* Filters bar */}
+      <div className="border-t border-zinc-300 px-5 pt-3 sm:px-6 dark:border-white/[0.12]">
         {lowSample && (
           <p className="mb-3 text-xs leading-snug text-sky-800 dark:text-sky-300">
             Small sample: ratios like profit factor and expectancy swing a lot below {MIN_RELIABLE_SAMPLE} closed trades. Treat them as early signals.
@@ -297,15 +393,15 @@ function TradeAnalysis({ trades, allTrades, range, currency, rangeLabel, mode })
           {tab === 'overview' && (
             <>
             <div className="px-3 pb-4 pt-4 sm:px-4">
-                <MetricGate id="equityCurve">
+              <MetricGate id="equityCurve">
                 {hasClosed ? (
                   <>
                     <EquityCurve points={stats.equity} currency={currency} />
-                    <MetricGate id="drawdownChart">
-                      <div className="px-2 pt-3 sm:px-3">
+                    <div className="px-2 pt-3 sm:px-3">
+                      <MetricGate id="drawdownChart" variant="chart">
                         <DrawdownChart points={stats.equity} currency={currency} />
-                      </div>
-                    </MetricGate>
+                      </MetricGate>
+                    </div>
                   </>
                 ) : (
                   <div className="grid h-52 place-items-center px-6 text-center">
@@ -315,27 +411,39 @@ function TradeAnalysis({ trades, allTrades, range, currency, rangeLabel, mode })
                     </div>
                   </div>
                 )}
-                </MetricGate>
+              </MetricGate>
             </div>
 
-            {(keyGroup.rows.length > 0 || keyGroup.locked.length > 0) && (
+            {basicGroup.rows.length > 0 && (
               <div className="grid grid-cols-2 gap-x-6 gap-y-6 border-t border-zinc-300 p-5 sm:p-6 md:grid-cols-5 dark:border-white/[0.12]">
-                {keyGroup.rows.map((entry) => entry.node)}
-                {keyGroup.locked.length > 0 && <LockedBlock ids={keyGroup.locked} compact className="col-span-2 md:col-span-5" />}
+                {basicGroup.rows.map((entry) => entry.node)}
               </div>
             )}
 
-            <div className="grid gap-x-12 gap-y-6 border-t border-zinc-300 p-5 sm:p-6 md:grid-cols-2 dark:border-white/[0.12]">
-              <MetricList title="Performance" rows={performanceGroup.rows} locked={performanceGroup.locked} />
-              <MetricList title="Risk and consistency" rows={riskGroup.rows} locked={riskGroup.locked} />
-              <MetricList title="Long vs short" rows={sideGroup.rows} locked={sideGroup.locked} />
-            </div>
+            {hasUnlockedProRows && (
+              <div className="grid gap-x-12 gap-y-6 border-t border-zinc-300 p-5 sm:p-6 md:grid-cols-2 dark:border-white/[0.12]">
+                <MetricList title="Performance" rows={performanceGroup.rows} />
+                <MetricList title="Risk and consistency" rows={riskGroup.rows} />
+                <MetricList title="Long vs short" rows={sideGroup.rows} />
+              </div>
+            )}
 
-            {hasMonthly && (
+            {hasMonthly && can('monthlyPnl') && (
               <div className="border-t border-zinc-300 p-5 sm:p-6 dark:border-white/[0.12]">
-                <MetricGate id="monthlyPnl">
-                  <MonthlyPnl months={stats.monthly} currency={currency} />
-                </MetricGate>
+                <MonthlyPnl months={stats.monthly} currency={currency} />
+              </div>
+            )}
+
+            {overviewProLocked.length > 0 && (
+              <div className="border-t border-zinc-300 dark:border-white/[0.12]">
+                <LockedBlock
+                  ids={overviewProLocked}
+                  title="Unlock Performance, Risk, Long vs Short & Monthly P&L"
+                  subtitle="Upgrade to Pro to unlock full performance ratios, risk & streak consistency, directional splits, and month-by-month P&L history."
+                  highlights={OVERVIEW_PRO_HIGHLIGHTS}
+                >
+                  <NativeAnalyticsPreview />
+                </LockedBlock>
               </div>
             )}
 
