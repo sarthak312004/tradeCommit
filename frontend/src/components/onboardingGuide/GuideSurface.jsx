@@ -96,6 +96,9 @@ export default function GuideSurface({
   stageOverride,
   stageProgress,
   error,
+  showStepCounter = false,
+  secondaryLabel = null,
+  onSecondary = null,
 }) {
   const viewport = useViewport()
   const compact = viewport.width < COMPACT_BREAKPOINT
@@ -196,7 +199,16 @@ export default function GuideSurface({
           data-guide-card
           className="guide-card-in rounded-2xl border border-zinc-900/10 bg-gradient-to-b from-white to-[#f9f6f0] p-5 shadow-[0_18px_44px_-18px_rgb(28_25_23/0.38),0_2px_6px_-2px_rgb(28_25_23/0.1)] dark:border-white/[0.12] dark:from-[#242424] dark:to-[#1b1b1b] dark:shadow-[0_22px_50px_-18px_rgb(0_0_0/0.85)]"
         >
-          <StageRail stage={stage} label={stageLabel} progress={stageProgress} />
+          {showStepCounter ? (
+            <div className="flex items-center justify-between gap-2">
+              <StageRail stage={stage} label={stageLabel} progress={stageProgress} />
+              <span className="shrink-0 text-[10px] font-medium uppercase tracking-[0.14em] text-zinc-500 dark:text-zinc-400">
+                Step {index + 1} of {progressSteps.length}
+              </span>
+            </div>
+          ) : (
+            <StageRail stage={stage} label={stageLabel} progress={stageProgress} />
+          )}
           <Segments index={index} steps={progressSteps} />
 
           <h2 id={titleId} className={`${SERIF} mt-4 text-[22px] font-medium leading-[1.2] tracking-[-0.015em] text-zinc-900 dark:text-zinc-50`}>
@@ -231,6 +243,15 @@ export default function GuideSurface({
                   className="h-8 rounded-lg px-2.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-900/[0.05] focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/50 dark:text-zinc-300 dark:hover:bg-white/[0.07]"
                 >
                   Back
+                </button>
+              )}
+              {secondaryLabel && onSecondary && (
+                <button
+                  type="button"
+                  onClick={onSecondary}
+                  className="h-8 rounded-lg border border-zinc-300/80 px-2.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-900/[0.05] focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/50 dark:border-white/[0.14] dark:text-zinc-200 dark:hover:bg-white/[0.07]"
+                >
+                  {secondaryLabel}
                 </button>
               )}
               <button

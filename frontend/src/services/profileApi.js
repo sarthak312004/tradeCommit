@@ -1,5 +1,11 @@
 import { readJson, requestJson } from '../utils/http'
 import { getGuideState, hydrateGuideState, moveGuideState } from '../utils/onboardingGuide'
+import {
+  getDemoFlywheelState,
+  hydrateDemoFlywheelState,
+  isDemoFlywheelRunnable,
+  moveDemoFlywheelState,
+} from '../utils/demoFlywheel'
 
 const BASE = '/api/v1/auth'
 const post = (path, body = {}) => requestJson(`${BASE}${path}`, { method: 'POST', body })
@@ -8,11 +14,41 @@ const post = (path, body = {}) => requestJson(`${BASE}${path}`, { method: 'POST'
 let cachedProfile = null
 let onboardingGuideQueue = Promise.resolve()
 let plannerWalkthroughQueue = Promise.resolve()
+let demoFlywheelQueue = Promise.resolve()
 export const PROFILE_UPDATED_EVENT = 'profile-updated'
 
+const hydrateDemoFlywheel = async (profile) => {
+  if (!profile?.username || !profile?.demoFlywheel) return profile
+  const serverDemo = profile.demoFlywheel
+  const localDemo = getDemoFlywheelState(profile.username)
+  const serverTimestamp = Date.parse(serverDemo?.updatedAt ?? '') || 0
+
+  if (
+    isDemoFlywheelRunnable(serverDemo)
+    && localDemo
+    && localDemo.status !== 'pending'
+    && localDemo.updatedAt > serverTimestamp
+  ) {
+    try {
+      const saved = await requestJson(`${BASE}/onboarding/demo-flywheel`, {
+        method: 'PATCH',
+        body: { status: localDemo.status, step: localDemo.step },
+      })
+      profile = { ...profile, demoFlywheel: saved.demoFlywheel }
+    } catch (error) {
+      console.error('Could not sync saved flywheel demo progress:', error)
+      return profile
+    }
+  }
+
+  hydrateDemoFlywheelState(profile.username, profile.demoFlywheel)
+  return profile
+}
+
 const hydrateProfile = async (profile) => {
-  const serverGuide = profile?.onboardingGuide
   if (!profile?.username) return profile
+  profile = await hydrateDemoFlywheel(profile)
+  const serverGuide = profile?.onboardingGuide
   const localGuide = getGuideState(profile.username)
   if (!serverGuide && !localGuide) return profile
 
@@ -103,11 +139,25 @@ export const savePlannerWalkthroughState = async ({ plannerId, status, step }) =
   return saved.plannerWalkthrough
 }
 
+export const saveDemoFlywheelState = async ({ status, step }) => {
+  const request = demoFlywheelQueue.then(() => requestJson(`${BASE}/onboarding/demo-flywheel`, {
+    method: 'PATCH',
+    body: { status, step },
+  }))
+  demoFlywheelQueue = request.catch(() => {})
+  const saved = await request
+  publishProfileUpdate({ demoFlywheel: saved.demoFlywheel })
+  return saved.demoFlywheel
+}
+
 /** Saves the name and/or username (sign-up no longer asks for them). Resolves to `{ fullname, username }`. */
 export const updateProfile = async (changes) => {
   const previous = cachedProfile ? await Promise.resolve(cachedProfile).catch(() => null) : null
   const saved = await requestJson(`${BASE}/profile`, { method: 'PATCH', body: changes })
-  if (previous?.username) moveGuideState(previous.username, saved.username)
+  if (previous?.username) {
+    moveGuideState(previous.username, saved.username)
+    moveDemoFlywheelState(previous.username, saved.username)
+  }
   cachedProfile = Promise.resolve({ ...(previous ?? {}), ...saved })
   window.dispatchEvent(new Event(PROFILE_UPDATED_EVENT)) // every mounted profile hook re-reads the cache
   return saved

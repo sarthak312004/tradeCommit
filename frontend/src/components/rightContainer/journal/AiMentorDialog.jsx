@@ -6,6 +6,7 @@ import { focusRing } from '../../common/controlStyles'
 import SparklesIcon from './SparklesIcon'
 import RangeReviewPanel from './RangeReviewPanel'
 import ReviewHistoryPanel from './ReviewHistoryPanel'
+import Review from './ReviewReport'
 import { allowanceText, usageLine } from './reviewParts'
 import { usePlan } from '../../../hooks/usePlan'
 import { openUpgrade } from '../../../utils/upgrade'
@@ -24,7 +25,7 @@ const MODES = [
  * The Review tab stays mounted once opened, so a review being written is never lost when you look at the history.
  * Rendered in a portal because the page header uses backdrop-blur, which would trap `fixed` children.
  */
-function AiMentorDialog({ journalId, journalName, currency, isOpen, onClose, onOpenContext, onAddTrade, onReviewReady, initialRange = null, earliestTradeDate = null }) {
+function AiMentorDialog({ journalId, journalName, currency, isOpen, onClose, onOpenContext, onAddTrade, onReviewReady, initialRange = null, earliestTradeDate = null, demoReview = null, guideOverlayActive = false, portalTarget = document.body }) {
   const [mode, setMode] = useState('review') // 'review' | 'history'
   // dates handed to the Review tab when a review is reopened from the history
   const [rangeSeed, setRangeSeed] = useState(null)
@@ -33,7 +34,7 @@ function AiMentorDialog({ journalId, journalName, currency, isOpen, onClose, onO
   const dialogRef = useRef(null)
   const { entitlements, loading: planLoading } = usePlan()
   // the History tab needs the plan's history feature; a locked tab opens the upgrade prompt instead of switching
-  const historyLocked = !planLoading && entitlements?.aiHistory !== true
+  const historyLocked = Boolean(demoReview) || (!planLoading && entitlements?.aiHistory !== true)
 
   // every response carries the allowance as the server sees it right now; the newest one wins
   const reportAccess = useCallback((access) => {
@@ -41,12 +42,13 @@ function AiMentorDialog({ journalId, journalName, currency, isOpen, onClose, onO
   }, [])
 
   const refreshQuota = useCallback(async () => {
+    if (demoReview) return
     try {
       setQuota(await getAiQuota(journalId))
     } catch (quotaError) {
       console.error('Could not refresh the review allowance:', quotaError)
     }
-  }, [journalId])
+  }, [journalId, demoReview])
 
   useEffect(() => {
     if (!isOpen) return undefined
@@ -57,6 +59,7 @@ function AiMentorDialog({ journalId, journalName, currency, isOpen, onClose, onO
   }, [isOpen, onClose])
 
   useEffect(() => {
+    if (demoReview) return undefined
     let cancelled = false
     getAiQuota(journalId)
       .then((next) => {
@@ -66,7 +69,7 @@ function AiMentorDialog({ journalId, journalName, currency, isOpen, onClose, onO
         console.error('Could not refresh the review allowance:', quotaError)
       })
     return () => { cancelled = true }
-  }, [journalId])
+  }, [journalId, demoReview])
 
   const selectMode = (next) => {
     if (next === 'history' && planLoading) return
@@ -99,6 +102,7 @@ function AiMentorDialog({ journalId, journalName, currency, isOpen, onClose, onO
         role="dialog"
         aria-modal="true"
         aria-label="Mentor review"
+        data-guide-pass-through={guideOverlayActive ? '' : undefined}
         className="flex max-h-[calc(100vh-2rem)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-zinc-300 bg-white shadow-2xl outline-none dark:border-white/[0.14] dark:bg-panel"
       >
         <header className="flex shrink-0 items-start justify-between gap-4 px-8 pb-5 pt-7">
@@ -152,23 +156,32 @@ function AiMentorDialog({ journalId, journalName, currency, isOpen, onClose, onO
         <div className="quiet-scrollbar min-h-[360px] flex-1 overflow-y-auto overflow-x-hidden px-8 pb-8">
           <div className="pt-6">
             <div hidden={mode !== 'review'}>
-              <RangeReviewPanel
-                key={rangeKey}
-                journalId={journalId}
-                currency={currency}
-                isOpen={isOpen}
-                seed={rangeSeed}
-                journalRange={initialRange}
-                earliestTradeDate={earliestTradeDate}
-                onOpenContext={onOpenContext}
-                onAddTrade={onAddTrade}
-                quota={quota}
-                onAccess={reportAccess}
-                onRefreshQuota={refreshQuota}
-                onReviewReady={onReviewReady}
-              />
+              {demoReview ? (
+                <Review
+                  review={demoReview.review}
+                  period="range"
+                  stats={demoReview.stats}
+                  currency={currency}
+                />
+              ) : (
+                <RangeReviewPanel
+                  key={rangeKey}
+                  journalId={journalId}
+                  currency={currency}
+                  isOpen={isOpen}
+                  seed={rangeSeed}
+                  journalRange={initialRange}
+                  earliestTradeDate={earliestTradeDate}
+                  onOpenContext={onOpenContext}
+                  onAddTrade={onAddTrade}
+                  quota={quota}
+                  onAccess={reportAccess}
+                  onRefreshQuota={refreshQuota}
+                  onReviewReady={onReviewReady}
+                />
+              )}
             </div>
-            {mode === 'history' && <ReviewHistoryPanel journalId={journalId} currency={currency} onUpdate={openFromHistory} />}
+            {mode === 'history' && !demoReview && <ReviewHistoryPanel journalId={journalId} currency={currency} onUpdate={openFromHistory} />}
           </div>
         </div>
 
@@ -182,7 +195,7 @@ function AiMentorDialog({ journalId, journalName, currency, isOpen, onClose, onO
         </footer>
       </div>
     </div>,
-    document.body
+    portalTarget || document.body
   )
 }
 

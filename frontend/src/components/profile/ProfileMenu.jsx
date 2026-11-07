@@ -6,6 +6,7 @@ import { updateProfile } from '../../services/profileApi'
 import { AtSignIcon, CheckIcon, ChevronDownIcon, CloseIcon, CompassIcon, LockIcon, MailIcon, PencilIcon, StarIcon, UserIcon } from '../../utils/Icons.jsx'
 import ProfileAvatar from './ProfileAvatar'
 import ResetPasswordDialog from './ResetPasswordDialog'
+import { requestDemoFlywheelReplay } from '../../utils/demoFlywheel'
 import { requestGuideReplay } from '../../utils/onboardingGuide'
 import { focusRing } from './profileStyles'
 
@@ -171,6 +172,11 @@ function ProfileMenu() {
     requestGuideReplay()
   }
 
+  const startDemo = () => {
+    setIsOpen(false)
+    requestDemoFlywheelReplay()
+  }
+
   return (
     <div ref={rootRef} className="relative shrink-0">
       <button
@@ -260,6 +266,16 @@ function ProfileMenu() {
             >
               <CompassIcon className="h-3.5 w-3.5" />
               Take guided tour
+            </button>
+
+            <button
+              type="button"
+              onClick={startDemo}
+              tabIndex={isOpen ? 0 : -1}
+              className={`mt-1.5 flex h-9 w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-zinc-300 text-[13px] font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-white/[0.14] dark:text-zinc-200 dark:hover:bg-white/[0.06] ${focusRing}`}
+            >
+              <CompassIcon className="h-3.5 w-3.5" />
+              Replay flywheel demo
             </button>
           </>
         ) : error ? (

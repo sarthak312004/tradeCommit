@@ -75,7 +75,7 @@ const deepModeStyles = `
  * @param {Function} onUploadImage   (file) => Promise<url>
  * @param {object}   [carryForward]  { rule, planLine, checkpoint } the linked journal's latest mentor review asked the trader to apply
  */
-function DailyPlanForm({ plannerName, plannerType, initialEntry = null, initialDate, draftKey, onSubmit, onDelete, onClose, onUploadImage, carryForward = null, guideOverlayActive = false, readOnly = false }) {
+function DailyPlanForm({ plannerName, plannerType, initialEntry = null, initialDate, draftKey, onSubmit, onDelete, onClose, onUploadImage, carryForward = null, guideOverlayActive = false, tourSaveTarget = false, readOnly = false }) {
   const defaultDate = initialEntry?.date ?? initialDate ?? todayKey()
   const [savedDraft] = useState(() => readFormDraft(draftKey))
   const savedValues = savedDraft?.values && typeof savedDraft.values === 'object' ? savedDraft.values : {}
@@ -332,7 +332,7 @@ function DailyPlanForm({ plannerName, plannerType, initialEntry = null, initialD
       <div className="flex items-center gap-2">
         <ShortcutHint className="mr-2 hidden md:block" />
         <button type="button" onClick={() => drawerRef.current?.close()} className={ghostFooterButton}>Cancel</button>
-        <button type="submit" disabled={isBusy || readOnly} title={readOnly ? 'Read-only on Free. Upgrade to edit' : `Save (${MOD_LABEL}+Enter)`} className={primaryFooterButton}>
+        <button type="submit" data-tour={tourSaveTarget ? 'planner-save-plan' : undefined} disabled={isBusy || readOnly} title={readOnly ? 'Read-only on Free. Upgrade to edit' : `Save (${MOD_LABEL}+Enter)`} className={primaryFooterButton}>
           {isBusy ? 'Saving...' : initialEntry ? 'Save plan' : 'Create plan'}
         </button>
       </div>
@@ -417,7 +417,7 @@ function DailyPlanForm({ plannerName, plannerType, initialEntry = null, initialD
       <hr className="my-6 border-zinc-300 dark:border-white/[0.12]" />
 
       {carryForward?.rule && !initialEntry && (
-        <aside aria-label="From your last mentor review" className="mb-5 rounded-xl border border-[#d6a88f]/70 bg-[#fbf6f1] px-4 py-3.5 dark:border-[#e08a68]/30 dark:bg-[#e08a68]/[0.07]">
+        <aside data-tour="carry-forward" aria-label="From your last mentor review" className="mb-5 rounded-xl border border-[#d6a88f]/70 bg-[#fbf6f1] px-4 py-3.5 dark:border-[#e08a68]/30 dark:bg-[#e08a68]/[0.07]">
           <p className="text-[11px] font-medium uppercase tracking-wider text-[#a24d2e] dark:text-[#e08a68]">From your last mentor review</p>
           <p className="mt-1.5 text-sm font-medium leading-6 text-zinc-900 dark:text-zinc-100">{carryForward.rule}</p>
           {carryForward.planLine && <p className="mt-1.5 text-[13px] leading-6 text-zinc-600 dark:text-zinc-300">Write in this plan: {carryForward.planLine}</p>}

@@ -90,7 +90,7 @@ function AnalysisLoading() {
   )
 }
 
-function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades, onOpenJournal, onAddTrade, onUpdateTrade, onDeleteTrade, onUploadTradeImage, onSaveContext, onRetryTrade, onDiscardTrade, onOpenCreateForm }) {
+function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades, onOpenJournal, onAddTrade, onUpdateTrade, onDeleteTrade, onUploadTradeImage, onSaveContext, onRetryTrade, onDiscardTrade, onOpenCreateForm, demoConfig = null }) {
   const journalCtx = useContext(JournalStateContext)
   // locked on Free: viewable and exportable, never editable (the API enforces this too and answers 403 PLAN_LIMIT)
   const isReadOnly = journal?.readOnly === true
@@ -154,12 +154,14 @@ function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades,
     setHasReadyMentorReview(false)
     setIsMentorMounted(true)
     setIsMentorOpen(true)
-  }, [])
+    demoConfig?.onMentorOpenChange?.(true)
+  }, [demoConfig])
 
   const closeMentor = useCallback(() => {
     isMentorOpenRef.current = false
     setIsMentorOpen(false)
-  }, [])
+    demoConfig?.onMentorOpenChange?.(false)
+  }, [demoConfig])
 
   const handleMentorReviewReady = useCallback(() => {
     if (!isMentorOpenRef.current) setHasReadyMentorReview(true)
@@ -188,7 +190,7 @@ function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades,
   const allTrades = journal?.trades
   // trades that reached the server (not still saving or failed): drives the unlock progress on the mentor orb
   const savedTradeCount = useMemo(() => (allTrades ?? []).filter((trade) => !trade.syncState).length, [allTrades])
-  const { progress: mentorProgress, celebrate: celebrateMentor } = useMentorProgress(savedTradeCount)
+  const { progress: mentorProgress, celebrate: celebrateMentor } = useMentorProgress(savedTradeCount, demoConfig?.mentorProgress ?? null)
   // the mentor's "All trades" period starts at this journal's first trade
   const earliestTradeDate = useMemo(() => {
     let earliest = null
@@ -244,12 +246,14 @@ function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades,
     if (isReadOnly) return
     writeFormDraft(contextFormStateKey, { open: true })
     setIsContextOpen(true)
+    demoConfig?.onContextOpenChange?.(true)
   }
 
   const handleCloseContext = () => {
     clearFormDraft(contextFormStateKey)
     clearFormDraft(`tradecommit:context-form-draft:${journal.id}`)
     setIsContextOpen(false)
+    demoConfig?.onContextOpenChange?.(false)
   }
 
   // The form closes right away. The card shows up (or updates) immediately and the save finishes in the
@@ -312,6 +316,10 @@ function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades,
   const subtitle = isFiltered
     ? `${visibleTrades.length} of ${journal.trades.length} trades, ${describeRangeInline(range)}`
     : `Trades in ${journal.name} (${currency})`
+
+  const effectiveContextOpen = demoConfig?.isContextOpen ?? isContextOpen
+  const effectiveMentorOpen = demoConfig?.isMentorOpen ?? isMentorOpen
+  const effectiveMentorMounted = Boolean(demoConfig?.isMentorOpen) || isMentorMounted
 
   return (
     <section className="pb-20">
@@ -430,13 +438,16 @@ function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades,
         </div>
       </div>
 
-      {isContextOpen && !isReadOnly && (
+      {effectiveContextOpen && !isReadOnly && (
         <Suspense fallback={<DialogSkeleton variant="context" />}>
           <JournalContextDialog
             journalId={journal.id}
             journalName={journal.name}
             context={journalContext}
             mode={journal.mode}
+            allowUnchangedSave={Boolean(demoConfig)}
+            guideOverlayActive={Boolean(demoConfig)}
+            portalTarget={demoConfig?.portalTarget}
             onSave={(context, options) => onSaveContext(journal.id, context, options)}
             onClose={handleCloseContext}
           />
@@ -459,14 +470,17 @@ function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades,
         </Suspense>
       )}
 
-      {isMentorMounted && (
+      {effectiveMentorMounted && (
         <Suspense fallback={<DialogSkeleton variant="mentor" />}>
           <AiMentorDialog
             key={journal.id}
             journalId={journal.id}
             journalName={journal.name}
             currency={currency}
-            isOpen={isMentorOpen}
+            isOpen={effectiveMentorOpen}
+            demoReview={demoConfig?.demoReview ?? null}
+            guideOverlayActive={Boolean(demoConfig)}
+            portalTarget={demoConfig?.portalTarget}
             onReviewReady={handleMentorReviewReady}
             initialRange={isFiltered ? range : null}
             earliestTradeDate={earliestTradeDate}
@@ -603,7 +617,7 @@ function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades,
         </div>
       )}
 
-      {mentorProgress?.completed && !mentorProgress.firstFeedbackReceived && !mentorProgress.celebrated && !isMentorOpen && !isFormOpen && !isPlanTodayOpen && (
+      {mentorProgress?.completed && !mentorProgress.firstFeedbackReceived && !mentorProgress.celebrated && !effectiveMentorOpen && !isFormOpen && !isPlanTodayOpen && (
         <MentorUnlockBadge
           target={mentorProgress.target}
           onDismiss={celebrateMentor}
@@ -614,13 +628,14 @@ function TradeJournal({ view = 'trades', journal, journals = [], onImportTrades,
         />
       )}
 
-      {!isMentorOpen && !isFormOpen && !isPlanTodayOpen && (
+      {!effectiveMentorOpen && !isFormOpen && !isPlanTodayOpen && (
         <MentorOrb
           onOpen={openMentor}
           onWarm={loadAiMentor}
           progress={mentorProgress}
           hasReadyReview={hasReadyMentorReview}
           onLogTrade={() => handleOpenNewTrade()}
+          portalTarget={demoConfig?.portalTarget}
         />
       )}
     </section>

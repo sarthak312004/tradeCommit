@@ -30,7 +30,7 @@ function ProgressSegments({ count, target, justHit }) {
  * gives way to the familiar hover pill and a tiny badge pip on the orb.
  * Rendered in a portal so no ancestor (the page header uses backdrop-blur) can trap its `fixed` position.
  */
-function MentorOrb({ onOpen, onWarm, progress = null, hasReadyReview = false, onLogTrade }) {
+function MentorOrb({ onOpen, onWarm, progress = null, hasReadyReview = false, onLogTrade, portalTarget = document.body }) {
   const showUnlockProgress = Boolean(progress && !progress.firstFeedbackReceived)
   const locked = showUnlockProgress && !progress.completed
   const count = progress?.count ?? 0
@@ -142,7 +142,7 @@ function MentorOrb({ onOpen, onWarm, progress = null, hasReadyReview = false, on
         <span aria-hidden="true" className="pointer-events-none absolute right-[1px] top-[1px] z-10 h-3 w-3 rounded-full bg-[#c4623f] ring-2 ring-white dark:bg-[#e08a68] dark:ring-[#242424]" />
       )}
     </div>,
-    document.body
+    portalTarget || document.body
   )
 }
 

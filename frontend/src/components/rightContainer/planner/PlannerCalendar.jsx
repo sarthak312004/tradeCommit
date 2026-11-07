@@ -100,12 +100,13 @@ function WeekBand({ weekStart, entry, isLoading, onPlan, onOpen }) {
 }
 
 /** One line above a week's row for a weekly plan. Weekly plans never appear inside the day cells. */
-function WeekSummaryLine({ entry, onOpen, large = false }) {
+function WeekSummaryLine({ entry, onOpen, large = false, isTourTarget = false }) {
   return (
     <button
       type="button"
       disabled={entry.syncState === 'saving'}
       onClick={() => onOpen(entry)}
+      data-tour={isTourTarget ? 'planner-open-plan' : undefined}
       aria-label={`Open weekly plan: ${entry.title}`}
       title={entry.syncState === 'saving' ? 'Saving plan…' : entry.title}
       className={`flex w-full min-w-0 cursor-pointer items-center gap-2 overflow-hidden rounded-md px-2 text-left text-[11px] font-medium leading-none text-zinc-700 transition-colors hover:bg-zinc-900/[0.06] hover:text-zinc-900 motion-reduce:transition-none disabled:cursor-wait disabled:opacity-70 dark:text-zinc-300 dark:hover:bg-white/[0.08] dark:hover:text-zinc-50 ${large ? 'h-8' : 'h-6'} ${focusRing}`}
@@ -121,7 +122,7 @@ function WeekSummaryLine({ entry, onOpen, large = false }) {
 const navItem = `inline-flex h-full cursor-pointer items-center justify-center text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100 hover:text-zinc-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-600 dark:text-zinc-300 dark:hover:bg-white/[0.07] dark:hover:text-zinc-50 dark:focus-visible:ring-sky-400`
 
 /** Fixed h-6 pill: the label is truncated inside it, so it can never grow taller than the cell or clip a descender. */
-function EntryChip({ entry, onOpen, large = false }) {
+function EntryChip({ entry, onOpen, large = false, isTourTarget = false }) {
   return (
     <button
       type="button"
@@ -130,6 +131,7 @@ function EntryChip({ entry, onOpen, large = false }) {
         event.stopPropagation()
         onOpen(entry)
       }}
+      data-tour={isTourTarget ? 'planner-open-plan' : undefined}
       title={entry.syncState === 'saving' ? 'Saving plan…' : entry.title}
       className={`flex w-full min-w-0 cursor-pointer items-center overflow-hidden rounded-md border border-zinc-200 bg-zinc-100 text-left font-medium leading-none ${large ? 'h-9 gap-2 px-3 text-xs' : 'h-6 gap-1.5 px-2 text-[11px]'} text-zinc-800 transition-colors hover:border-zinc-300 hover:bg-zinc-200 hover:text-zinc-900 disabled:cursor-wait disabled:opacity-70 dark:border-transparent dark:bg-white/[0.08] dark:text-zinc-200 dark:hover:border-transparent dark:hover:bg-white/[0.13] dark:hover:text-zinc-50 ${focusRing}`}
     >
@@ -181,7 +183,7 @@ function CompactDayCell({ day, entries, isToday, isSelected, isActive, isTourTar
   )
 }
 
-function DayCell({ day, entries, isToday, isSelected, isExpanded, isTourTarget, onToggleExpand, onCreate, onOpenEntry }) {
+function DayCell({ day, entries, isToday, isSelected, isExpanded, isTourTarget, tourEntryId, onToggleExpand, onCreate, onOpenEntry }) {
   const visible = isExpanded ? entries : entries.slice(0, MAX_VISIBLE_CHIPS)
   const hiddenCount = entries.length - visible.length
 
@@ -230,7 +232,7 @@ function DayCell({ day, entries, isToday, isSelected, isExpanded, isTourTarget, 
 
       <div className="mt-1.5 space-y-1">
         {visible.map((entry) => (
-          <EntryChip key={entry.id} entry={entry} onOpen={onOpenEntry} />
+          <EntryChip key={entry.id} entry={entry} onOpen={onOpenEntry} isTourTarget={entry.id === tourEntryId} />
         ))}
         {hiddenCount > 0 && (
           <button
@@ -271,7 +273,7 @@ function DayCell({ day, entries, isToday, isSelected, isExpanded, isTourTarget, 
  *                                   { scope: 'week', sections: [...] } with dateKey = the current week's first day
  * @param {Function} onOpenEntry     (entry) => void
  */
-function PlannerCalendar({ entries, selectedDate = null, onCreateForDate, onOpenEntry, headerHint, isOpenPlanTourActive = false, isPlansLoading = false }) {
+function PlannerCalendar({ entries, selectedDate = null, onCreateForDate, onOpenEntry, headerHint, isOpenPlanTourActive = false, isPlansLoading = false, tourEntryId = null }) {
   const [month, setMonth] = useState(() => startOfMonth(new Date()))
   const [expandedDay, setExpandedDay] = useState(null)
   const isCompact = useIsCompact()
@@ -368,7 +370,7 @@ function PlannerCalendar({ entries, selectedDate = null, onCreateForDate, onOpen
             <div key={week[0].key} data-current-week={isCurrentWeek || undefined} className={`col-span-7 rounded-xl ${isCurrentWeek ? 'bg-sky-600/[0.05] dark:bg-sky-400/[0.06]' : ''}`}>
               {rowWeekly.length > 0 && (
                 <div className="space-y-1 px-1 pb-1 pt-1">
-                  {rowWeekly.map((entry) => <WeekSummaryLine key={entry.id} entry={entry} onOpen={onOpenEntry} large={isCompact} />)}
+                  {rowWeekly.map((entry) => <WeekSummaryLine key={entry.id} entry={entry} onOpen={onOpenEntry} large={isCompact} isTourTarget={entry.id === tourEntryId} />)}
                 </div>
               )}
               <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
@@ -381,7 +383,7 @@ function PlannerCalendar({ entries, selectedDate = null, onCreateForDate, onOpen
                       isToday={day.key === today}
                       isSelected={day.key === selectedDate}
                       isActive={day.key === activeDay}
-                      isTourTarget={isOpenPlanTourActive && day.key === today}
+                      isTourTarget={isOpenPlanTourActive && day.key === today || Boolean(tourEntryId && entriesByDate.get(day.key)?.some((entry) => entry.id === tourEntryId) && activeDay !== day.key)}
                       onPick={handlePickDay}
                     />
                   ) : (
@@ -393,6 +395,7 @@ function PlannerCalendar({ entries, selectedDate = null, onCreateForDate, onOpen
                       isSelected={day.key === selectedDate}
                       isExpanded={expandedDay === day.key}
                       isTourTarget={isOpenPlanTourActive && day.key === today}
+                      tourEntryId={tourEntryId}
                       onToggleExpand={(key) => setExpandedDay((current) => (current === key ? null : key))}
                       onCreate={onCreateForDate}
                       onOpenEntry={onOpenEntry}
@@ -421,8 +424,8 @@ function PlannerCalendar({ entries, selectedDate = null, onCreateForDate, onOpen
             </button>
           </div>
           <div className="space-y-1.5">
-            {activeEntries.map((entry) => (
-              <EntryChip key={entry.id} entry={entry} onOpen={onOpenEntry} large />
+              {activeEntries.map((entry) => (
+                <EntryChip key={entry.id} entry={entry} onOpen={onOpenEntry} large isTourTarget={entry.id === tourEntryId} />
             ))}
           </div>
         </div>

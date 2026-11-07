@@ -3,6 +3,7 @@ import { useNavigate } from "react-router"
 import { useProfile } from "../hooks/useProfile"
 import { requestJson } from "../utils/http"
 import { clearProfileCache } from "../services/profileApi"
+import { queueDemoFlywheel } from "../utils/demoFlywheel"
 import { queueOnboardingGuide } from "../utils/onboardingGuide"
 import { SERIF } from "../components/auth/authStyles"
 
@@ -32,7 +33,8 @@ export default function OnboardingPage() {
       // The profile hook caches the pre-onboarding profile. Clear it before
       // returning home so Home does not redirect the user back to onboarding.
       clearProfileCache()
-      // a brand-new workspace gets the guided onboarding (Plan -> Journal -> AI feedback) on its first visit
+      // a brand-new workspace sees the read-only Flywheel Demo first, then the guided onboarding
+      queueDemoFlywheel(profile?.username)
       queueOnboardingGuide(profile?.username)
       navigate("/", { replace: true })
     } catch (error) {

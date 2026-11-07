@@ -5,6 +5,7 @@ import {
   completeOnboarding,
   updateOnboardingGuide,
   updatePlannerWalkthrough,
+  updateDemoFlywheel,
   setHeaderBackdrop,
   setFocusPreferences,
   uploadHeaderBackdropImage,
@@ -52,6 +53,7 @@ router.patch("/profile", verifyJWT, updateProfile)
 router.post("/onboarding/complete", verifyJWT, completeOnboarding)
 router.patch("/onboarding/guide", verifyJWT, updateOnboardingGuide)
 router.patch("/onboarding/planner-walkthrough", verifyJWT, updatePlannerWalkthrough)
+router.patch("/onboarding/demo-flywheel", verifyJWT, updateDemoFlywheel)
 // header background: a built-in scene / none (JSON), or the user's own picture (multipart)
 router.put("/header-backdrop", verifyJWT, setHeaderBackdrop)
 router.put("/focus-preferences", verifyJWT, setFocusPreferences)

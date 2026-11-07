@@ -11,11 +11,13 @@
 //      (hidden, state kept) and returns when the form closes.
 
 export const GUIDES = Object.freeze({
+  DEMO_FLYWHEEL: 'onboarding:demo-flywheel',
   ONBOARDING: 'onboarding:guide',
   PLANNER_WALKTHROUGH: 'planner:walkthrough',
 })
 
 export const GUIDE_PRIORITY = Object.freeze({
+  [GUIDES.DEMO_FLYWHEEL]: 60,
   [GUIDES.ONBOARDING]: 50,
   [GUIDES.PLANNER_WALKTHROUGH]: 40,
 })
@@ -80,7 +82,7 @@ export function guidanceReducer(state, action) {
     }
 
     case 'navigate':
-      return state.settledRoute !== null && state.settledRoute !== action.route ? { ...state, settledRoute: null } : state
+      return state.settledRoute !== null ? { ...state, settledRoute: null } : state
 
     default:
       return state

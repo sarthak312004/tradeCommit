@@ -131,7 +131,10 @@ function Flywheel({ flywheel }) {
       )}
 
       {carryForward?.rule && (
-        <div className="rounded-xl border border-[#d6a88f]/70 bg-[#fbf6f1] px-5 py-4 dark:border-[#e08a68]/30 dark:bg-[#e08a68]/[0.07]">
+        <div
+          data-tour="carry-forward"
+          className="rounded-xl border border-[#d6a88f]/70 bg-[#fbf6f1] px-5 py-4 dark:border-[#e08a68]/30 dark:bg-[#e08a68]/[0.07]"
+        >
           <h4 className="text-[11px] font-medium uppercase tracking-wider text-[#a24d2e] dark:text-[#e08a68]">Carry this into your next plan</h4>
           <p className="mt-2 text-[15px] font-medium leading-7 text-zinc-900 dark:text-zinc-50">{carryForward.rule}</p>
           <dl className="mt-3 space-y-2.5 text-[13px] leading-6">
@@ -391,7 +394,7 @@ function PlanFold({ review }) {
   const days = plan.days ?? []
   const asPlanned = days.filter((day) => day.status === 'executed_as_planned').length
   return (
-    <Fold title="Plan vs execution" badge={days.length ? <span className="text-xs tabular-nums text-zinc-500 dark:text-zinc-400">{asPlanned} of {days.length} {days.length === 1 ? 'day' : 'days'} as planned</span> : null}>
+    <Fold title="Plan vs execution" badge={days.length ? <span className="text-xs tabular-nums text-zinc-500 dark:text-zinc-400">{asPlanned} of {days.length} {days.length === 1 ? 'day' : 'days'} as planned</span> : null} defaultOpen={Boolean(plan.defaultOpen)}>
       {plan.summary && <Clamp className="text-sm leading-6 text-zinc-700 dark:text-zinc-300">{plan.summary}</Clamp>}
       {days.length > 0 && (
         <ul className={listBox}>

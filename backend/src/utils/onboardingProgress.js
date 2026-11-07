@@ -5,6 +5,9 @@ import { Planner } from "../models/planner.models.js";
 import { PlanEntry } from "../models/planEntry.models.js";
 import { Trade } from "../models/trade.models.js";
 import { User } from "../models/user.models.js";
+import { ApiError } from "./ApiError.js";
+import { ApiResponse } from "./ApiResponse.js";
+import { asyncHandler } from "./asyncHandler.js";
 
 export const ONBOARDING_ACTION = Object.freeze({
   JOURNAL_CREATED: "journal_created",
@@ -31,6 +34,71 @@ export const PLANNER_WALKTHROUGH_STEPS = Object.freeze([
   "quick-plan",
   "full-editor",
 ]);
+
+export const DEMO_FLYWHEEL_STATUSES = Object.freeze([
+  "pending",
+  "active",
+  "completed",
+  "skipped",
+]);
+
+export const DEMO_FLYWHEEL_STEPS = Object.freeze([
+  "journal",
+  "context",
+  "planner",
+  "ai-mentor",
+  "next-plan",
+  "finish",
+]);
+
+export const ALLOWED_PRIOR_DEMO_STATUSES = Object.freeze({
+  pending: Object.freeze(["pending"]),
+  active: Object.freeze(["pending", "active"]),
+  completed: Object.freeze(["pending", "active"]),
+  skipped: Object.freeze(["pending", "active"]),
+});
+
+export const toDemoFlywheel = (demo) => demo ? ({
+  status: demo.status,
+  step: demo.step,
+  updatedAt: demo.updatedAt ? new Date(demo.updatedAt).toISOString() : null,
+}) : null;
+
+export const createUpdateDemoFlywheelHandler = ({ User: UserModel = User } = {}) =>
+  asyncHandler(async (req, res) => {
+    const { status, step } = req.body ?? {};
+    if (!DEMO_FLYWHEEL_STATUSES.includes(status) || !DEMO_FLYWHEEL_STEPS.includes(step)) {
+      throw new ApiError(400, "Choose a valid flywheel demo status and step");
+    }
+
+    const allowedPriorStatuses = ALLOWED_PRIOR_DEMO_STATUSES[status];
+    let user = await UserModel.findOneAndUpdate(
+      {
+        _id: req.user._id,
+        "demoFlywheel.status": { $in: allowedPriorStatuses },
+      },
+      {
+        $set: {
+          "demoFlywheel.status": status,
+          "demoFlywheel.step": step,
+          "demoFlywheel.updatedAt": new Date(),
+        },
+      },
+      { new: true, projection: "demoFlywheel" }
+    );
+
+    if (!user) {
+      user = await UserModel.findById(req.user._id).select("demoFlywheel");
+      if (!user) throw new ApiError(404, "User not found");
+      if (!user.demoFlywheel) {
+        throw new ApiError(409, "Flywheel demo is not available for this account");
+      }
+    }
+
+    return res.status(200).json(
+      new ApiResponse(200, { demoFlywheel: toDemoFlywheel(user.demoFlywheel) }, "Flywheel demo saved")
+    );
+  });
 
 export const hasCompletedOnboardingWorkflow = (actions = []) => {
   const completed = new Set(actions);

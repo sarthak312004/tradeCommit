@@ -7,6 +7,11 @@ import { GUIDES } from '../../utils/guidance'
 import { getOnboardingWorkflowProgress } from '../../utils/onboardingProgress'
 import { saveOnboardingGuideState } from '../../services/profileApi'
 import {
+  DEMO_FLYWHEEL_CHANGE_EVENT,
+  getDemoFlywheelState,
+  isDemoFlywheelRunnable,
+} from '../../utils/demoFlywheel'
+import {
   GUIDE_CHANGE_EVENT,
   GUIDE_REPLAY_EVENT,
   GUIDE_STATUS,
@@ -59,19 +64,26 @@ export default function OnboardingGuide({ isNavOpen, setNavOpen, autoCloseNav = 
   // re-read the saved state whenever it changes (this tab, or another one)
   useEffect(() => {
     const onChange = (event) => {
-      if (event.type === GUIDE_CHANGE_EVENT && event.detail?.username !== username?.toLowerCase()) return
+      if (
+        (event.type === GUIDE_CHANGE_EVENT || event.type === DEMO_FLYWHEEL_CHANGE_EVENT)
+        && event.detail?.username !== username?.toLowerCase()
+      ) return
       bump()
     }
     window.addEventListener(GUIDE_CHANGE_EVENT, onChange)
+    window.addEventListener(DEMO_FLYWHEEL_CHANGE_EVENT, onChange)
     window.addEventListener('storage', onChange)
     return () => {
       window.removeEventListener(GUIDE_CHANGE_EVENT, onChange)
+      window.removeEventListener(DEMO_FLYWHEEL_CHANGE_EVENT, onChange)
       window.removeEventListener('storage', onChange)
     }
   }, [username])
 
   // eslint-disable-next-line react-hooks/exhaustive-deps -- `version` re-reads the saved state
   const saved = useMemo(() => getGuideState(username), [username, version])
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `version` re-reads the saved state
+  const demoRunnable = useMemo(() => isDemoFlywheelRunnable(getDemoFlywheelState(username) ?? profile?.demoFlywheel), [username, profile?.demoFlywheel, version])
 
   const facts = useMemo(
     () => ({
@@ -103,12 +115,12 @@ export default function OnboardingGuide({ isNavOpen, setNavOpen, autoCloseNav = 
     }
   }, [resolved, saved, username, active, persistState])
 
-  // ask to start: only a queued (or replayed) guide. The controller decides: one guide at a time, nothing while a form is open.
+  // ask to start: only a queued (or replayed) guide, and never while the Flywheel Demo is queued or active.
   useEffect(() => {
-    if (!runnable || activeId) return undefined
+    if (!runnable || demoRunnable || activeId) return undefined
     const timer = setTimeout(() => request(GUIDES.ONBOARDING, { trigger: 'auto' }), START_DELAY_MS)
     return () => clearTimeout(timer)
-  }, [runnable, activeId, request])
+  }, [runnable, demoRunnable, activeId, request])
 
   // finished, skipped or no longer needed: give the screen back
   useEffect(() => {

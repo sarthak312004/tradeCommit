@@ -6,7 +6,7 @@ import { plannerApi } from "../../services/plannerApi.js"
 import { preloadPlannerPage } from "../../utils/plannerPageLoader.js"
 import SidebarItemCard from "./SidebarItemCard"
 
-function PlannerCard({ planner, isSelected }) {
+function PlannerCard({ planner, isSelected, onSelect }) {
 	const { updatePlanner, deletePlanner } = useContext(plannerContext)
 	const navigate = useNavigate()
 
@@ -16,6 +16,10 @@ function PlannerCard({ planner, isSelected }) {
 	}
 
 	const handleSelect = () => {
+		if (onSelect) {
+			onSelect(planner.id)
+			return
+		}
 		preloadPlannerPage().catch(() => {})
 		plannerApi.listEntries(planner.id).catch(() => {})
 		navigate(`/planner/${planner.id}`)

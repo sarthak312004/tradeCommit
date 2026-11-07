@@ -3,6 +3,7 @@ import Sidebar from './components/sidebar/Sidebar'
 import { Navigate, Outlet } from 'react-router'
 import { fetchPrefetched } from './utils/prefetch'
 import { SessionError, SessionLoading } from './components/common/SessionScreen'
+import DemoFlywheel from './components/demoFlywheel/DemoFlywheel'
 import OnboardingGuide from './components/onboardingGuide/OnboardingGuide'
 import { DeepFocusProvider } from './context/DeepFocusProvider'
 import GuidanceProvider from './context/GuidanceProvider'
@@ -148,6 +149,7 @@ function Home() {
       <DeepFocusDock />
       <ToastHost />
       <UpgradeHost />
+      <DemoFlywheel />
       <OnboardingGuide isNavOpen={navOpen} setNavOpen={setNavOpen} autoCloseNav={isMobile} openCreateForm={openCreateForm} />
     </>
     </GuidanceProvider>

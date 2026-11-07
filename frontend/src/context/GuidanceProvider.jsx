@@ -7,7 +7,7 @@ const SETTLE_MS = 40 // requests made in the same moment are collected, then ONE
 // Our own surfaces are marked; every other aria-modal element (forms, drawers, dialogs) counts as "the app is busy".
 const FOREIGN_MODAL = '[aria-modal="true"]:not([data-tour-card]):not([data-guide-surface]):not([data-guide-pass-through])'
 const isVisibleForeignModal = (element) => (
-  !element.closest('[hidden], [aria-hidden="true"], [inert]')
+  !element.closest('[data-demo-stage], [hidden], [aria-hidden="true"], [inert]')
   && window.getComputedStyle(element).display !== 'none'
 )
 
@@ -16,14 +16,18 @@ const isVisibleForeignModal = (element) => (
  * when finished.
  */
 export default function GuidanceProvider({ children }) {
-  const { pathname } = useLocation()
+  const { pathname, key } = useLocation()
   const [state, dispatch] = useReducer(guidanceReducer, initialGuidanceState)
   const routeRef = useRef(pathname)
+  const navKeyRef = useRef(`${pathname}:${key}`)
 
   useEffect(() => {
     routeRef.current = pathname
+    const nextNavKey = `${pathname}:${key}`
+    if (navKeyRef.current === nextNavKey) return
+    navKeyRef.current = nextNavKey
     dispatch({ type: 'navigate', route: pathname })
-  }, [pathname])
+  }, [pathname, key])
 
   // is a real form/dialog open? (debounced; our own guide surfaces are excluded)
   useEffect(() => {

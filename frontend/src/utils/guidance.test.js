@@ -6,13 +6,37 @@ const run = (actions, start = initialGuidanceState) => actions.reduce(reduce, st
 const ask = (id, extra = {}) => ({ type: 'request', id, trigger: 'auto', route: '/', ...extra })
 const settle = { type: 'resolve' }
 const activeId = (state) => state.active?.id ?? null
+const DEMO_FLYWHEEL = GUIDES.DEMO_FLYWHEEL
 const ONBOARDING = GUIDES.ONBOARDING
 
-test('only the main and first-Planner walkthroughs are requestable', () => {
-  assert.deepEqual(Object.values(GUIDES), ['onboarding:guide', 'planner:walkthrough'])
+test('only the flywheel demo, main, and first-Planner walkthroughs are requestable', () => {
+  assert.deepEqual(Object.values(GUIDES), ['onboarding:demo-flywheel', 'onboarding:guide', 'planner:walkthrough'])
   for (const id of ['tour:main', 'tour:journal', 'tour:planner', 'trading-loop', 'playbook', 'mission-complete']) {
     assert.equal(reduce(initialGuidanceState, ask(id, { trigger: 'user' })), initialGuidanceState)
   }
+})
+
+test('DEMO_FLYWHEEL has priority above ONBOARDING, prevents overlap, and never chains back-to-back without navigation', () => {
+  let state = run([ask(ONBOARDING), ask(DEMO_FLYWHEEL), settle])
+  assert.equal(activeId(state), DEMO_FLYWHEEL)
+  assert.equal(state.pending.length, 0)
+
+  // While DEMO_FLYWHEEL is active, ONBOARDING cannot interrupt or queue
+  state = reduce(state, ask(ONBOARDING))
+  assert.equal(activeId(state), DEMO_FLYWHEEL)
+  assert.equal(state.pending.length, 0)
+
+  // Releasing DEMO_FLYWHEEL sets settledRoute on '/' so automatic guides wait until navigation
+  state = reduce(state, { type: 'release', id: DEMO_FLYWHEEL, route: '/' })
+  assert.equal(activeId(state), null)
+  assert.equal(state.settledRoute, '/')
+  assert.equal(reduce(state, ask(ONBOARDING, { route: '/' })).pending.length, 0)
+
+  // Leaving the demo calls navigate('/'), which clears settledRoute and allows ONBOARDING to start
+  state = reduce(state, { type: 'navigate', route: '/' })
+  assert.equal(state.settledRoute, null)
+  state = run([ask(ONBOARDING, { route: '/' }), settle], state)
+  assert.equal(activeId(state), ONBOARDING)
 })
 
 test('a request made while the guide is active is ignored', () => {

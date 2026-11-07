@@ -4,12 +4,16 @@ import { journalContext } from "../../context/Context.js"
 import { FileIcon } from "../../utils/Icons.jsx"
 import SidebarItemCard from "./SidebarItemCard"
 
-function JournalCard({ journal, isSelected }) {
+function JournalCard({ journal, isSelected, onSelect }) {
 	const { updateJournal, deleteJournal, selectJournal } = useContext(journalContext)
 	const navigate = useNavigate()
 	const { pathname } = useLocation()
 
 	const handleSelect = () => {
+		if (onSelect) {
+			onSelect(journal.id)
+			return
+		}
 		selectJournal(journal.id)
 		// journals live on /, /calendar and /analysis (stay on the current view), planners on /planner/:id
 		navigate(pathname === "/calendar" || pathname === "/analysis" ? pathname : "/")

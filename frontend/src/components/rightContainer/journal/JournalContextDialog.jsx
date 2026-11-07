@@ -275,7 +275,7 @@ function AddPropertyMenu({ disabled, onAdd }) {
  * properties are also added to trades that were logged before.
  * Rendered in a portal because the page header uses backdrop-blur, which would trap `fixed` children.
  */
-function JournalContextDialog({ journalId, journalName, context, mode = "live", onSave, onClose }) {
+function JournalContextDialog({ journalId, journalName, context, mode = "live", onSave, onClose, allowUnchangedSave = false, guideOverlayActive = false, portalTarget = document.body }) {
   // the strategy is rich text: older journals hold plain text, which is turned into paragraphs once, here
   const draftKey = `tradecommit:context-form-draft:${journalId}`
   const [savedDraft] = useState(() => readFormDraft(draftKey))
@@ -324,7 +324,7 @@ function JournalContextDialog({ journalId, journalName, context, mode = "live", 
   const savedPayload = useMemo(() => JSON.stringify({ ...toPayload(strategyToHtml(context?.strategy), (context?.attributes ?? []).map(toFormField)), mode: mode === "backtest" ? "backtest" : "live" }), [context, mode])
   const isDirty = JSON.stringify({ ...toPayload(strategy, attributes), mode: journalMode }) !== savedPayload
   const isTooLong = strategyLength > MAX_STRATEGY_LENGTH
-  const canSave = isDirty && !isSaving && !isTooLong
+  const canSave = (isDirty || allowUnchangedSave) && !isSaving && !isTooLong
 
   // a long strategy is easy to lose with a stray Esc or click outside, so ask first when there are unsaved edits
   const requestClose = () => {
@@ -395,6 +395,7 @@ function JournalContextDialog({ journalId, journalName, context, mode = "live", 
         role="dialog"
         aria-modal="true"
         aria-label="Journal context"
+        data-guide-pass-through={guideOverlayActive ? '' : undefined}
         className={`flex w-full flex-col rounded-2xl border border-zinc-300 bg-white shadow-2xl outline-none transition-[max-width] duration-200 motion-safe:animate-[fadeIn_180ms_ease-out] dark:border-white/[0.14] dark:bg-panel ${
           isWide ? 'h-[92vh] max-w-6xl' : 'max-h-[90vh] max-w-3xl'
         }`}
@@ -578,14 +579,14 @@ function JournalContextDialog({ journalId, journalName, context, mode = "live", 
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <button type="button" onClick={requestClose} disabled={isSaving} className={`${ghostFooterButton} disabled:opacity-50`}>Cancel</button>
-            <button type="submit" disabled={!canSave} className={saveButtonClass}>
+            <button type="submit" data-tour="journal-context-save" disabled={!canSave} className={saveButtonClass}>
               {isSaving ? 'Saving...' : 'Save changes'}
             </button>
           </div>
         </footer>
       </form>
     </div>,
-    document.body
+    portalTarget || document.body
   )
 }
 

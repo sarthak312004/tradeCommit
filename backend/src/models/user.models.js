@@ -80,6 +80,26 @@ const plannerWalkthroughSchema = new mongoose.Schema(
     { _id:false }
 )
 
+const demoFlywheelSchema = new mongoose.Schema(
+    {
+        status:{
+            type:String,
+            enum:["pending","active","completed","skipped"],
+            required:true
+        },
+        step:{
+            type:String,
+            enum:["journal","context","planner","ai-mentor","next-plan","finish"],
+            default:"journal"
+        },
+        updatedAt:{
+            type:Date,
+            default:Date.now
+        }
+    },
+    { _id:false }
+)
+
 const userSchema = new mongoose.Schema(
     {
         username:{
@@ -149,6 +169,11 @@ const userSchema = new mongoose.Schema(
         // Created atomically only for a user's first Planner; independent of the main guide.
         plannerWalkthrough:{
             type:plannerWalkthroughSchema,
+            default:null
+        },
+        // Created only when a new user completes onboarding; existing accounts remain unqueued.
+        demoFlywheel:{
+            type:demoFlywheelSchema,
             default:null
         },
         passwordChangedAt:{

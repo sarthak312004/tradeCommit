@@ -10,8 +10,11 @@ import { HEADER_SCENE_IDS, headerBackdropFolder } from "../constants/headerBackd
 import { resolveMusicChanges, toMusicPreferences } from "../utils/musicLinks.js";
 import { getEffectivePlan, getEntitlements, planState } from "../utils/entitlements.js";
 import {
+  DEMO_FLYWHEEL_STEPS,
   PLANNER_WALKTHROUGH_STEPS,
+  createUpdateDemoFlywheelHandler,
   restoreLegacyOnboardingGuide,
+  toDemoFlywheel,
 } from "../utils/onboardingProgress.js";
 import {
   OTP_LENGTH,
@@ -155,6 +158,7 @@ export const getProfile = asyncHandler(async (req, res) => {
         onboardingTradingStyle: user.onboardingTradingStyle ?? null,
         onboardingGuide: toOnboardingGuide(user.onboardingGuide),
         plannerWalkthrough: toPlannerWalkthrough(user.plannerWalkthrough),
+        demoFlywheel: toDemoFlywheel(user.demoFlywheel),
         createdAt: user.createdAt,
         headerBackdrop: toHeaderBackdrop(user),
         focusPreferences: toFocusPreferences(user),
@@ -218,6 +222,7 @@ export const completeOnboarding = asyncHandler(async (req, res) => {
   const tradingStyle = typeof req.body?.tradingStyle === "string" ? req.body.tradingStyle : ""
   if (!allowedStyles.has(tradingStyle)) throw new ApiError(400, "Choose a valid trading style")
 
+  const now = new Date()
   let user = await User.findOneAndUpdate(
     { _id: req.user._id, onboardingCompleted: false },
     {
@@ -229,13 +234,18 @@ export const completeOnboarding = asyncHandler(async (req, res) => {
           step: "planner",
           actions: [],
           workflowCompletedAt: null,
-          updatedAt: new Date(),
+          updatedAt: now,
+        },
+        demoFlywheel: {
+          status: "pending",
+          step: DEMO_FLYWHEEL_STEPS[0],
+          updatedAt: now,
         },
       },
     },
     { new: true }
   )
-  if (!user) user = await User.findById(req.user._id).select("onboardingCompleted onboardingTradingStyle");
+  if (!user) user = await User.findById(req.user._id).select("onboardingCompleted onboardingTradingStyle onboardingGuide demoFlywheel");
   if (!user) throw new ApiError(404, "User not found")
 
   return res.status(200).json(
@@ -245,6 +255,7 @@ export const completeOnboarding = asyncHandler(async (req, res) => {
         onboardingCompleted: true,
         tradingStyle: user.onboardingTradingStyle ?? tradingStyle,
         onboardingGuide: toOnboardingGuide(user.onboardingGuide),
+        demoFlywheel: toDemoFlywheel(user.demoFlywheel),
       },
       "Onboarding completed"
     )
@@ -317,6 +328,8 @@ export const updatePlannerWalkthrough = asyncHandler(async (req, res) => {
     new ApiResponse(200, { plannerWalkthrough: toPlannerWalkthrough(user.plannerWalkthrough) }, "Planner walkthrough saved")
   );
 });
+
+export const updateDemoFlywheel = createUpdateDemoFlywheelHandler();
 
 // ---- Changing the password is three steps, all for the logged-in user, and the code only ever goes to their own email --------
 //   1. POST /auth/password/send-otp    {}                           -> emails a 6-digit code
