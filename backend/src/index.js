@@ -3,6 +3,7 @@ import mongoose from 'mongoose'
 import { app } from './app.js'
 import { dbConnection } from './db/dbConnection.js'
 import { pendingReservationCount, releasePendingReservations } from './utils/aiQuota.js'
+import { cleanEnv, dodoClientProblems } from './utils/dodoClient.js'
 
 const requiredEnv = [
     'MONGODB_CONNECTION_URL',
@@ -39,11 +40,11 @@ if (process.env.NODE_ENV === 'production') {
             'DODO_PRODUCT_PRO_MONTHLY',
             'DODO_PRODUCT_PRO_YEARLY',
             'APP_URL',
-        ].filter((name) => !process.env[name]?.trim())
+        ].filter((name) => !cleanEnv(process.env[name]))
         if (missingBilling.length > 0) {
             console.warn(`Billing is incomplete in production (${missingBilling.join(', ')}); checkout or webhooks will be unavailable.`)
-        } else if (process.env.DODO_ENV.trim() !== 'live_mode') {
-            console.warn('DODO_ENV must be live_mode in production; billing is disabled until live_mode is set.')
+        } else if (dodoClientProblems().length > 0) {
+            console.warn(`Billing is disabled in production: ${dodoClientProblems().join('; ')}.`) // variable names only, never values
         }
     }
 }

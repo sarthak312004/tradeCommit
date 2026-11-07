@@ -1,7 +1,7 @@
 // Webhook + checkout flow with in-memory stand-ins for the database and the Dodo client (no network, no secrets).
 import assert from "node:assert/strict";
 import test, { afterEach, beforeEach } from "node:test";
-import { createCheckoutHandler, createWebhookHandler, processBillingEvent } from "./billingService.js";
+import { checkoutConfigProblems, createCheckoutHandler, createWebhookHandler, processBillingEvent } from "./billingService.js";
 
 const UID = "64b000000000000000000001";
 const UID2 = "64b000000000000000000002";
@@ -445,4 +445,43 @@ test("checkout answers 503 when billing is not configured and 502 (no details) w
   const out = await run(checkout(failing), checkoutReq({ interval: "monthly" }));
   assert.equal(out.error.statusCode, 502);
   assert.ok(!out.error.message.includes("secret"));
+});
+
+/* ---------------- checkout 503 diagnostics (names only) ---------------- */
+
+const captureConsoleError = async (fn) => {
+  const original = console.error;
+  const lines = [];
+  console.error = (...args) => { lines.push(args.map(String).join(" ")); };
+  try { await fn(); } finally { console.error = original; }
+  return lines.join("\n");
+};
+
+test("a 503 checkout logs which variable names are missing or invalid, never their values", async () => {
+  delete process.env.DODO_PRODUCT_PRO_YEARLY;
+  process.env.APP_URL = '""';
+  const handler = createCheckoutHandler({ getClient: async () => null, configProblems: () => ["DODO_ENV is not test_mode or live_mode"] });
+  let out;
+  const logged = await captureConsoleError(async () => { out = await run(handler, checkoutReq({ interval: "yearly" })); });
+  assert.equal(out.error.statusCode, 503);
+  assert.match(logged, /DODO_PRODUCT_PRO_YEARLY is missing/);
+  assert.match(logged, /APP_URL is missing/);
+  assert.match(logged, /DODO_ENV is not test_mode or live_mode/);
+  assert.doesNotMatch(logged, /pdt_m|DODO_PRODUCT_PRO_MONTHLY/); // only the interval that was requested, and no ids
+});
+
+test("checkoutConfigProblems is empty for a complete (even quoted) config and the client check runs with it", () => {
+  process.env.DODO_PRODUCT_PRO_MONTHLY = '"pdt_m"';
+  process.env.APP_URL = "'https://app.example.com/'";
+  assert.deepEqual(checkoutConfigProblems("monthly", () => []), []);
+  assert.deepEqual(checkoutConfigProblems("monthly", () => ["DODO_PAYMENTS_API_KEY is missing"]), ["DODO_PAYMENTS_API_KEY is missing"]);
+});
+
+test("a Dodo API rejection is a 502 that logs only status/name, not a 503 config error", async () => {
+  const failing = { checkoutSessions: { create: async () => { throw Object.assign(new Error("raw provider payload sk_live_x"), { status: 401 }); } } };
+  let out;
+  const logged = await captureConsoleError(async () => { out = await run(checkout(failing), checkoutReq({ interval: "monthly" })); });
+  assert.equal(out.error.statusCode, 502);
+  assert.match(logged, /Dodo checkout session failed: 401/);
+  assert.doesNotMatch(logged, /raw provider payload|sk_live_x|Checkout unavailable/);
 });

@@ -6,6 +6,7 @@ import { ApiResponse } from "./ApiResponse.js";
 import { asyncHandler } from "./asyncHandler.js";
 import { BillingEventError, eventSubject, eventTime, extractProductId, isLiveStatus, planUpdateFor } from "./billingEvents.js";
 import { isSubscriptionTermElapsed } from "./entitlements.js";
+import { dodoClientProblems } from "./dodoClient.js";
 
 const INTERVALS = ["monthly", "yearly"];
 // Product ids come from the server environment only; the client just says "monthly" or "yearly".
@@ -27,7 +28,14 @@ const appUrl = () => cleanEnv(process.env.APP_URL).replace(/\/+$/, "");
 
 /* ---------------------------------- POST /api/v1/billing/checkout ---------------------------------- */
 
-export const createCheckoutHandler = ({ getClient }) =>
+// Why checkout cannot start, naming variables only (never values), so a 503 can be diagnosed from the server log.
+export const checkoutConfigProblems = (interval, clientProblems = dodoClientProblems) => [
+  ...(productIdFor(interval) ? [] : [`${PRODUCT_ENV[interval]} is missing`]),
+  ...(appUrl() ? [] : ["APP_URL is missing"]),
+  ...clientProblems(),
+];
+
+export const createCheckoutHandler = ({ getClient, configProblems = dodoClientProblems }) =>
   asyncHandler(async (req, res) => {
     const interval = req.body?.interval;
     if (!INTERVALS.includes(interval)) throw new ApiError(400, 'interval must be "monthly" or "yearly"');
@@ -42,7 +50,11 @@ export const createCheckoutHandler = ({ getClient }) =>
     const productId = productIdFor(interval);
     const base = appUrl();
     const client = productId && base ? await getClient() : null;
-    if (!client) throw new ApiError(503, "Billing is not available right now. Please try again later.");
+    if (!client) {
+      const problems = checkoutConfigProblems(interval, configProblems);
+      console.error(`Checkout unavailable: ${problems.length > 0 ? problems.join("; ") : "Dodo client could not be created"}`); // variable names only
+      throw new ApiError(503, "Billing is not available right now. Please try again later.");
+    }
 
     let session;
     try {
