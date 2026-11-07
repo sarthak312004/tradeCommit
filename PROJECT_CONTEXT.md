@@ -50,7 +50,7 @@ TradeCommit/
 
 ### Important frontend entry points
 
-- `frontend/src/main.jsx`: creates router and wraps the app with `JournalContextProvider` and `PlannerContextProvider`.
+- `frontend/src/main.jsx`: creates router and wraps the app with `JournalContextProvider` and `PlannerContextProvider`; public legal/support routes (`/terms`, `/privacy`, `/refund-policy`, `/cancellation-policy`, `/contact`) are defined here.
 - `frontend/src/Home.jsx`: main application shell; inspect for shell-level navigation/layout/auth behavior.
 - `frontend/src/pages/MainJournal.jsx`: main journal screen.
 - `frontend/src/pages/PlannerPage.jsx` and `LazyPlannerPage.jsx`: planner screen/loading path.

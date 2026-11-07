@@ -10,6 +10,11 @@ import LazyPlannerPage from './pages/LazyPlannerPage.jsx'
 import MarketResearchPage from './pages/MarketResearchPage.jsx'
 import OnboardingPage from './pages/OnboardingPage.jsx'
 import BillingPage from './pages/BillingPage.jsx'
+import TermsPage from './pages/TermsPage.jsx'
+import PrivacyPage from './pages/PrivacyPage.jsx'
+import RefundPolicyPage from './pages/RefundPolicyPage.jsx'
+import CancellationPolicyPage from './pages/CancellationPolicyPage.jsx'
+import ContactPage from './pages/ContactPage.jsx'
 import { PlannerContextProvider } from './context/plannerContextProvider.jsx'
 import { Analytics } from '@vercel/analytics/react'
 
@@ -17,6 +22,26 @@ const router = createBrowserRouter([
   {
     path:'/auth',
     element:<AuthPage/>
+  },
+  {
+    path:'/terms',
+    element:<TermsPage/>
+  },
+  {
+    path:'/privacy',
+    element:<PrivacyPage/>
+  },
+  {
+    path:'/refund-policy',
+    element:<RefundPolicyPage/>
+  },
+  {
+    path:'/cancellation-policy',
+    element:<CancellationPolicyPage/>
+  },
+  {
+    path:'/contact',
+    element:<ContactPage/>
   },
   {
     path:'/onboarding',

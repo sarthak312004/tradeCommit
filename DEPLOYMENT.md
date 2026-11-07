@@ -90,3 +90,19 @@ the browser will still access both through the Vercel origin.
 - Render's free plan sleeps after inactivity (first request is slow); use a paid plan or a different host for always-on.
 - Consider a Content-Security-Policy (e.g. via `helmet`) once you have tested it against the app.
 - Back up your Atlas data (free M0 has no automated backups).
+
+## 8. Legal pages and Dodo Payments go-live
+
+The app has short public pages at `/terms`, `/privacy`, `/refund-policy`, `/cancellation-policy`, and `/contact`.
+Set `VITE_SUPPORT_EMAIL` from `frontend/.env.example` in Vercel's **Production** environment, then redeploy. It is
+public website information, not a secret. Open each URL on your production site and check that it works without login
+and that the support email is yours and monitored.
+
+In Dodo, give them your real website and the policy URLs they ask for. Complete any business or payout details in
+Dodo itself. Their exact review requirements can vary, so follow any specific feedback they send; having these pages
+does not guarantee approval.
+
+Before accepting live payments, make sure your Dodo products match the prices in `frontend/src/config/pricing.js`,
+and configure the existing Dodo API key, product IDs, webhook URL/signing key, and `APP_URL` in Render from the
+correct Dodo mode. Test checkout and subscription changes using test-mode credentials first. Keep Dodo secrets in
+Render only, never in Vercel or `VITE_*` variables.

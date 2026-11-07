@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useLocation } from 'react-router'
+import { Link, useLocation } from 'react-router'
 import CancelDialog from '../components/billing/CancelDialog'
 import ScrollFade from '../components/common/ScrollFade'
 import { controlNeutral, focusRing } from '../components/common/controlStyles'
@@ -521,6 +521,33 @@ export default function BillingPage() {
                 </button>
               )}
             </div>
+          </div>
+
+          <div className="mt-2.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-[11px] text-zinc-500 dark:text-zinc-400">
+            <span>
+              By continuing with checkout, you agree to our{' '}
+              <Link to="/terms" className={`underline underline-offset-2 transition-colors hover:text-zinc-800 dark:hover:text-zinc-200 ${focusRing}`}>
+                Terms &amp; Conditions
+              </Link>{' '}
+              and acknowledge our{' '}
+              <Link to="/privacy" className={`underline underline-offset-2 transition-colors hover:text-zinc-800 dark:hover:text-zinc-200 ${focusRing}`}>
+                Privacy Policy
+              </Link>
+              .
+            </span>
+            <nav aria-label="Billing policies" className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <Link to="/refund-policy" className={`transition-colors hover:text-zinc-800 hover:underline hover:underline-offset-2 dark:hover:text-zinc-200 ${focusRing}`}>
+                Refund Policy
+              </Link>
+              <span aria-hidden="true" className="text-zinc-300 dark:text-zinc-700">·</span>
+              <Link to="/cancellation-policy" className={`transition-colors hover:text-zinc-800 hover:underline hover:underline-offset-2 dark:hover:text-zinc-200 ${focusRing}`}>
+                Cancellation Policy
+              </Link>
+              <span aria-hidden="true" className="text-zinc-300 dark:text-zinc-700">·</span>
+              <Link to="/contact" className={`transition-colors hover:text-zinc-800 hover:underline hover:underline-offset-2 dark:hover:text-zinc-200 ${focusRing}`}>
+                Contact
+              </Link>
+            </nav>
           </div>
 
           <div aria-live="polite">

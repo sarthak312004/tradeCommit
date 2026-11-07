@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router'
 import { displayRegion, pricingView } from '../../config/pricing'
 import { usePlan } from '../../hooks/usePlan'
 import { requestJson } from '../../utils/http'
@@ -96,7 +97,25 @@ export default function PricingCard({ onBusyChange, secondaryAction = null }) {
         </ul>
       )}
 
-      <p className="mt-3 text-[11px] leading-4 text-zinc-500 dark:text-zinc-400">Final price is shown at checkout based on your billing country.</p>
+      <p className="mt-3 text-[11px] leading-4 text-zinc-500 dark:text-zinc-400">
+        Final price is shown at checkout based on your billing country. By upgrading, you agree to our{' '}
+        <Link to="/terms" className={`underline underline-offset-2 hover:text-zinc-800 dark:hover:text-zinc-200 ${focusRing}`}>
+          Terms
+        </Link>
+        ,{' '}
+        <Link to="/privacy" className={`underline underline-offset-2 hover:text-zinc-800 dark:hover:text-zinc-200 ${focusRing}`}>
+          Privacy
+        </Link>
+        ,{' '}
+        <Link to="/refund-policy" className={`underline underline-offset-2 hover:text-zinc-800 dark:hover:text-zinc-200 ${focusRing}`}>
+          Refund
+        </Link>
+        , and{' '}
+        <Link to="/cancellation-policy" className={`underline underline-offset-2 hover:text-zinc-800 dark:hover:text-zinc-200 ${focusRing}`}>
+          Cancellation
+        </Link>{' '}
+        policies.
+      </p>
 
       {error && <p role="alert" className="mt-2.5 text-xs text-rose-600 dark:text-rose-400">{error}</p>}
 

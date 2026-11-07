@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import { useNavigate } from "react-router"
+import { Link, useNavigate } from "react-router"
 import ForgotPasswordFlow from "../components/auth/ForgotPasswordFlow"
 import GoogleButton from "../components/auth/GoogleButton"
 import OtpLoginFlow from "../components/auth/OtpLoginFlow"
@@ -525,7 +525,17 @@ function AuthPanel({ mode, selectedPlan, login, setLogin, message, loading, show
       {mode === "forgot" && <ForgotPasswordFlow initialEmail={login.identifier.includes("@") ? login.identifier.trim() : ""} onComplete={finishLogin} onBack={() => switchMode("login")} />}
       {mode === "otp" && <OtpLoginFlow initialEmail={login.identifier.includes("@") ? login.identifier.trim() : ""} onComplete={finishLogin} onBack={() => switchMode("login")} />}
       {mode === "register" && <div className="tc-form-enter"><SignupFlow onCredential={handleGoogleSignup} onLogin={() => switchMode("login")} loading={loading} message={mode === "register" ? message : null} /></div>}
-      <p className="mt-5 text-center text-[10px] leading-4 text-zinc-500 dark:text-zinc-500">By continuing, you agree to use Trade Commit as a tool for reflection and disciplined decision-making.</p>
+      <p className="mt-5 text-center text-[10px] leading-4 text-zinc-500 dark:text-zinc-500">
+        By continuing, you agree to our{" "}
+        <Link to="/terms" className={`underline underline-offset-2 transition-colors hover:text-zinc-900 dark:hover:text-zinc-200 ${focusRing}`}>
+          Terms &amp; Conditions
+        </Link>{" "}
+        and acknowledge our{" "}
+        <Link to="/privacy" className={`underline underline-offset-2 transition-colors hover:text-zinc-900 dark:hover:text-zinc-200 ${focusRing}`}>
+          Privacy Policy
+        </Link>
+        .
+      </p>
     </div>
   )
 }
@@ -826,7 +836,15 @@ export default function AuthPage() {
             <span className={`${SERIF} inline-flex items-center gap-2 text-base text-zinc-700 dark:text-zinc-300`}><TradeCommitMark size={22} />Trade Commit</span>
             <span>Journal. Plan. Review. Trade deliberately.</span>
           </div>
-          <div className="flex items-center gap-5">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+            <nav aria-label="Legal" className="flex flex-wrap items-center gap-x-4 gap-y-1.5 sm:gap-x-5">
+              <Link to="/terms" className={`rounded transition-colors hover:text-zinc-900 dark:hover:text-zinc-100 ${focusRing}`}>Terms</Link>
+              <Link to="/privacy" className={`rounded transition-colors hover:text-zinc-900 dark:hover:text-zinc-100 ${focusRing}`}>Privacy</Link>
+              <Link to="/refund-policy" className={`rounded transition-colors hover:text-zinc-900 dark:hover:text-zinc-100 ${focusRing}`}>Refund Policy</Link>
+              <Link to="/cancellation-policy" className={`rounded transition-colors hover:text-zinc-900 dark:hover:text-zinc-100 ${focusRing}`}>Cancellation Policy</Link>
+              <Link to="/contact" className={`rounded transition-colors hover:text-zinc-900 dark:hover:text-zinc-100 ${focusRing}`}>Contact</Link>
+            </nav>
+            <span aria-hidden="true" className="hidden text-zinc-300 sm:inline dark:text-zinc-700">·</span>
             <button type="button" onClick={scrollToTop} className={`rounded transition-colors hover:text-zinc-900 dark:hover:text-zinc-100 ${focusRing}`}>Back to top</button>
             <span>© {CURRENT_YEAR} Trade Commit</span>
           </div>
