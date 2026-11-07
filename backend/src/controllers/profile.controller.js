@@ -8,6 +8,7 @@ import { sendOtpEmail } from "../utils/mailer.js";
 import { deleteImagesFromCloudinary, uploadOnCloudinary } from "../utils/cloudinary.js";
 import { HEADER_SCENE_IDS, headerBackdropFolder } from "../constants/headerBackdrop.js";
 import { resolveMusicChanges, toMusicPreferences } from "../utils/musicLinks.js";
+import { getEffectivePlan, getEntitlements, planState } from "../utils/entitlements.js";
 import {
   PLANNER_WALKTHROUGH_STEPS,
   restoreLegacyOnboardingGuide,
@@ -157,6 +158,9 @@ export const getProfile = asyncHandler(async (req, res) => {
         createdAt: user.createdAt,
         headerBackdrop: toHeaderBackdrop(user),
         focusPreferences: toFocusPreferences(user),
+        plan: getEffectivePlan(user),
+        planState: planState(user),
+        entitlements: getEntitlements(user),
       },
       "Profile fetched"
     )

@@ -29,11 +29,13 @@ function PlannerContextProvider({ children }) {
     }
 
     window.addEventListener('auth-state-changed', loadPlanners)
+    window.addEventListener('plan-state-changed', loadPlanners)
     loadPlanners()
 
     return () => {
       latestLoad += 1
       window.removeEventListener('auth-state-changed', loadPlanners)
+      window.removeEventListener('plan-state-changed', loadPlanners)
     }
   }, [])
 

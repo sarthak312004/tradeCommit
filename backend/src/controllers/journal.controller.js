@@ -6,6 +6,8 @@ import { AiRangeReview } from "../models/aiRangeReview.models.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
+import { createWithinPlanLimit } from "../utils/planLimits.js";
+import { assertOwnedResourceWritable, getReadOnlyResourceIds } from "../utils/readOnlyResources.js";
 import { deleteImagesFromCloudinary } from "../utils/cloudinary.js";
 import { DEFAULT_CURRENCY, isValidCurrency, normalizeCurrency } from "../constants/currency.js";
 import { applyContextToFields, parseCustomFields } from "../utils/customFields.js";
@@ -83,7 +85,7 @@ const parseJournalContext = (raw) => {
   return { strategy, attributes };
 };
 
-const serializeJournal = (journal) => ({
+const serializeJournal = (journal, readOnly = false) => ({
   id: String(journal._id),
   _id: journal._id,
   name: journal.journalName,
@@ -92,9 +94,18 @@ const serializeJournal = (journal) => ({
   mode: journal.mode === "backtest" ? "backtest" : "live",
   currency: journal.currency ?? DEFAULT_CURRENCY,
   context: serializeContext(journal.context),
+  autoLog: {
+    enabled: Boolean(journal.autoLog?.enabled),
+    brokerId: journal.autoLog?.brokerId ?? "zerodha",
+    totalLoggedCount: Number(journal.autoLog?.totalLoggedCount ?? 0),
+    lastReceivedAt: journal.autoLog?.lastReceivedAt ? new Date(journal.autoLog.lastReceivedAt).toISOString() : null,
+    lastStatus: journal.autoLog?.lastStatus ?? "idle",
+    lastMessage: journal.autoLog?.lastMessage ?? "",
+  },
   createdAt: journal.createdAt ? new Date(journal.createdAt).toISOString() : new Date().toISOString(),
   updatedAt: journal.updatedAt ? new Date(journal.updatedAt).toISOString() : new Date().toISOString(),
   updated: "Just now",
+  readOnly,
   trades: (journal.trades ?? []).map(serializeTrade),
 });
 
@@ -105,10 +116,11 @@ export const getAllJournals = asyncHandler(async (req, res) => {
       path: "trades",
       options: { sort: { date: -1, createdAt: -1 } },
     });
+  const readOnlyIds = await getReadOnlyResourceIds({ user: req.user, Model: Journal, limitKey: "maxJournals" });
 
   return res
     .status(200)
-    .json(new ApiResponse(200, journals.map(serializeJournal), "Journals fetched successfully"));
+    .json(new ApiResponse(200, journals.map((journal) => serializeJournal(journal, readOnlyIds.has(String(journal._id)))), "Journals fetched successfully"));
 });
 
 export const createJournal = asyncHandler(async (req, res) => {
@@ -128,12 +140,21 @@ export const createJournal = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Journal description must be a string");
   }
 
-  const journal = await Journal.create({
-    journalName: trimmedName,
-    description: description?.trim(),
-    currency: normalizedCurrency,
-    mode: normalizedMode,
-    owner: req.user._id,
+  // blocked with 403 PLAN_LIMIT when the user already has entitlements.maxJournals journals
+  const journal = await createWithinPlanLimit({
+    user: req.user,
+    limitKey: "maxJournals",
+    noun: "journal",
+    countOwned: () => Journal.countDocuments({ owner: req.user._id }),
+    create: () =>
+      Journal.create({
+        journalName: trimmedName,
+        description: description?.trim(),
+        currency: normalizedCurrency,
+        mode: normalizedMode,
+        owner: req.user._id,
+      }),
+    remove: (created) => Journal.deleteOne({ _id: created._id, owner: req.user._id }),
   });
   await recordOnboardingActionSafely(req.user._id, ONBOARDING_ACTION.JOURNAL_CREATED, "journal creation");
 
@@ -149,6 +170,10 @@ export const createJournal = asyncHandler(async (req, res) => {
 
 export const updateJournal = asyncHandler(async (req, res) => {
   const { journalId } = req.params;
+  const ownedJournal = await Journal.findOne({ _id: journalId, owner: req.user._id });
+  if (!ownedJournal) throw new ApiError(404, "Journal not found");
+  await assertOwnedResourceWritable({ user: req.user, Model: Journal, resource: ownedJournal, limitKey: "maxJournals", feature: "readonly_journal" });
+
   const { journalName, name, context, mode, applyToExistingTrades } = req.body ?? {};
   // true (default) = also update trades logged before; false = only trades created from now on
   if (applyToExistingTrades !== undefined && typeof applyToExistingTrades !== "boolean") {
@@ -224,6 +249,7 @@ export const deleteJournal = asyncHandler(async (req, res) => {
   if (!journal) {
     throw new ApiError(404, "Journal not found");
   }
+  await assertOwnedResourceWritable({ user: req.user, Model: Journal, resource: journal, limitKey: "maxJournals", feature: "readonly_journal" });
 
   const trades = await Trade.find({ journal: journal._id, owner: req.user._id });
   await Trade.deleteMany({ journal: journal._id, owner: req.user._id });

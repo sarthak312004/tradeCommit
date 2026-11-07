@@ -33,6 +33,15 @@ This file is the entry point for coding agents. Read this file and `PROJECT_CONT
 - Respect existing rate limits and AI quota/queue guards. Do not add a path that bypasses them.
 - Imports can contain large batches. Preserve the dedicated larger JSON body limit and import preview/commit validation flow.
 
+## 2a. Plans and entitlements (Free / Pro)
+
+- All plan rules live in ONE file: `backend/src/config/plans.config.js` (`PLANS.free`, `PLANS.pro`, `METRIC_TIERS`, `GRACE_DAYS`). Its header explains how to move a feature or metric between plans.
+- `backend/src/utils/entitlements.js` is pure: `getEntitlements(user, now)` and `planState(user, now)` decide the effective plan (billing fields on the User + `PLAN_ENFORCEMENT`), merge `PLAN_OVERRIDES_JSON` and `user.entitlementOverrides`, and add `metricAccess`. `GET /auth/profile` returns `plan`, `planState`, `entitlements`.
+- Every enforcement point, backend and frontend, reads an entitlement key (`null` = unlimited). Never compare a plan name (`plan === 'pro'`) and never read `PLANS`/`METRIC_TIERS` outside `config/` and `entitlements.js`; `src/utils/planGuard.test.js` fails if you do. Limit errors are `403 { code: 'PLAN_LIMIT', feature }`.
+- Billing fields on `User` (`planStatus`, `planAccessUntil`, `planInterval`, `billingCustomerId`, `billingSubscriptionId`, `cancelAtPeriodEnd`, `legacyProUntil`, `entitlementOverrides`) are written by server code only (payment webhooks), never from a request body. The ids and overrides are never serialized to a client.
+- Only `planAccessUntil` (+ `GRACE_DAYS`) and `legacyProUntil` grant Pro; `planStatus` is informational. Webhooks must move the dates.
+- Rollout: `PLAN_ENFORCEMENT=off` (default: everyone gets Pro entitlements) | `new` (users created after `PLAN_ENFORCEMENT_FROM`) | `all`.
+
 ## 3. Repository map
 
 - `frontend/` — React + Vite client. Application source is in `frontend/src/`.

@@ -18,6 +18,20 @@ const journalContextSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const journalAutoLogSchema = new mongoose.Schema(
+  {
+    enabled: { type: Boolean, default: false },
+    brokerId: { type: String, trim: true, default: "zerodha" },
+    webhookToken: { type: String, trim: true, select: false },
+    processedOrderIds: { type: [String], default: [], select: false },
+    totalLoggedCount: { type: Number, default: 0 },
+    lastReceivedAt: { type: Date, default: null },
+    lastStatus: { type: String, enum: ["idle", "ok", "error"], default: "idle" },
+    lastMessage: { type: String, trim: true, maxlength: 300, default: "" },
+  },
+  { _id: false }
+);
+
 const journalSchema = new mongoose.Schema(
   {
     journalName: {
@@ -48,6 +62,10 @@ const journalSchema = new mongoose.Schema(
       type: journalContextSchema,
       default: () => ({}),
     },
+    autoLog: {
+      type: journalAutoLogSchema,
+      default: () => ({}),
+    },
     owner: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -61,6 +79,8 @@ const journalSchema = new mongoose.Schema(
     toObject: { virtuals: true },
   }
 );
+
+journalSchema.index({ "autoLog.webhookToken": 1 }, { sparse: true, unique: true });
 
 // Optional: journal.populate("trades") works without storing an array
 journalSchema.virtual("trades", {

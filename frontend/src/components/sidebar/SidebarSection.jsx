@@ -20,6 +20,9 @@ import { EASE, FADE_BASE, fade, focusRing, ghostBtn } from "./sidebarStyles"
  * @param {string}    emptyText
  * @param {ReactNode} children         expanded list rows
  * @param {ReactNode} [footer]         optional extra content under the list (expanded sidebar only)
+ * @param {string}    [usage]          "1 of 2" counter next to the title (omitted when the plan has no limit)
+ * @param {boolean}   [atLimit]        the plan's limit is reached: "+" calls onLimit instead of opening the form
+ * @param {Function}  [onLimit]
  */
 function SidebarSection({
   title,
@@ -35,12 +38,20 @@ function SidebarSection({
   isEmpty,
   emptyText,
   footer,
+  usage = '',
+  atLimit = false,
+  addDisabled = false,
+  onLimit,
   children,
 }) {
   const showForm = isSidebarOpen && isFormOpen
   const closeForm = () => onFormOpenChange(false)
 
   const handleAddClick = () => {
+    if (atLimit) {
+      onLimit?.()
+      return
+    }
     if (!isSidebarOpen) {
       setIsSidebarOpen(true)
       onFormOpenChange(true)
@@ -58,6 +69,7 @@ function SidebarSection({
         >
           <span className="text-[11px] font-semibold uppercase leading-none tracking-wider text-zinc-700 dark:text-zinc-400">
             {title}
+            {usage && <span className="ml-1.5 font-medium normal-case tracking-normal tabular-nums text-zinc-500 dark:text-zinc-400">{usage}</span>}
           </span>
           <button
             type="button"
@@ -65,6 +77,7 @@ function SidebarSection({
             aria-expanded={showForm}
             title={addLabel}
             aria-label={addLabel}
+            disabled={addDisabled}
             className={`flex h-7 w-7 items-center justify-center rounded-md ${ghostBtn}`}
           >
             <PlusIcon className="h-4 w-4" />

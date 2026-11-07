@@ -32,7 +32,7 @@ const modeButton = (active) => `inline-flex h-7 items-center rounded-md px-2.5 t
  * Without one, a new plan is for the week of today, starting on Monday.
  * `initialSections` are the section cards to open on a NEW plan, on top of the default ones (a restored draft wins).
  */
-function WeeklyPlanForm({ plannerName, plannerType, plannerId, initialEntry = null, initialDate, initialSections: requestedSections, quickSection, onSubmit, onDelete, onClose, onUploadImage, guideOverlayActive = false }) {
+function WeeklyPlanForm({ plannerName, plannerType, plannerId, initialEntry = null, initialDate, initialSections: requestedSections, quickSection, onSubmit, onDelete, onClose, onUploadImage, guideOverlayActive = false, readOnly = false }) {
   const [weekStart] = useState(() => initialEntry?.date ?? initialDate ?? weekStartKey(todayKey()))
   const draftKey = weeklyDraftKey(plannerId ?? initialEntry?.plannerId ?? 'planner', weekStart)
   const defaultTitle = initialEntry?.title ?? weekTitle(weekStart)
@@ -282,7 +282,7 @@ function WeeklyPlanForm({ plannerName, plannerType, plannerId, initialEntry = nu
       <div className="flex items-center gap-2">
         <ShortcutHint className="mr-2 hidden md:block" />
         <button type="button" onClick={() => drawerRef.current?.close()} className={ghostFooterButton}>Cancel</button>
-        <button type="submit" disabled={isBusy} title={`Save (${MOD_LABEL}+Enter)`} className={primaryFooterButton}>
+        <button type="submit" disabled={isBusy || readOnly} title={readOnly ? 'Read-only on Free. Upgrade to edit' : `Save (${MOD_LABEL}+Enter)`} className={primaryFooterButton}>
           {isBusy ? 'Saving...' : initialEntry ? 'Save weekly plan' : 'Create weekly plan'}
         </button>
       </div>
@@ -301,7 +301,7 @@ function WeeklyPlanForm({ plannerName, plannerType, plannerId, initialEntry = nu
       onClose={handleClose}
       footer={footer}
       canClose={!isBusy}
-      canSubmit={!isBusy}
+      canSubmit={!isBusy && !readOnly}
       onBeforeClose={guardClose}
       guideOverlayActive={guideOverlayActive}
     >

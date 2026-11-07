@@ -101,6 +101,7 @@ These are the route mounts in `backend/src/app.js`. Route handlers and auth requ
 |---|---|---|
 | `/api/v1/auth` | `routes/user.routes.js` | Google sign-in/signup, password login, email-code login, logout, profile (`GET`/`PATCH /profile`), onboarding state, preferences, password set/reset |
 | `/api/v1/journals` | `routes/journal.routes.js` | Journal CRUD and journal export |
+| `/api/v1/webhooks/journal/:webhookToken` | `controllers/autoLog.controller.js` | Token-authenticated broker/chart execution webhook; trade data is normalized and deduplicated |
 | `/api/v1/journals/:journalId/trades` | `routes/trade.routes.js` | Trade CRUD and trade image upload |
 | `/api/v1/journals/:journalId/ai-review` | `routes/aiReview.routes.js` | Weekly AI mentor review and quota |
 | `/api/v1/journals/:journalId/ai-range-reviews` | `routes/aiRangeReview.routes.js` | Date-range AI review/history/preview/carry-forward |
@@ -111,6 +112,13 @@ These are the route mounts in `backend/src/app.js`. Route handlers and auth requ
 | `/api/v1/imports` | `routes/import.routes.js` | Import template, preview, commit |
 
 `backend/src/routes/market.controller.js` is a controller file located in the routes directory; the mounted router is `market.routes.js`.
+
+### Trade auto-logging webhook
+
+- Pro users configure a journal-specific webhook URL from the journal's Auto-log dialog. The URL token is a bearer credential; keep it private and rotate it if exposed.
+- The public `POST /api/v1/webhooks/journal/:webhookToken` endpoint is authenticated by that high-entropy token rather than a session cookie. It is rate-limited and accepts the existing JSON body limit.
+- The receiver normalizes supported broker/chart payloads, ignores non-filled events, deduplicates execution IDs, and maps entry/exit fills to journal trades. Per-journal in-process locking serializes retries within one server process.
+- Secret tokens and processed execution IDs are excluded from default Mongoose projections and journal API responses. No broker credentials or outbound broker URL polling are stored.
 
 ### Authentication middleware
 
@@ -313,3 +321,16 @@ The Planner feature walkthrough is stored separately in `User.plannerWalkthrough
 `GuidanceProvider` (reducer in `utils/guidance.js`, tests in `guidance.test.js`) arbitrates both guides so they never overlap. It normally suspends on forms; only the Planner walkthrough is allowed to remain visible above its own plan editor. Without an existing journal, a temporary non-interactive connection hint provides the Planner tour's real spotlight anchor. Main-guide anchors: `data-tour="sidebar-planners"`, `data-tour-section="sidebar-journals"` (set by `SidebarSection` from its `tourId`), `data-tour="journal-context"`, `data-tour="add-trade"`, `data-tour="mentor-orb"`. Keep them when refactoring those components.
 
 The legacy Product Tour, Trading Loop, Playbook and mission-tracker code (all unreachable) was removed. The Mentor's trade-unlock progress and feedback celebration are independent of onboarding guidance.
+
+## 12. Downgrade safety and rollout
+
+- `backend/src/utils/readOnlyResources.js` calculates which owned journals/planners exceed the current `maxJournals` / `maxPlanners` entitlements. Resources are ordered oldest-first (`createdAt`, `_id`); the oldest allowed resources remain writable. No records are deleted or migrated.
+- `GET /journals` and `GET /planners` add `readOnly: boolean` to each resource. Reads and exports remain available. Trade writes (including image upload) against a read-only journal fail with HTTP 403 `{ code: "PLAN_LIMIT", feature: "readonly_journal" }`; planner and plan-entry writes fail with `feature: "readonly_planner"`.
+- `POST /imports/commit` is guarded too (any locked target journal rejects the whole import). Sidebar rows show `Read-only on Free. Upgrade to edit` and hide rename/delete; locked journals also show a banner and disable add/edit/delete trade, Context and Import; locked planners show the banner and disable new plan, Save, delete and journal link. The server remains authoritative.
+- Subscription grace (`GRACE_DAYS`, default 3) applies to `active`, `cancelling`, and `past_due` accounts after `planAccessUntil`; explicit expiry, immediate cancellation, full refund, and lost-dispute events revoke access immediately (partial refunds are recorded without revoking access).
+- `backend/src/utils/dodoClient.js` requires an explicit `DODO_ENV` (`test_mode` or `live_mode`) and refuses test mode in production. Set it to match `DODO_PAYMENTS_API_KEY` and configure both `DODO_PRODUCT_PRO_MONTHLY` and `DODO_PRODUCT_PRO_YEARLY`; verify the live credential and webhook key in the provider dashboard before rollout.
+- Webhook event IDs are claimed before state changes, with a five-minute lease for recovery if processing stops. Event records retain only provider/user identifiers and processing metadata, not payloads or payment details.
+- `PLAN_ENFORCEMENT=all` or `new` must be configured intentionally for production plan limits; startup warns if enforcement is off/invalid or the `new` cutoff is missing. Free export windows are clamped server-side to exactly the entitlement's calendar-day count.
+- `backend/scripts/grandfather-users.js` is dry-run by default; `--apply` grants 60 days via `legacyProUntil` to eligible accounts created before `PLAN_ENFORCEMENT_FROM`. Existing legacy grants and users with current billing/access are skipped. Use `npm run grandfather-users` to preview and `npm run grandfather-users:apply` to apply.
+- `backend/scripts/reconcile-billing.js` retrieves persisted subscription ids through the existing Dodo SDK client and applies `planUpdateForSubscription` via `utils/billingReconcile.js`. It never writes `billingLastEventAt` (provider event time) and only writes when the user's billing fields are unchanged since read. Schedule `npm run billing:reconcile` nightly as a backend Render Cron Job; it logs aggregate counts only.
+- Full manual QA and go-live/rollback instructions: `docs/PLAN_ROLLOUT_QA.md`.

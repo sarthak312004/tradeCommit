@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createRangeReview, getRangeReviewStatus, previewRangeReview } from '../../../services/aiRangeReviewApi'
+import { createAiReview, getAiReview } from '../../../services/aiReviewApi'
+import { usePlan } from '../../../hooks/usePlan'
+import { openUpgrade } from '../../../utils/upgrade'
 import { dateKeyFromDate, formatDateKey } from '../../../utils/tradeAnalytics'
 import { focusRing } from '../../common/controlStyles'
 import ListenControls from './ListenControls'
@@ -46,6 +49,22 @@ const PRESETS = [
 
 const rangeFromPreset = (id, earliest) => ({ preset: id, ...PRESETS.find((item) => item.id === id).resolve(todayKey(), earliest) })
 
+// Without date-range reviews on the plan, only a single calendar week can be reviewed: those periods use the weekly
+// endpoints (open to every plan) and everything else is locked behind the upgrade prompt.
+const WEEKLY_PRESETS = new Set(['week', 'last-week'])
+const asWeekly = (data, range) => ({ ...data, stats: data.week, days: daysBetween(range.from, range.to) })
+const loadPeriod = async (weekly, journalId, range) =>
+  weekly ? asWeekly(await getAiReview(journalId, range.from), range) : previewRangeReview(journalId, range.from, range.to)
+const writePeriod = async (weekly, journalId, range) =>
+  weekly ? asWeekly(await createAiReview(journalId, range.from), range) : createRangeReview(journalId, range.from, range.to)
+// the weekly endpoints have no status call: `generating` is per trader, and a saved weekly review shows as a new generatedAt
+const periodStatus = async (weekly, journalId, range) => {
+  const status = await getRangeReviewStatus(journalId, range.from, range.to)
+  if (!weekly) return status
+  const saved = await getAiReview(journalId, range.from)
+  return { generating: status.generating, savedAt: saved.generatedAt }
+}
+
 const chip = (active) =>
   `h-8 cursor-pointer whitespace-nowrap rounded-full border px-3.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${focusRing} ${
     active
@@ -53,8 +72,14 @@ const chip = (active) =>
       : 'border-zinc-300 text-zinc-700 hover:bg-zinc-100 dark:border-white/[0.14] dark:text-zinc-300 dark:hover:bg-white/[0.07]'
   }`
 
+const LockMark = () => (
+  <svg viewBox="0 0 24 24" className="ml-1.5 inline h-3 w-3 align-[-1px]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-label="Locked">
+    <rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" />
+  </svg>
+)
+
 /** Preset chips, plus two date fields only when "Custom" is picked. */
-function RangePicker({ range, onChange, disabled, earliestTradeDate, summary, showWorkHint }) {
+function RangePicker({ range, onChange, disabled, earliestTradeDate, summary, showWorkHint, weeklyOnly = false }) {
   const today = todayKey()
   const custom = range.preset === 'custom'
   const days = range.from && range.to && range.from <= range.to ? daysBetween(range.from, range.to) : 0
@@ -73,13 +98,16 @@ function RangePicker({ range, onChange, disabled, earliestTradeDate, summary, sh
   return (
     <div className="space-y-3.5">
       <div role="group" aria-label="Period to review" className="flex flex-wrap gap-2">
-        {PRESETS.map((preset) => (
-          <button key={preset.id} type="button" disabled={disabled} aria-pressed={range.preset === preset.id} onClick={() => onChange(rangeFromPreset(preset.id, earliestTradeDate))} className={chip(range.preset === preset.id)}>
-            {preset.label}
-          </button>
-        ))}
-        <button type="button" disabled={disabled} aria-pressed={custom} onClick={() => onChange({ ...range, preset: 'custom' })} className={chip(custom)}>
-          Custom
+        {PRESETS.map((preset) => {
+          const locked = weeklyOnly && !WEEKLY_PRESETS.has(preset.id)
+          return (
+            <button key={preset.id} type="button" disabled={disabled} aria-pressed={range.preset === preset.id} title={locked ? 'Not included in your plan' : undefined} onClick={() => (locked ? openUpgrade('aiRangeReviews') : onChange(rangeFromPreset(preset.id, earliestTradeDate)))} className={chip(range.preset === preset.id)}>
+              {preset.label}{locked && <LockMark />}
+            </button>
+          )
+        })}
+        <button type="button" disabled={disabled} aria-pressed={custom} title={weeklyOnly ? 'Not included in your plan' : undefined} onClick={() => (weeklyOnly ? openUpgrade('aiRangeReviews') : onChange({ ...range, preset: 'custom' }))} className={chip(custom)}>
+          Custom{weeklyOnly && <LockMark />}
         </button>
       </div>
 
@@ -148,6 +176,10 @@ function RangeReviewPanel({ journalId, currency, seed, journalRange, earliestTra
   const [phase, setPhase] = useState('idle') // 'idle' | 'loading' | 'generating' | 'ready'
   const [error, setError] = useState('')
   const [reloadKey, setReloadKey] = useState(0)
+  // what the plan allows comes from the server's entitlements; nothing loads until they are known
+  const { entitlements } = usePlan()
+  const ready = entitlements !== null
+  const weekly = ready && entitlements.aiRangeReviews !== true
   const requestId = useRef(0)
   const generatingRef = useRef(false)
   const attempt = useRef({ startedAt: 0, baseline: null, cutOff: false })
@@ -163,15 +195,22 @@ function RangeReviewPanel({ journalId, currency, seed, journalRange, earliestTra
     setError('')
   }, [])
 
+  // a plan without date-range reviews starts on (and stays within) a single week
+  /* eslint-disable react-hooks/set-state-in-effect -- the plan arrives after mount, so the period is corrected once it is known */
+  useEffect(() => {
+    if (weekly && !WEEKLY_PRESETS.has(range.preset)) changeRange(rangeFromPreset('week'))
+  }, [weekly, range.preset, changeRange])
+  /* eslint-enable react-hooks/set-state-in-effect */
+
   // changing the dates loads the saved review for that exact range (nothing is generated by picking dates)
   useEffect(() => {
-    if (!valid || !isOpen) return undefined
+    if (!valid || !isOpen || !ready) return undefined
     const id = ++requestId.current
     const timer = setTimeout(async () => {
       setPhase('loading')
       setError('')
       try {
-        const next = await previewRangeReview(journalId, range.from, range.to)
+        const next = await loadPeriod(weekly, journalId, range)
         if (id !== requestId.current) return
         setData(next)
         onAccess?.(next.access)
@@ -183,7 +222,7 @@ function RangeReviewPanel({ journalId, currency, seed, journalRange, earliestTra
     }, 350)
     return () => clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- onAccess only forwards the allowance and must not refetch
-  }, [journalId, range.from, range.to, valid, reloadKey, isOpen])
+  }, [journalId, range.from, range.to, valid, reloadKey, isOpen, ready, weekly])
 
   useEffect(
     () => () => {
@@ -200,7 +239,7 @@ function RangeReviewPanel({ journalId, currency, seed, journalRange, earliestTra
     setPhase('generating')
     setError('')
     try {
-      const next = await createRangeReview(journalId, range.from, range.to)
+      const next = await writePeriod(weekly, journalId, range)
       if (id !== requestId.current) return
       setData(next)
       onAccess?.(next.access)
@@ -218,7 +257,7 @@ function RangeReviewPanel({ journalId, currency, seed, journalRange, earliestTra
       generatingRef.current = false
     }
     if (id === requestId.current) setPhase('ready')
-  }, [journalId, range.from, range.to, data?.generatedAt, onAccess, onRefreshQuota, onReviewReady])
+  }, [weekly, journalId, range.from, range.to, data?.generatedAt, onAccess, onRefreshQuota, onReviewReady])
 
   // While generating, watch the cheap status endpoint: it finds a review that was saved even when the POST never answered
   // (and ends the wait once the server has stopped working without saving anything), with a time limit and a gentle backoff.
@@ -241,11 +280,11 @@ function RangeReviewPanel({ journalId, currency, seed, journalRange, earliestTra
     const check = async () => {
       checks += 1
       try {
-        const status = await getRangeReviewStatus(journalId, range.from, range.to)
+        const status = await periodStatus(weekly, journalId, range)
         if (cancelled || id !== requestId.current) return
         if (status.savedAt && status.savedAt !== attempt.current.baseline) {
           // only what the database returns is shown as saved
-          const latest = await previewRangeReview(journalId, range.from, range.to)
+          const latest = await loadPeriod(weekly, journalId, range)
           if (cancelled || id !== requestId.current) return
           if (latest.review) {
             requestId.current += 1
@@ -279,7 +318,7 @@ function RangeReviewPanel({ journalId, currency, seed, journalRange, earliestTra
       cancelled = true
       clearTimeout(timeoutId)
     }
-  }, [phase, journalId, range.from, range.to, onAccess, onRefreshQuota, onReviewReady])
+  }, [phase, weekly, journalId, range.from, range.to, onAccess, onRefreshQuota, onReviewReady])
 
   const busy = valid && phase === 'generating'
   useEffect(() => {
@@ -346,7 +385,7 @@ function RangeReviewPanel({ journalId, currency, seed, journalRange, earliestTra
           title={data.tradeCount === 0 ? 'No trades in this period' : `${plural(remaining, 'more trade')} to unlock`}
           action={
             <>
-              {range.preset !== 'all' && (
+              {range.preset !== 'all' && !weekly && (
                 <button type="button" onClick={() => changeRange(rangeFromPreset('all', earliestTradeDate))} className={buttonQuiet}>
                   Use all trades
                 </button>
@@ -427,24 +466,24 @@ function RangeReviewPanel({ journalId, currency, seed, journalRange, earliestTra
           </p>
         )}
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <ListenControls review={review} period="range" currency={currency} />
+          <ListenControls review={review} period={weekly ? 'week' : 'range'} currency={currency} />
           <div className="flex items-center gap-1">
             {data.generatedAt && (
               <span className="text-[11px] text-zinc-500 dark:text-zinc-400">
                 Written {new Date(data.generatedAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
               </span>
             )}
-            <ReviewDownloadButton review={review} period="range" from={range.from} to={range.to} generatedAt={data.generatedAt} stats={data.stats} currency={currency} />
+            <ReviewDownloadButton review={review} period={weekly ? 'week' : 'range'} from={range.from} to={range.to} generatedAt={data.generatedAt} stats={data.stats} currency={currency} />
           </div>
         </div>
-        <Review key={`${data.id ?? ''}-${data.generatedAt ?? ''}`} review={review} period="range" stats={data.stats} currency={currency} />
+        <Review key={`${data.id ?? ''}-${data.generatedAt ?? ''}`} review={review} period={weekly ? 'week' : 'range'} stats={data.stats} currency={currency} />
       </div>
     )
   }
 
   return (
     <div className="space-y-8">
-      <RangePicker range={range} onChange={changeRange} disabled={busy} earliestTradeDate={earliestTradeDate} summary={data ? plural(data.tradeCount, 'trade') : ''} showWorkHint={busy} />
+      <RangePicker range={range} onChange={changeRange} disabled={busy} earliestTradeDate={earliestTradeDate} summary={data ? plural(data.tradeCount, 'trade') : ''} showWorkHint={busy} weeklyOnly={weekly} />
       {renderBody()}
     </div>
   )

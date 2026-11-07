@@ -9,6 +9,7 @@ import AuthPage from './pages/AuthPage.jsx'
 import LazyPlannerPage from './pages/LazyPlannerPage.jsx'
 import MarketResearchPage from './pages/MarketResearchPage.jsx'
 import OnboardingPage from './pages/OnboardingPage.jsx'
+import BillingPage from './pages/BillingPage.jsx'
 import { PlannerContextProvider } from './context/plannerContextProvider.jsx'
 import { Analytics } from '@vercel/analytics/react'
 
@@ -44,6 +45,14 @@ const router = createBrowserRouter([
       {
         path:'market-research',
         element:<MarketResearchPage/>
+      },
+      {
+        path:'billing',
+        element:<BillingPage/>
+      },
+      {
+        path:'billing/success',
+        element:<BillingPage/>
       },
     ]
   },

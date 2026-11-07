@@ -7,6 +7,9 @@ import cors from 'cors'
 import cookieParser from 'cookie-parser'
 import mongoose from 'mongoose'
 import { rateLimit } from './middlewares/rateLimit.middleware.js'
+import { publicErrorFields } from './utils/ApiError.js'
+import { handleDodoWebhook } from './controllers/billing.controller.js'
+import { receiveJournalWebhook } from './controllers/autoLog.controller.js'
 
 const app = express()
 
@@ -26,6 +29,10 @@ if (allowedOrigins.length > 0) {
         credentials: true,
     }))
 }
+
+// Payment-provider webhook: needs the RAW body to verify the signature, so it is mounted before the JSON parser.
+// It is authenticated by that signature (not a cookie) and deliberately has no per-IP limiter: Dodo retries from its own addresses.
+app.post('/api/v1/billing/webhook', express.raw({ type: 'application/json', limit: '256kb' }), handleDodoWebhook)
 
 // Import commits are sent in batches of up to 1000 trades, so they need more than the 16kb limit used by other routes.
 const jsonDefault = express.json({limit:"16kb"})
@@ -52,6 +59,7 @@ import { aiRangeReviewRouter } from './routes/aiRangeReview.routes.js'
 import { marketRouter } from './routes/market.routes.js'
 import { progressRouter } from './routes/progress.routes.js'
 import { importRouter } from './routes/import.routes.js'
+import { billingRouter } from './routes/billing.routes.js'
 
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20 })
 app.use("/api/v1/auth/login", authLimiter)
@@ -76,6 +84,10 @@ const aiReviewLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 20, refundFai
 app.use("/api/v1/journals/:journalId/ai-review", (req, res, next) => (req.method === "POST" ? aiReviewLimiter(req, res, next) : next()))
 app.use("/api/v1/journals/:journalId/ai-range-reviews", (req, res, next) => (req.method === "POST" ? aiReviewLimiter(req, res, next) : next()))
 
+// Checkout creation calls the payment provider: a handful per IP is plenty (failed attempts are given back).
+const checkoutLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, refundFailed: true })
+app.use("/api/v1/billing/checkout", (req, res, next) => (req.method === "POST" ? checkoutLimiter(req, res, next) : next()))
+
 // Live price + symbol search for the trade form: it polls while open, so allow a generous (but bounded) rate per IP.
 const marketLimiter = rateLimit({ windowMs: 60 * 1000, max: 240, message: "Too many price requests, please slow down" })
 app.use("/api/v1/market", marketLimiter)
@@ -90,6 +102,11 @@ app.use("/api/v1/feedback", feedbackRouter)
 app.use("/api/v1/market", marketRouter)
 app.use("/api/v1/progress", progressRouter)
 app.use("/api/v1/imports", importRouter)
+app.use("/api/v1/billing", billingRouter)
+
+// The journal webhook is authenticated by its high-entropy per-journal URL token, not a session cookie.
+const tradeWebhookLimiter = rateLimit({ windowMs: 60 * 1000, max: 120, message: "Too many webhook deliveries, please slow down" })
+app.post("/api/v1/webhooks/journal/:webhookToken", tradeWebhookLimiter, receiveJournalWebhook)
 
 app.use("/api", (req, res) => {
     res.status(404).json({ statusCode: 404, success: false, message: "Route not found", errors: [] })
@@ -124,6 +141,7 @@ app.use((error, req, res, next) => {
         success: false,
         message: hideMessage ? "Internal server error" : (error.message || "Internal server error"),
         errors: error.errors ?? [],
+        ...publicErrorFields(error),
     })
 })
 

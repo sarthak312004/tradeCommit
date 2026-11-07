@@ -6,7 +6,9 @@ import { ApiError } from "../utils/ApiError.js";
 // `refundFailed: true` gives the hit back when the request ends with an error (status >= 400), so failed attempts
 // (for example an AI call that failed) do not eat the allowance. A handler can also set `res.locals.skipRateLimit = true`
 // to refund a request that cost nothing, such as one answered from a saved result.
-export const rateLimit = ({ windowMs, max, message = "Too many attempts, please try again later", refundFailed = false }) => {
+//
+// `keyBy(req)` (optional) picks who is counted; the default is the client IP. Per-user limits use it on routes that run after verifyJWT.
+export const rateLimit = ({ windowMs, max, message = "Too many attempts, please try again later", refundFailed = false, keyBy = null }) => {
   const hits = new Map();
 
   const sweep = setInterval(() => {
@@ -26,7 +28,7 @@ export const rateLimit = ({ windowMs, max, message = "Too many attempts, please 
 
   return (req, res, next) => {
     const now = Date.now();
-    const key = req.ip;
+    const key = (keyBy && keyBy(req)) || req.ip;
     const entry = hits.get(key);
 
     if (!entry || entry.resetAt <= now) {

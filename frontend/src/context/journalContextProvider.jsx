@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react"
 import { journalContext } from "./Context"
 
 import { DEFAULT_CURRENCY } from "../utils/currencies"
+import { readJson } from "../utils/http"
 import { fetchPrefetched } from "../utils/prefetch"
 import { MAX_IMPORT_BATCH_SIZE } from "../services/importApi"
 import { refreshProfile } from "../services/profileApi"
@@ -58,6 +59,15 @@ const normalizeContext = (context) => ({
         : [],
 })
 
+const normalizeAutoLog = (autoLog) => ({
+    enabled: Boolean(autoLog?.enabled),
+    brokerId: autoLog?.brokerId || "custom",
+    totalLoggedCount: Number(autoLog?.totalLoggedCount ?? 0),
+    lastReceivedAt: autoLog?.lastReceivedAt ?? null,
+    lastStatus: autoLog?.lastStatus || "idle",
+    lastMessage: autoLog?.lastMessage || "",
+})
+
 const normalizeTradeForFrontend = (trade) => ({
     id: trade.id ?? trade._id,
     symbol: trade.symbol ?? trade.assetName ?? "",
@@ -93,30 +103,26 @@ const normalizeJournalForFrontend = (journal) => ({
     mode: journal.mode === "backtest" ? "backtest" : "live",
     currency: journal.currency ?? DEFAULT_CURRENCY,
     context: normalizeContext(journal.context),
+    autoLog: normalizeAutoLog(journal.autoLog),
+    readOnly: journal.readOnly === true,
     createdAt: journal.createdAt ?? new Date().toISOString(),
     updatedAt: journal.updatedAt ?? new Date().toISOString(),
     updated: "Just now",
     trades: (journal.trades ?? []).map(normalizeTradeForFrontend),
 })
 
-const readJson = async (response) => {
-    const payload = await response.json().catch(() => null)
-    if (!response.ok) {
-        if (response.status === 401) {
-            window.dispatchEvent(new Event("auth-expired"))
-        }
-        throw new Error(payload?.message ?? "Request failed")
-    }
-    return payload?.data
-}
-
 function JournalContextProvider({children}){
     const [journals, setJournals] = useState([])
     const [selectedJournalId, setSelectedJournalId] = useState(null)
+    const journalsRef = useRef(journals)
     // true until the first journals request has answered, so empty states don't flash for returning users
     const [isLoading, setIsLoading] = useState(true)
     // retry / discard handlers of trades whose save is running or failed, by trade id
     const tradeSyncRef = useRef(new Map())
+
+    useEffect(() => {
+        journalsRef.current = journals
+    }, [journals])
 
     useEffect(() => {
         let latestLoad = 0
@@ -152,11 +158,74 @@ function JournalContextProvider({children}){
         }
 
         window.addEventListener("auth-state-changed", loadJournals)
+        window.addEventListener("plan-state-changed", loadJournals)
         loadJournals()
 
         return () => {
             latestLoad += 1
             window.removeEventListener("auth-state-changed", loadJournals)
+            window.removeEventListener("plan-state-changed", loadJournals)
+        }
+    }, [])
+
+    useEffect(() => {
+        let active = true
+        let isRefreshing = false
+        let controller
+
+        const refreshAutoLoggedTrades = async () => {
+            if (!active || isRefreshing || document.visibilityState === "hidden") return
+            const activeJournals = journalsRef.current.filter(
+                (journal) => journal.autoLog?.enabled && !isPending(journal.id)
+            )
+            if (activeJournals.length === 0) return
+
+            isRefreshing = true
+            controller = new AbortController()
+            try {
+                await Promise.all(activeJournals.map(async (journal) => {
+                    try {
+                        const rows = await readJson(await fetch(`${API_BASE}/${journal.id}/trades`, {
+                            credentials: "include",
+                            signal: controller.signal,
+                        }))
+                        if (!active) return
+
+                        const saved = (rows ?? []).map(normalizeTradeForFrontend)
+                        setJournals((current) => current.map((item) => {
+                            if (item.id !== journal.id) return item
+                            const pending = item.trades.filter((trade) => trade.syncState)
+                            const currentSaved = item.trades.filter((trade) => !trade.syncState)
+                            const unchanged = currentSaved.length === saved.length &&
+                                currentSaved.every((trade, index) =>
+                                    trade.id === saved[index]?.id &&
+                                    trade.updatedAt === saved[index]?.updatedAt
+                                )
+                            return unchanged
+                                ? item
+                                : { ...item, trades: [...pending, ...saved], updated: "Just now" }
+                        }))
+                    } catch (error) {
+                        if (active && error.name !== "AbortError") {
+                            console.error("Could not refresh auto-logged trades:", error)
+                        }
+                    }
+                }))
+            } finally {
+                isRefreshing = false
+            }
+        }
+
+        const timer = window.setInterval(refreshAutoLoggedTrades, 10_000)
+        document.addEventListener("visibilitychange", refreshAutoLoggedTrades)
+        window.addEventListener("focus", refreshAutoLoggedTrades)
+
+        return () => {
+            active = false
+            window.clearInterval(timer)
+            document.removeEventListener("visibilitychange", refreshAutoLoggedTrades)
+            window.removeEventListener("focus", refreshAutoLoggedTrades)
+            controller?.abort()
         }
     }, [])
 
@@ -251,6 +320,14 @@ function JournalContextProvider({children}){
         } : journal))
         refreshProfile()
         return saved.context
+    }
+
+    const updateJournalAutoLogState = (journalId, autoLogPatch) => {
+        setJournals((current) => current.map((journal) => (
+            journal.id === journalId
+                ? { ...journal, autoLog: normalizeAutoLog({ ...journal.autoLog, ...autoLogPatch }) }
+                : journal
+        )))
     }
 
     const deleteJournal = async (id) => {
@@ -487,6 +564,7 @@ function JournalContextProvider({children}){
             updateJournal,
             updateJournalMode,
             updateJournalContext,
+            updateJournalAutoLogState,
             deleteJournal,
             selectJournal,
             uploadTradeImage,

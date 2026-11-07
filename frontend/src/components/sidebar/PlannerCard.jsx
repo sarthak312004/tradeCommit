@@ -28,6 +28,7 @@ function PlannerCard({ planner, isSelected }) {
 			noun="planner"
 			Icon={CalendarIcon}
 			badge={planner.type}
+			readOnly={planner.readOnly === true}
 			isSelected={isSelected}
 			onSelect={handleSelect}
 			onRename={(name) => updatePlanner(planner.id, name)}

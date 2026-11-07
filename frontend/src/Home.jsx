@@ -8,6 +8,7 @@ import { DeepFocusProvider } from './context/DeepFocusProvider'
 import GuidanceProvider from './context/GuidanceProvider'
 import DeepFocusDock from './components/rightContainer/planner/DeepFocusDock'
 import ToastHost from './components/common/ToastHost'
+import { UpgradeHost } from './components/common/UpgradeModal'
 import { MOBILE_MEDIA_QUERY, useIsMobile } from './hooks/useMediaQuery'
 
 const AUTH_CHECK_TIMEOUT_MS = 60_000
@@ -146,6 +147,7 @@ function Home() {
 
       <DeepFocusDock />
       <ToastHost />
+      <UpgradeHost />
       <OnboardingGuide isNavOpen={navOpen} setNavOpen={setNavOpen} autoCloseNav={isMobile} openCreateForm={openCreateForm} />
     </>
     </GuidanceProvider>

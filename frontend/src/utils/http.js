@@ -1,5 +1,11 @@
 // Small fetch helpers shared by the API services.
 
+export const PLAN_LIMIT_CODE = 'PLAN_LIMIT'
+export const PLAN_LIMIT_EVENT = 'plan-limit'
+
+/** True when an error thrown by readJson/requestJson is a plan-limit rejection. */
+export const isPlanLimitError = (error) => error?.code === PLAN_LIMIT_CODE
+
 /** Unwraps the `{ data }` envelope of ApiResponse; signals the app when the session has expired. */
 export const readJson = async (response) => {
   const payload = await response.json().catch(() => null)
@@ -10,6 +16,12 @@ export const readJson = async (response) => {
     error.retryAfter = response.headers.get('Retry-After')
     // false when a proxy answered instead of our API (for example a gateway timeout page), so callers can tell the two apart
     error.fromApi = payload !== null
+    // Plan limit (HTTP 403 { code: 'PLAN_LIMIT', feature }): expose code/feature and tell the app so UpgradeModal can open
+    if (response.status === 403 && payload?.code === PLAN_LIMIT_CODE) {
+      error.code = PLAN_LIMIT_CODE
+      error.feature = payload.feature
+      window.dispatchEvent(new CustomEvent(PLAN_LIMIT_EVENT, { detail: { feature: payload.feature } }))
+    }
     throw error
   }
   return payload?.data

@@ -75,7 +75,7 @@ const deepModeStyles = `
  * @param {Function} onUploadImage   (file) => Promise<url>
  * @param {object}   [carryForward]  { rule, planLine, checkpoint } the linked journal's latest mentor review asked the trader to apply
  */
-function DailyPlanForm({ plannerName, plannerType, initialEntry = null, initialDate, draftKey, onSubmit, onDelete, onClose, onUploadImage, carryForward = null, guideOverlayActive = false }) {
+function DailyPlanForm({ plannerName, plannerType, initialEntry = null, initialDate, draftKey, onSubmit, onDelete, onClose, onUploadImage, carryForward = null, guideOverlayActive = false, readOnly = false }) {
   const defaultDate = initialEntry?.date ?? initialDate ?? todayKey()
   const [savedDraft] = useState(() => readFormDraft(draftKey))
   const savedValues = savedDraft?.values && typeof savedDraft.values === 'object' ? savedDraft.values : {}
@@ -332,7 +332,7 @@ function DailyPlanForm({ plannerName, plannerType, initialEntry = null, initialD
       <div className="flex items-center gap-2">
         <ShortcutHint className="mr-2 hidden md:block" />
         <button type="button" onClick={() => drawerRef.current?.close()} className={ghostFooterButton}>Cancel</button>
-        <button type="submit" disabled={isBusy} title={`Save (${MOD_LABEL}+Enter)`} className={primaryFooterButton}>
+        <button type="submit" disabled={isBusy || readOnly} title={readOnly ? 'Read-only on Free. Upgrade to edit' : `Save (${MOD_LABEL}+Enter)`} className={primaryFooterButton}>
           {isBusy ? 'Saving...' : initialEntry ? 'Save plan' : 'Create plan'}
         </button>
       </div>
@@ -353,7 +353,7 @@ function DailyPlanForm({ plannerName, plannerType, initialEntry = null, initialD
       onClose={handleClose}
       footer={footer}
       canClose={!isBusy}
-      canSubmit={!isBusy}
+      canSubmit={!isBusy && !readOnly}
       onBeforeClose={guardClose}
       guideOverlayActive={guideOverlayActive}
     >

@@ -85,3 +85,92 @@ export const sendOtpEmail = async ({ to, name, otp, purpose = "signup" }) => {
     throw new ApiError(502, "Could not send the verification email. Please try again in a moment.");
   }
 };
+
+/* ------------------------------------------ billing emails ------------------------------------------ */
+// Short, plain notices about the subscription. Best effort: a failed email never fails a billing request or a webhook,
+// so sendBillingEmail swallows its own errors (and logs only the kind and status, never the address or the body).
+
+const formatDate = (value) => {
+  const date = value ? new Date(value) : null;
+  return date && !Number.isNaN(date.getTime()) ? date.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }) : null;
+};
+
+const billingUrl = () => `${(process.env.APP_URL ?? "").trim().replace(/\/+$/, "")}/billing`;
+
+const BILLING_COPY = {
+  "cancellation-scheduled": ({ accessUntil }) => ({
+    subject: "Your TradeCommit Pro cancellation is scheduled",
+    lines: [
+      formatDate(accessUntil)
+        ? `Your subscription will not renew. You keep Pro until ${formatDate(accessUntil)}.`
+        : "Your subscription will not renew. You keep Pro until the end of the period you paid for.",
+      "Your data stays. After that, extra journals and planners become read-only.",
+      "Changed your mind? You can resume any time before then from the billing page.",
+    ],
+    cta: "Manage subscription",
+  }),
+  "payment-failed": () => ({
+    subject: "We couldn't take your TradeCommit payment",
+    lines: ["Your last payment did not go through. Pro stays on for a few days while we retry.", "To avoid losing Pro, please update your payment method."],
+    cta: "Update payment method",
+  }),
+  "downgrade-complete": () => ({
+    subject: "Your TradeCommit plan is now Free",
+    lines: ["Your Pro access has ended and your account is on the Free plan.", "Nothing was deleted. Extra journals and planners are read-only, and you can upgrade again any time."],
+    cta: "View plans",
+  }),
+};
+
+const buildBillingEmail = ({ name, kind, accessUntil }) => {
+  const build = BILLING_COPY[kind];
+  if (!build) return null;
+  const { subject, lines, cta } = build({ accessUntil });
+  const url = billingUrl();
+  const hello = name ? `Hi ${name},` : "Hi,";
+  return {
+    subject,
+    text: `${hello}\n\n${lines.join("\n\n")}\n\n${cta}: ${url}`,
+    html: `<div style="font-family:system-ui,-apple-system,Segoe UI,sans-serif;max-width:460px;margin:0 auto;padding:24px;color:#18181b">
+  <p style="margin:0 0 16px;font-size:15px">${name ? `Hi ${escapeHtml(name)},` : "Hi,"}</p>
+  ${lines.map((line) => `<p style="margin:0 0 12px;font-size:15px">${escapeHtml(line)}</p>`).join("\n  ")}
+  <p style="margin:16px 0 0;font-size:15px"><a href="${escapeHtml(url)}" style="color:#18181b;font-weight:600">${escapeHtml(cta)}</a></p>
+</div>`,
+  };
+};
+
+// kind: "cancellation-scheduled" | "payment-failed" | "downgrade-complete"
+export const sendBillingEmail = async ({ to, name, kind, accessUntil = null }) => {
+  try {
+    const email = to ? buildBillingEmail({ name, kind, accessUntil }) : null;
+    if (!email) return false;
+
+    const apiKey = process.env.BREVO_API_KEY;
+    const senderEmail = process.env.MAIL_FROM_EMAIL;
+    if (!apiKey || !senderEmail) {
+      if (process.env.NODE_ENV !== "production") console.log(`[mail:dev] billing email "${kind}" (not sent: Brevo is not configured)`);
+      else console.error(`Cannot send billing email "${kind}": Brevo is not configured`);
+      return false;
+    }
+
+    const response = await fetch(BREVO_URL, {
+      method: "POST",
+      headers: { "api-key": apiKey, "content-type": "application/json", accept: "application/json" },
+      body: JSON.stringify({
+        sender: { name: process.env.MAIL_FROM_NAME || "TradeCommit", email: senderEmail },
+        to: [{ email: to, ...(name ? { name } : {}) }],
+        subject: email.subject,
+        textContent: email.text,
+        htmlContent: email.html,
+      }),
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!response.ok) {
+      console.error(`Billing email "${kind}" rejected by Brevo:`, response.status);
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.error(`Billing email "${kind}" failed:`, error?.name);
+    return false;
+  }
+};

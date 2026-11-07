@@ -113,7 +113,7 @@ function TradeRow({ trade, currency = DEFAULT_CURRENCY, detailFields = [], field
     if (event.target !== event.currentTarget) return
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault()
-      onSelect(trade)
+      onSelect?.(trade)
     }
   }
 
@@ -145,7 +145,7 @@ function TradeRow({ trade, currency = DEFAULT_CURRENCY, detailFields = [], field
       <article
         role="button"
         tabIndex="0"
-        onClick={() => onSelect(trade)}
+        onClick={() => onSelect?.(trade)}
         onKeyDown={handleRowKeyDown}
         aria-busy={isSaving}
         className={`relative ${COLUMNS} cursor-pointer items-center gap-x-4 rounded-xl border border-transparent px-[11px] py-[9px] text-left transition-[background-color,border-color,border-radius] hover:border-zinc-300 hover:bg-white group-has-[:focus-visible]/chip:border-zinc-300 group-has-[:focus-visible]/chip:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-600 dark:hover:border-zinc-700 dark:hover:bg-panel-hi dark:group-has-[:focus-visible]/chip:border-zinc-700 dark:group-has-[:focus-visible]/chip:bg-panel-hi dark:focus-visible:ring-sky-400 ${
@@ -247,7 +247,7 @@ function TradeRow({ trade, currency = DEFAULT_CURRENCY, detailFields = [], field
             </button>
           )}
 
-          {!trade.syncState && !isDeleteConfirmationOpen && (
+          {onDelete && !trade.syncState && !isDeleteConfirmationOpen && (
             <button
               type="button"
               title="Delete trade"

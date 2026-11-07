@@ -4,7 +4,8 @@ import { Trade } from "../models/trade.models.js";
 import { DEFAULT_CURRENCY } from "../constants/currency.js";
 import { ApiError } from "../utils/ApiError.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
-import { rangeToDateFilter, resolveExportRange } from "../utils/exportRange.js";
+import { clampExportRange, rangeToDateFilter, resolveExportRange } from "../utils/exportRange.js";
+import { getEntitlements } from "../utils/entitlements.js";
 import { buildExportData } from "../utils/exportData.js";
 import { buildCsv, buildJson, buildPdf, buildXlsx, streamZip } from "../utils/exporters.js";
 
@@ -34,11 +35,20 @@ const baseFileName = (journalName, range) => {
   return `${slug(journalName)}_${span}_${new Date().toISOString().slice(0, 10)}`;
 };
 
-const sendFile = (res, { buffer, fileName, mime }) => {
+const EXPOSED_HEADERS = "Content-Disposition, X-Export-Range, X-Export-Range-Clamped";
+
+// tells the client which dates were really exported ("from..to", an empty side = no limit) and whether the plan cut them
+const setRangeHeaders = (res, range) => {
+  res.setHeader("X-Export-Range", `${range.from ?? ""}..${range.to ?? ""}`);
+  res.setHeader("X-Export-Range-Clamped", range.clamped ? "true" : "false");
+};
+
+const sendFile = (res, { buffer, fileName, mime, range }) => {
+  setRangeHeaders(res, range);
   res.setHeader("Content-Type", mime);
   res.setHeader("Content-Length", buffer.length);
   res.setHeader("Content-Disposition", `attachment; filename="${fileName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`);
-  res.setHeader("Access-Control-Expose-Headers", "Content-Disposition");
+  res.setHeader("Access-Control-Expose-Headers", EXPOSED_HEADERS);
   res.setHeader("Cache-Control", "no-store");
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.status(200).end(buffer);
@@ -58,7 +68,11 @@ export const exportJournal = asyncHandler(async (req, res) => {
   const format = FORMAT_ALIASES[requested] ?? requested;
   if (!FORMATS[format]) throw new ApiError(400, `Unsupported format "${requested}". Use one of: ${Object.keys(FORMATS).join(", ")}`);
 
-  const range = resolveExportRange({ range: req.query.range, from: req.query.from, to: req.query.to });
+  // the plan decides how far back an export may reach (entitlements.exportDays); a wider request is cut to it
+  const range = clampExportRange(
+    resolveExportRange({ range: req.query.range, from: req.query.from, to: req.query.to }),
+    getEntitlements(req.user).exportDays
+  );
 
   const journal = await Journal.findOne({ _id: journalId, owner: req.user._id }).lean();
   if (!journal) throw new ApiError(404, "Journal not found");
@@ -79,9 +93,10 @@ export const exportJournal = asyncHandler(async (req, res) => {
       { name: `${base}.pdf`, buffer: await buildPdf(data) },
     ];
     const fileName = `${base}.zip`;
+    setRangeHeaders(res, range);
     res.setHeader("Content-Type", FORMATS.zip.mime);
     res.setHeader("Content-Disposition", `attachment; filename="${fileName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`);
-    res.setHeader("Access-Control-Expose-Headers", "Content-Disposition");
+    res.setHeader("Access-Control-Expose-Headers", EXPOSED_HEADERS);
     res.setHeader("Cache-Control", "no-store");
     res.setHeader("X-Content-Type-Options", "nosniff");
     try {
@@ -104,5 +119,6 @@ export const exportJournal = asyncHandler(async (req, res) => {
     buffer: await builders[format](),
     fileName: `${base}.${FORMATS[format].extension}`,
     mime: FORMATS[format].mime,
+    range,
   });
 });
