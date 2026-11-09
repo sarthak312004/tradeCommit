@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { SERIF } from '../auth/authStyles'
+import { usePwa } from '../../hooks/usePwa'
 
 /* Quiet full-screen states shown by <Home/> while the session is verified.
    Same visual language as the auth + onboarding pages: warm canvas, monochrome mark, serif headline. */
@@ -22,14 +23,27 @@ function Shell({ children }) {
 
 function Mark({ breathing }) {
   return (
-    <span
+    <svg
+      width="44"
+      height="44"
+      viewBox="0 0 64 64"
       aria-hidden="true"
-      className={`grid h-11 w-11 place-items-center rounded-xl bg-zinc-900 text-base font-bold text-white shadow-card dark:bg-zinc-100 dark:text-zinc-900 ${
-        breathing ? 'tc-session-breathe' : ''
-      }`}
+      className={`shrink-0 rounded-xl shadow-card ${breathing ? 'tc-session-breathe' : ''}`}
     >
-      T
-    </span>
+      <rect width="64" height="64" rx="15" className="fill-zinc-900 dark:fill-zinc-100" />
+      <g
+        transform="translate(8.2 10) scale(0.9167)"
+        fill="none"
+        strokeWidth="5.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="stroke-zinc-100 dark:stroke-zinc-900"
+      >
+        <path d="M10 8H42" />
+        <path d="M26 8V42.75" strokeLinecap="butt" />
+        <path d="M42 8H30a4 4 0 0 0-4 4V36a4 4 0 0 0 4 4H42" />
+      </g>
+    </svg>
   )
 }
 
@@ -77,14 +91,18 @@ export function SessionLoading() {
 }
 
 export function SessionError({ onRetry }) {
+  const { isOffline } = usePwa()
+
   return (
     <Shell>
       <Mark />
       <h1 className={`${SERIF} mt-8 text-[28px] font-medium leading-tight tracking-[-0.03em] sm:text-[32px]`}>
-        We couldn&apos;t reach the server
+        {isOffline ? "You're offline" : "We couldn't reach the server"}
       </h1>
       <p className="mt-3 text-sm leading-6 text-zinc-500 dark:text-zinc-400">
-        It may still be starting up or briefly unavailable. Your data is safe, so please try again.
+        {isOffline
+          ? 'TradeCommit does not cache private journals, trades, or account data offline. Reconnect to the internet and try again.'
+          : 'It may still be starting up or briefly unavailable. Your data is safe, so please try again.'}
       </p>
       <button
         type="button"

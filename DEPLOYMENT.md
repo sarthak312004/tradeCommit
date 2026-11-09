@@ -106,3 +106,29 @@ Before accepting live payments, make sure your Dodo products match the prices in
 and configure the existing Dodo API key, product IDs, webhook URL/signing key, and `APP_URL` in Render from the
 correct Dodo mode. Test checkout and subscription changes using test-mode credentials first. Keep Dodo secrets in
 Render only, never in Vercel or `VITE_*` variables.
+
+## 9. Progressive Web App (PWA), HTTPS, and Service Worker Caching
+
+TradeCommit ships as an installable Progressive Web App with a web app manifest (`/manifest.webmanifest`), platform icons generated from `frontend/public/favicon.svg`, an offline fallback page (`/offline.html`), and a production-only service worker (`/sw.js`).
+
+Installed-app icons use a fixed creamy-white (`#F3F0E8`) background, dark TradeCommit mark, and subtle inset hairline border (`#DAD6CD`) to distinguish the icon from light desktop surfaces. Desktop and mobile operating systems consume static manifest/touch-icon files and do not switch an installed icon when the system or in-app theme changes; the browser-tab SVG favicon remains system-theme-aware.
+
+### HTTPS requirement
+- Browser installation (`beforeinstallprompt` on Chromium and standalone service-worker registration) requires **HTTPS** in production. `http://localhost` and `http://127.0.0.1` are allowed for local production preview testing only.
+- Both Vercel and Render provide HTTPS automatically. When using a custom domain or Docker reverse proxy, terminate TLS with a valid certificate and keep `NODE_ENV=production` so Express `trust proxy` is enabled.
+
+### Service worker & caching rules
+- The service worker is registered **only** in production builds (`import.meta.env.PROD`). Vite development (`npm run dev`) does not register a service worker, keeping HMR and development behavior predictable.
+- During `npm run build` in `frontend/`, the `tradeCommitPwaPlugin` in `frontend/vite.config.js` stamps `dist/sw.js` with a deterministic SHA-256 cache version and the exact list of built static app-shell assets.
+- **Strict privacy boundary:** `/sw.js` caches only safe static app-shell resources (HTML shell, hashed JS/CSS bundles under `/assets/*`, icons, manifest, and `/offline.html`). It **never** intercepts or caches `/api/*` requests, non-`GET` requests, credentials, cookies, journals, trades, planner entries, profile data, or cross-origin resources. Offline writes are never queued or replayed.
+- **Update behavior:** New service workers do not call `skipWaiting()` automatically and never reload the page silently. When a newly deployed worker enters the `waiting` state, TradeCommit shows an "Update available" banner with explicit **Update** and **Dismiss / Later** actions so users never lose unsaved form drafts.
+- **HTTP cache headers:** Ensure `/sw.js` is served with `Cache-Control: no-cache, no-store, must-revalidate` and `/manifest.webmanifest` with `Content-Type: application/manifest+json; charset=utf-8` (already configured in `frontend/vercel.json` and `backend/src/app.js`).
+
+### Platform installation matrix
+| Platform / Browser | Installation mechanism |
+|---|---|
+| Windows / Android (Chrome, Microsoft Edge) | Native browser prompt via the **Install app** button in the sidebar, profile menu, or header (uses `beforeinstallprompt`), or browser menu → **Install TradeCommit** / **Install app**. |
+| macOS (Chrome, Microsoft Edge) | Native browser prompt via **Install app** or address-bar install icon. |
+| macOS (Safari, macOS Sonoma+) | Clicking **Install app** opens step-by-step instructions for **File → Add to Dock…** (or **Share → Add to Dock…**). |
+| iOS / iPadOS (Safari, Chrome) | Clicking **Install app** opens step-by-step instructions for **Share → Add to Home Screen → Add**. |
+| Unsupported desktop browsers (e.g. Firefox Desktop) | No unsolicited install nudge is shown; native one-click installation is never falsely promised. |

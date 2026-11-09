@@ -6,6 +6,7 @@ import { clearProfileCache } from "../services/profileApi"
 import { queueDemoFlywheel } from "../utils/demoFlywheel"
 import { queueOnboardingGuide } from "../utils/onboardingGuide"
 import { SERIF } from "../components/auth/authStyles"
+import PwaInstallButton from "../components/pwa/PwaInstallButton"
 
 const STYLES = [
   { id: "intraday", label: "Intraday", description: "Plan and review trades within the same session.", icon: "◷" },
@@ -60,12 +61,15 @@ export default function OnboardingPage() {
       <div className="pointer-events-none absolute inset-0 opacity-50 [background-image:radial-gradient(circle_at_20%_15%,rgba(120,113,108,0.10),transparent_32%),radial-gradient(circle_at_80%_80%,rgba(120,113,108,0.08),transparent_30%)] dark:opacity-40" />
 
       <div className="relative mx-auto flex min-h-screen w-full max-w-5xl flex-col px-6 py-7 sm:px-10">
-        <header className="flex items-center justify-between">
+        <header className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
-            <span className="grid h-8 w-8 place-items-center rounded-md bg-zinc-900 text-xs font-bold text-white dark:bg-zinc-100 dark:text-zinc-900">T</span>
+            <img src="/favicon.svg" alt="" className="h-7 w-7 shrink-0 rounded-md object-contain" />
             <span className="text-sm font-medium tracking-[-0.01em]">TradeCommit</span>
           </div>
-          <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Workspace setup</div>
+          <div className="flex items-center gap-3">
+            <PwaInstallButton />
+            <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Workspace setup</div>
+          </div>
         </header>
 
         <section className="flex flex-1 items-center justify-center py-12">

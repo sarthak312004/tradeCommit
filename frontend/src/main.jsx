@@ -15,6 +15,7 @@ import PrivacyPage from './pages/PrivacyPage.jsx'
 import RefundPolicyPage from './pages/RefundPolicyPage.jsx'
 import CancellationPolicyPage from './pages/CancellationPolicyPage.jsx'
 import ContactPage from './pages/ContactPage.jsx'
+import PwaShell from './components/pwa/PwaShell.jsx'
 import { PlannerContextProvider } from './context/plannerContextProvider.jsx'
 import { Analytics } from '@vercel/analytics/react'
 
@@ -93,6 +94,7 @@ createRoot(document.getElementById('root')).render(
         <RouterProvider router={router}/>
       </PlannerContextProvider>
     </JournalContextProvider>
+    <PwaShell />
     <Analytics />
   </StrictMode>,
 )

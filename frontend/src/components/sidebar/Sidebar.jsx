@@ -10,10 +10,11 @@ import DialogSkeleton from "../common/DialogSkeleton"
 import SidebarSection from "./SidebarSection"
 import { ThemeCycleButton, ThemeSegmented } from "./ThemeToggle"
 import { useFeedbackPrompt } from "../../hooks/useFeedbackPrompt"
+import { usePwa } from "../../hooks/usePwa"
 import { useTheme } from "../../hooks/useTheme"
 import { usePlan } from "../../hooks/usePlan"
 import { openUpgrade } from "../../utils/upgrade"
-import { CalendarIcon, ChevronsLeftIcon, CloseIcon, FileIcon, LogoutIcon, MessageSquareIcon, PlusIcon } from "../../utils/Icons.jsx"
+import { CalendarIcon, ChevronsLeftIcon, CloseIcon, DownloadIcon, FileIcon, LogoutIcon, MessageSquareIcon, PlusIcon } from "../../utils/Icons.jsx"
 import { plannerApi } from "../../services/plannerApi"
 import { preloadPlannerPage } from "../../utils/plannerPageLoader"
 import { EASE, FADE_BASE, fade, focusRing, ghostBtn } from "./sidebarStyles"
@@ -26,6 +27,7 @@ function Sidebar({ isSidebarOpen: isSidebarOpenProp, setIsSidebarOpen, isMobile 
   const { journals, selectedJournal, selectJournal } = useContext(journalContext)
   const { planners } = useContext(plannerContext)
   const { theme, setTheme } = useTheme()
+  const { showInstallNudge, isPromptingInstall, requestInstall, dismissInstallEntry } = usePwa()
   const { entitlements, loading: planLoading } = usePlan()
   const navigate = useNavigate()
   const { pathname } = useLocation()
@@ -232,16 +234,41 @@ function Sidebar({ isSidebarOpen: isSidebarOpenProp, setIsSidebarOpen, isMobile 
       </div>
 
       {/* ------------------------------ Footer ------------------------------ */}
-      <div className="relative h-[164px] shrink-0 border-t border-zinc-300 dark:border-white/[0.10]">
+      <div className={`relative ${showInstallNudge ? "h-[200px]" : "h-[164px]"} shrink-0 border-t border-zinc-300 dark:border-white/[0.10]`}>
         {/* Expanded */}
         <div
           className={`absolute inset-y-0 left-0 flex w-[260px] flex-col justify-center gap-1 px-2 ${FADE_BASE} ${fade(isSidebarOpen)}`}
         >
-          {/* all three rows are h-8 with the same px-2 inset, so label, icons and text share two left edges */}
+          {/* all rows are h-8 with the same px-2 inset, so label, icons and text share two left edges */}
           <div className="flex h-8 items-center justify-between px-2">
             <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">Theme</span>
             <ThemeSegmented theme={theme} setTheme={setTheme} />
           </div>
+          {showInstallNudge && (
+            <div className="flex h-8 items-center gap-0.5">
+              <button
+                type="button"
+                disabled={isPromptingInstall}
+                onClick={() => {
+                  requestInstall()
+                  if (isMobile) onMobileClose?.()
+                }}
+                className={`flex h-8 min-w-0 flex-1 items-center gap-2.5 rounded-md px-2 text-[13px] disabled:opacity-60 ${ghostBtn}`}
+              >
+                <DownloadIcon className="h-4 w-4 shrink-0" />
+                <span className="truncate">Install app</span>
+              </button>
+              <button
+                type="button"
+                onClick={dismissInstallEntry}
+                aria-label="Dismiss install app option"
+                title="Dismiss"
+                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-zinc-500 dark:text-zinc-400 ${ghostBtn}`}
+              >
+                <CloseIcon className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
           <button
             type="button"
             onClick={openMarketResearch}
@@ -277,6 +304,18 @@ function Sidebar({ isSidebarOpen: isSidebarOpenProp, setIsSidebarOpen, isMobile 
           className={`absolute inset-y-0 left-0 flex w-[56px] flex-col items-center justify-center gap-1 ${FADE_BASE} ${fade(!isSidebarOpen)}`}
         >
           <ThemeCycleButton theme={theme} setTheme={setTheme} />
+          {showInstallNudge && (
+            <button
+              type="button"
+              disabled={isPromptingInstall}
+              onClick={() => requestInstall()}
+              title="Install app"
+              aria-label="Install app"
+              className={`flex h-8 w-8 items-center justify-center rounded-md disabled:opacity-60 ${ghostBtn}`}
+            >
+              <DownloadIcon className="h-4 w-4" />
+            </button>
+          )}
           <button
             type="button"
             onClick={openMarketResearch}

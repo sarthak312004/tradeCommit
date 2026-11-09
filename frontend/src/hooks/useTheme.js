@@ -19,6 +19,8 @@ const applyTheme = (theme) => {
   const root = document.documentElement
   root.classList.toggle("dark", isDark)
   root.style.colorScheme = isDark ? "dark" : "light"
+  const metaTheme = document.getElementById("tc-theme-color")
+  if (metaTheme) metaTheme.setAttribute("content", isDark ? "#111111" : "#dfddd6")
 }
 
 export function useTheme() {

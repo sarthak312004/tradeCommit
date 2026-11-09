@@ -116,7 +116,18 @@ const here = path.dirname(fileURLToPath(import.meta.url))
 const distDir = path.resolve(here, '../../frontend/dist')
 if (fs.existsSync(path.join(distDir, 'index.html'))) {
     app.use('/assets', express.static(path.join(distDir, 'assets'), { immutable: true, maxAge: '1y' }))
-    app.use(express.static(distDir, { index: false, maxAge: '1h' }))
+    app.use(express.static(distDir, {
+        index: false,
+        maxAge: '1h',
+        setHeaders: (res, filePath) => {
+            if (filePath.endsWith(`${path.sep}sw.js`)) {
+                res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
+            } else if (filePath.endsWith(`${path.sep}manifest.webmanifest`)) {
+                res.setHeader('Content-Type', 'application/manifest+json; charset=utf-8')
+                res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate')
+            }
+        }
+    }))
     app.use((req, res, next) => {
         if (req.method !== 'GET' && req.method !== 'HEAD') return next()
         res.setHeader('Cache-Control', 'no-cache')

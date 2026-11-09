@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { useProfile } from '../../hooks/useProfile'
+import { usePwa } from '../../hooks/usePwa'
 import { errorText } from '../../services/authApi'
 import { updateProfile } from '../../services/profileApi'
-import { AtSignIcon, CheckIcon, ChevronDownIcon, CloseIcon, CompassIcon, LockIcon, MailIcon, PencilIcon, StarIcon, UserIcon } from '../../utils/Icons.jsx'
+import { AtSignIcon, CheckIcon, ChevronDownIcon, CloseIcon, CompassIcon, DownloadIcon, LockIcon, MailIcon, PencilIcon, StarIcon, UserIcon } from '../../utils/Icons.jsx'
 import ProfileAvatar from './ProfileAvatar'
 import ResetPasswordDialog from './ResetPasswordDialog'
 import { requestDemoFlywheelReplay } from '../../utils/demoFlywheel'
@@ -131,6 +132,7 @@ function EditableRow({ Icon, label, value, emptyText, maxLength, validate, norma
 /** Avatar toggle for the right side of the page header: opens a card with the account details. */
 function ProfileMenu() {
   const { profile, error, retry } = useProfile()
+  const { canOfferInstall, isPromptingInstall, requestInstall } = usePwa()
   const [isOpen, setIsOpen] = useState(false)
   const [isResetOpen, setIsResetOpen] = useState(false)
   const navigate = useNavigate()
@@ -175,6 +177,11 @@ function ProfileMenu() {
   const startDemo = () => {
     setIsOpen(false)
     requestDemoFlywheelReplay()
+  }
+
+  const installApp = () => {
+    setIsOpen(false)
+    requestInstall()
   }
 
   return (
@@ -277,6 +284,19 @@ function ProfileMenu() {
               <CompassIcon className="h-3.5 w-3.5" />
               Replay flywheel demo
             </button>
+
+            {canOfferInstall && (
+              <button
+                type="button"
+                disabled={isPromptingInstall}
+                onClick={installApp}
+                tabIndex={isOpen ? 0 : -1}
+                className={`mt-1.5 flex h-9 w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-zinc-300 text-[13px] font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-60 dark:border-white/[0.14] dark:text-zinc-200 dark:hover:bg-white/[0.06] ${focusRing}`}
+              >
+                <DownloadIcon className="h-3.5 w-3.5" />
+                Install app
+              </button>
+            )}
           </>
         ) : error ? (
           <div className="py-2 text-center">

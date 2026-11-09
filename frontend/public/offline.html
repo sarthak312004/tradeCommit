@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#dfddd6" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#111111" media="(prefers-color-scheme: dark)" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <title>Offline — TradeCommit</title>
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem("tradecommit-theme") || "system";
+          var dark = t === "dark" || (t === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+          document.documentElement.classList.toggle("dark", dark);
+          document.documentElement.style.colorScheme = dark ? "dark" : "light";
+        } catch (e) {}
+      })();
+    </script>
+    <style>
+      :root {
+        --bg: #dfddd6;
+        --fg: #18181b;
+        --muted: #52525b;
+        --subtle: #71717a;
+        --card-bg: rgba(255, 255, 255, 0.72);
+        --card-border: rgba(161, 161, 170, 0.45);
+        --btn-bg: #18181b;
+        --btn-fg: #f4f4f5;
+        --btn-hover: #3f3f46;
+        --tile-fill: #18181b;
+        --mark-stroke: #f4f4f5;
+      }
+      html.dark {
+        --bg: #111111;
+        --fg: #f4f4f5;
+        --muted: #a1a1aa;
+        --subtle: #71717a;
+        --card-bg: #1e1e1e;
+        --card-border: rgba(255, 255, 255, 0.10);
+        --btn-bg: #f4f4f5;
+        --btn-fg: #18181b;
+        --btn-hover: #ffffff;
+        --tile-fill: #f4f4f5;
+        --mark-stroke: #18181b;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        background: var(--bg);
+        color: var(--fg);
+        font-family: Inter, "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      main {
+        width: 100%;
+        max-width: 400px;
+        text-align: center;
+        background: var(--card-bg);
+        border: 1px solid var(--card-border);
+        border-radius: 20px;
+        padding: 32px 24px;
+        box-shadow: 0 16px 48px -18px rgba(0, 0, 0, 0.18);
+      }
+      .logo {
+        display: inline-flex;
+        margin-bottom: 20px;
+      }
+      .eyebrow {
+        margin: 0 0 8px;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--subtle);
+      }
+      h1 {
+        margin: 0;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 28px;
+        font-weight: 500;
+        line-height: 1.15;
+        letter-spacing: -0.025em;
+      }
+      p {
+        margin: 12px 0 0;
+        font-size: 14px;
+        line-height: 1.6;
+        color: var(--muted);
+      }
+      .actions {
+        margin-top: 24px;
+        display: flex;
+        justify-content: center;
+      }
+      button {
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        height: 40px;
+        padding: 0 20px;
+        border-radius: 8px;
+        border: none;
+        background: var(--btn-bg);
+        color: var(--btn-fg);
+        font-size: 13px;
+        font-weight: 600;
+        transition: background-color 150ms ease;
+      }
+      button:hover {
+        background: var(--btn-hover);
+      }
+      button:focus-visible {
+        outline: 2px solid var(--fg);
+        outline-offset: 3px;
+      }
+    </style>
+  </head>
+  <body>
+    <main role="main" aria-labelledby="offline-title">
+      <div class="logo" aria-hidden="true">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="44" height="44">
+          <rect width="64" height="64" rx="15" fill="var(--tile-fill)" />
+          <g transform="translate(8.2 10) scale(0.9167)" fill="none" stroke="var(--mark-stroke)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10 8H42" />
+            <path d="M26 8V42.75" stroke-linecap="butt" />
+            <path d="M42 8H30a4 4 0 0 0-4 4V36a4 4 0 0 0 4 4H42" />
+          </g>
+        </svg>
+      </div>
+      <p class="eyebrow">Connection unavailable</p>
+      <h1 id="offline-title">You&rsquo;re offline</h1>
+      <p>
+        TradeCommit could not reach the network. To keep your journals, trades, and account private, personal workspace data is never stored in an offline cache.
+      </p>
+      <div class="actions">
+        <button type="button" id="retry-btn">Try again</button>
+      </div>
+    </main>
+    <script>
+      document.getElementById("retry-btn").addEventListener("click", function () {
+        window.location.reload();
+      });
+      window.addEventListener("online", function () {
+        window.location.reload();
+      });
+    </script>
+  </body>
+</html>

@@ -7,6 +7,7 @@ import SignupFlow from "../components/auth/SignupFlow"
 import { Field, PasswordField } from "../components/auth/fields"
 import { SERIF, headingCls, linkBtnCls, messageCls, mutedCls, submitCls, tabCls } from "../components/auth/authStyles"
 import { ThemeCycleButton } from "../components/sidebar/ThemeToggle"
+import PwaInstallButton from "../components/pwa/PwaInstallButton"
 import { FREE_PLAN_EXCLUDED_FEATURES, FREE_PLAN_FEATURES, PRO_PLAN_FEATURES } from "../config/planFeatures"
 import { displayRegion, formatPrice, pricingView, REGION_IN } from "../config/pricing"
 import { useTheme } from "../hooks/useTheme"
@@ -667,6 +668,7 @@ export default function AuthPage() {
             <a href="#start" onClick={scrollToId("start")} className={navLink}>Start</a>
           </nav>
           <div className="flex items-center gap-1.5 sm:gap-2">
+            <PwaInstallButton />
             <ThemeCycleButton theme={theme} setTheme={setTheme} />
             {/* phones: a single "Log in" button (the hero button already covers sign-up); sm and up: both.
                 The responsive classes sit on wrappers because .tc-small-auth sets its own display. */}

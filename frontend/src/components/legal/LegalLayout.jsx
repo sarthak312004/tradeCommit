@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router'
 import { SERIF } from '../auth/authStyles'
 import { focusRing } from '../common/controlStyles'
 import { ThemeCycleButton } from '../sidebar/ThemeToggle'
+import PwaInstallButton from '../pwa/PwaInstallButton'
 import { LEGAL_CONFIG, LEGAL_PAGES } from '../../config/legal'
 import { useTheme } from '../../hooks/useTheme'
 
@@ -248,6 +249,7 @@ export default function LegalLayout({
                 )
               })}
             </nav>
+            <PwaInstallButton />
             <ThemeCycleButton theme={theme} setTheme={setTheme} />
           </div>
         </div>
