@@ -19,6 +19,7 @@ import {
   verifyForgotPasswordOtp,
 } from "../controllers/forgotPassword.controller.js";
 import { sendLoginOtp, verifyLoginOtp } from "../controllers/loginOtp.controller.js";
+import { sendSignupOtp, verifySignupOtp } from "../controllers/signupOtp.controller.js";
 import {
   checkAuthStatus,
   getAuthConfig,
@@ -37,6 +38,8 @@ router.post("/login", loginUser)
 // log in with an emailed code instead of a password
 router.post("/login/send-otp", sendLoginOtp)
 router.post("/login/verify-otp", verifyLoginOtp)
+router.post("/signup/send-otp", sendSignupOtp)
+router.post("/signup/verify-otp", verifySignupOtp)
 // Google is both log in and sign up (creates the account on first use)
 router.post("/google", googleLogin)
 router.post("/logout", verifyJWT, logoutUser)

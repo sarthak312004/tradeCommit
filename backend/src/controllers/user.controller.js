@@ -56,7 +56,7 @@ const nameFromEmail = (email) => {
 };
 
 // A unique username built from the name, e.g. "Sarthak Kumar" -> "sarthak_kumar_4f9a2c" (<= 12 + 1 + 6 = 19 chars).
-const generateUsername = (fullname, email) => {
+export const generateUsername = (fullname, email) => {
   const fromName = fullname.toLowerCase().replace(/[^a-z]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 12).replace(/_+$/, "");
   const fromEmail = email.split("@")[0].toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 12);
   const base = [fromName, fromEmail].find((candidate) => candidate.length >= 3) ?? "trader";

@@ -486,7 +486,7 @@ function LandingPlansSection({ onChoosePlan }) {
   )
 }
 
-function AuthPanel({ mode, selectedPlan, login, setLogin, message, loading, showForgot, switchMode, handleLogin, handleGoogleCredential, handleGoogleSignup, finishLogin, autoFocus = false }) {
+function AuthPanel({ mode, selectedPlan, login, setLogin, message, loading, showForgot, switchMode, handleLogin, handleGoogleCredential, handleGoogleSignup, finishLogin, finishRegistration, autoFocus = false }) {
   return (
     <div className="w-full max-w-[400px]">
       <div className="mb-5">
@@ -525,7 +525,7 @@ function AuthPanel({ mode, selectedPlan, login, setLogin, message, loading, show
 
       {mode === "forgot" && <ForgotPasswordFlow initialEmail={login.identifier.includes("@") ? login.identifier.trim() : ""} onComplete={finishLogin} onBack={() => switchMode("login")} />}
       {mode === "otp" && <OtpLoginFlow initialEmail={login.identifier.includes("@") ? login.identifier.trim() : ""} onComplete={finishLogin} onBack={() => switchMode("login")} />}
-      {mode === "register" && <div className="tc-form-enter"><SignupFlow onCredential={handleGoogleSignup} onLogin={() => switchMode("login")} loading={loading} message={mode === "register" ? message : null} /></div>}
+      {mode === "register" && <div className="tc-form-enter"><SignupFlow onCredential={handleGoogleSignup} onComplete={finishRegistration} onLogin={() => switchMode("login")} loading={loading} message={mode === "register" ? message : null} /></div>}
       <p className="mt-5 text-center text-[10px] leading-4 text-zinc-500 dark:text-zinc-500">
         By continuing, you agree to our{" "}
         <Link to="/terms" className={`underline underline-offset-2 transition-colors hover:text-zinc-900 dark:hover:text-zinc-200 ${focusRing}`}>
@@ -650,7 +650,7 @@ export default function AuthPage() {
   // same endpoint: creates the account on first use; new accounts land on the dashboard like before (replace, no back to login)
   const handleGoogleSignup = (credential) => run(async () => { await authPost("/google", { credential }); finishRegistration() })
 
-  const panelProps = { mode, selectedPlan, login, setLogin, message, loading, showForgot, handleLogin, handleGoogleCredential, handleGoogleSignup, finishLogin }
+  const panelProps = { mode, selectedPlan, login, setLogin, message, loading, showForgot, handleLogin, handleGoogleCredential, handleGoogleSignup, finishLogin, finishRegistration }
 
   return (
     <div className="tc-landing min-h-dvh overflow-x-hidden bg-canvas text-zinc-900 transition-colors duration-300 dark:bg-[#101010] dark:text-zinc-100">
